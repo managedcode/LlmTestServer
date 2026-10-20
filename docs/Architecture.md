@@ -6,7 +6,7 @@ LLM Test Server provides deterministic provider emulation for integration tests.
 
 ## Package Boundaries
 
-- `ManagedCode.LlmTestServer` owns provider-neutral runtime state: models, scenarios, match rules, deterministic modality fixtures, auth checks, and assertion events.
+- `ManagedCode.LlmTestServer` owns provider-neutral runtime state: models, scenarios, conversation step graphs, match rules, deterministic modality fixtures, auth checks, and assertion events.
 - `ManagedCode.LlmTestServer.OpenAI` owns OpenAI-compatible DTOs and mapping from runtime results to wire responses.
 - `ManagedCode.LlmTestServer.AzureOpenAI`, `ManagedCode.LlmTestServer.Foundry`, `ManagedCode.LlmTestServer.Anthropic`, `ManagedCode.LlmTestServer.Gemini`, `ManagedCode.LlmTestServer.Groq`, `ManagedCode.LlmTestServer.Mistral`, `ManagedCode.LlmTestServer.Ollama`, `ManagedCode.LlmTestServer.Cohere`, `ManagedCode.LlmTestServer.Bedrock`, `ManagedCode.LlmTestServer.OpenRouter`, `ManagedCode.LlmTestServer.DeepSeek`, `ManagedCode.LlmTestServer.Perplexity`, `ManagedCode.LlmTestServer.SystemOne`, and `ManagedCode.LlmTestServer.Cloudflare` own provider compatibility profiles and provider-specific wire contracts as they are implemented.
 - `ManagedCode.LlmTestServer.Hosting` exposes the runtime through ASP.NET Core endpoints and serves the browser admin panel as Blazor server-side rendered components.
@@ -40,9 +40,22 @@ The runtime owns bounded provider/model/credential-isolated chat-response snapsh
 Responses storage/parent fields into this neutral state and reuse its response identity for streaming and normal
 output. See [Responses continuation](Features/ResponsesContinuation.md) for limits, reset semantics and regressions.
 
+## Conversation step graphs
+
+The core conversation slice adds serializable predicates and ordered transitions to existing scenarios. Hosting
+passes the conversation selector and provider namespace into the runtime request scope; state remains owned
+by the selected test session and is partitioned by scenario, provider and credential. A typed client adds the
+selector without changing shared transport headers. Control APIs expose bounded conversation status and
+side-effect-free match explanations. See [Conversation DSL](Features/ConversationDSL.md) for the contract and
+[ADR-0004](ADR/ADR-0004-conversation-step-graphs.md) for identity, reservation, replay and lifecycle decisions.
+Integration qualification of this extension is in progress.
+
 ## Determinism
 
-Chat scenarios are queued. Each matched request consumes the next response. Streaming responses use explicit chunks. Datasets are named groups of active scenarios so tests can load conversation sets before a run. Embeddings return configured vectors. Image, audio, and video endpoints return fixed fixture content.
+Linear chat scenarios consume queued responses. Conversation graphs select an active step and advance only
+after its fixture commits; identical successful retries can replay the last result. Streaming responses use
+explicit chunks. Datasets are named groups of active scenarios and graphs so tests can load conversation sets
+before a run. Embeddings return configured vectors. Image, audio, and video endpoints return fixed fixture content.
 
 Audio transcription fixtures carry explicitly configured duration or complete audio/text/output token usage
 through runtime results and OpenAI-compatible JSON, verbose JSON and final streaming events. Configure it

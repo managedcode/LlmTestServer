@@ -157,7 +157,7 @@ public sealed class SessionStateIntegrationTests
         else { await session.Control.ResetAsync(); }
         using var superseded = await pending;
         await Assert.That(superseded.StatusCode).IsEqualTo(HttpStatusCode.Conflict);
-        await Assert.That(await superseded.Content.ReadAsStringAsync()).Contains("llm_tck_request_superseded");
+        await Assert.That(await superseded.Content.ReadAsStringAsync()).Contains("llm_test_server_request_superseded");
         if (mutation != 0)
         {
             await Assert.That((await session.Control.GetAssertionsAsync()).Matched).IsEqualTo(0);

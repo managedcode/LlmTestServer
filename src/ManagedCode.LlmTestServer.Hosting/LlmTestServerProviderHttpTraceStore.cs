@@ -161,6 +161,10 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
                     OperationId = enrichment.OperationId ?? trace.OperationId,
                     ModelId = enrichment.ModelId ?? trace.ModelId,
                     ScenarioId = enrichment.ScenarioId ?? trace.ScenarioId,
+                    ConversationId = enrichment.ConversationId ?? trace.ConversationId,
+                    StepId = enrichment.StepId ?? trace.StepId,
+                    TurnIndex = enrichment.TurnIndex ?? trace.TurnIndex,
+                    IsReplay = enrichment.IsReplay ?? trace.IsReplay,
                     RuntimeEventKind = enrichment.RuntimeEventKind ?? trace.RuntimeEventKind,
                     RuntimeMessage = enrichment.RuntimeMessage ?? trace.RuntimeMessage,
                     RuntimeResponse = enrichment.RuntimeResponse ?? trace.RuntimeResponse,
@@ -262,6 +266,9 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
             ref remaining,
             ref retentionTruncated
         );
+        var sessionId = RetainText(trace.SessionId, _maxMetadataBytes, ref remaining, ref retentionTruncated);
+        var conversationId = RetainText(trace.ConversationId, _maxMetadataBytes, ref remaining, ref retentionTruncated);
+        var stepId = RetainText(trace.StepId, _maxMetadataBytes, ref remaining, ref retentionTruncated);
         var scenarioId = RetainText(
             trace.ScenarioId,
             _maxMetadataBytes,
@@ -342,6 +349,9 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
                 trace.ResponsePreviewTruncated || responsePreviewTruncated,
             ModelId = modelId,
             ScenarioId = scenarioId,
+            SessionId = sessionId,
+            ConversationId = conversationId,
+            StepId = stepId,
             RuntimeMessage = runtimeMessage,
             RuntimeResponse = runtimeResponse,
             ErrorCode = errorCode,

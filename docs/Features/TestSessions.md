@@ -43,7 +43,7 @@ and is redacted from provider diagnostics. To change the provider key through co
 
 Creation uses the default runtime's management bearer requirement and rejects session selector headers with 400; create through the root management client. Deletion uses the session's own ID/key, so
 changing the default provider token does not prevent cleanup. Deleting a session invalidates in-flight delayed
-work with 409 `llm_tck_request_superseded`; subsequent calls return 404. Cancelling a request keeps the existing
+work with 409 `llm_test_server_request_superseded`; subsequent calls return 404. Cancelling a request keeps the existing
 queue rollback contract. Deleting an already absent session returns 404; typed disposal accepts that response.
 
 ## Bounds
@@ -56,12 +56,12 @@ can shrink or grow the reservation within that budget; deletion releases it. Exp
 the lifetime boundary. There is no timer expiration or persistence.
 
 The default browser dashboard continues to inspect the default runtime. A session selector and session/step
-visualization remain part of the later dashboard work in the migration plan.
+visualization remain part of the later dashboard work in the delivery plan.
 
 ## Verification
 
 `SessionIsolationIntegrationTests`, `SessionStateIntegrationTests`, `SessionBoundaryIntegrationTests` and `SessionProviderIntegrationTests` start a
 server and exercise HTTP, MEAI and official OpenAI SDK calls. They cover parallel identical prompts, credentials,
 queue/reset/configure/dispose, admission limits, history/video/fault/cache isolation, journal retention, streaming
-and deletion during an active delayed response. Full-suite and coverage results are recorded in the migration
+and deletion during an active delayed response. Full-suite and coverage results are recorded in the delivery
 implementation ledger; this document alone is not test evidence.

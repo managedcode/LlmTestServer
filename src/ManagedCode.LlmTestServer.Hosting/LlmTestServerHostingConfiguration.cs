@@ -6,12 +6,11 @@ namespace ManagedCode.LlmTestServer.Hosting;
 public static class LlmTestServerHostingConfiguration
 {
     public const string RequiredBearerTokenKey = "LlmTestServer:RequiredBearerToken";
-    public const string LegacyRequiredBearerTokenKey = "LlmTck:RequiredBearerToken";
 
-    /// <summary>The new key takes precedence, including an explicitly empty value.</summary>
+    /// <summary>Reads the canonical host authentication setting.</summary>
     public static string? GetRequiredBearerToken(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
-        return configuration[RequiredBearerTokenKey] ?? configuration[LegacyRequiredBearerTokenKey];
+        return configuration[RequiredBearerTokenKey];
     }
 }

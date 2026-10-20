@@ -7,6 +7,10 @@ namespace ManagedCode.LlmTestServer.Configuration;
 public sealed record LlmTestServerConfiguration
 {
     /// <summary>Maximum retained prompt-cache prefixes. Zero disables prompt caching.</summary>
+    public int MaxConversations { get; init; } = 256;
+
+    public long MaxConversationBytes { get; init; } = 16 * 1024 * 1024;
+
     public int MaxPromptCacheEntries { get; init; } = 4096;
 
     /// <summary>Maximum stored video jobs across providers. Zero rejects all new jobs.</summary>
@@ -83,9 +87,9 @@ public sealed record LlmTestServerConfiguration
 
     public string DefaultVideoMediaType { get; init; } = "video/mp4";
 
-    public string DefaultVideoId { get; init; } = "video_llm_tck";
+    public string DefaultVideoId { get; init; } = "video_llm_test_server";
 
-    public string DefaultVideoGenerationId { get; init; } = "gen_llm_tck";
+    public string DefaultVideoGenerationId { get; init; } = "gen_llm_test_server";
 
     public long DefaultVideoCreatedAtUnixTime { get; init; } = 1712697600;
 

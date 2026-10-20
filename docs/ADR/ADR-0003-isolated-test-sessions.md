@@ -2,7 +2,7 @@
 
 Status: Implemented and locally qualified
 Date: 2026-10-20
-Related feature: [migration plan E2](../Features/LlmTestServerMigrationPlan.md)
+Related feature: [delivery plan E2](../Features/LlmTestServerDeliveryPlan.md)
 
 ## Context and decision
 
@@ -45,5 +45,5 @@ Use HTTP/official SDK integration tests for simultaneous identical prompts, inde
 The complete integration-only suite passed 655/655 with 91.17% production line coverage. Canonical Release build
 and format verification passed with zero warnings/errors. An isolated NuGet consumer restored the repacked
 Core/Client/Hosting/Aspire artifacts, started the packaged service with Aspire and verified session API isolation,
-provider calls and the interactive Chromium dashboard (1/1). Evidence is under
-`artifacts/llm-test-server-migration/session-*`; public NuGet publication belongs to the combined release batch.
+provider calls and the interactive Chromium dashboard (1/1). Session verification logs are retained under
+the repository-owned `artifacts` directory; public NuGet publication belongs to the combined release batch.

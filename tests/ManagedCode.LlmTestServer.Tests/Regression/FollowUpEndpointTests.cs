@@ -102,7 +102,7 @@ public sealed class FollowUpEndpointTests
         using var http = host.GetTestClient();
         using var response = await http.PostAsJsonAsync(path, new { model = "sora-2", prompt = "whale" });
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Conflict);
-        await Assert.That(await response.Content.ReadAsStringAsync()).Contains("llm_tck_video_capacity_exceeded");
+        await Assert.That(await response.Content.ReadAsStringAsync()).Contains("llm_test_server_video_capacity_exceeded");
         using var list = await http.GetAsync(path);
         await Assert.That((await list.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data").GetArrayLength()).IsEqualTo(0);
     }

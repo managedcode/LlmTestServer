@@ -63,7 +63,7 @@ public sealed class LlmTestServerProviderHttpTraceFilter(
             return await next(context).ConfigureAwait(false);
         }
 
-        var runtimeScope = TryBeginRuntimeScope(session.RequestId);
+        var runtimeScope = TryBeginRuntimeScope(session.RequestId, httpContext.Request.Headers[ManagedCode.LlmTestServer.Conversations.LlmTestServerConversationHeaders.Id].FirstOrDefault(), provider.Value.Namespace);
         try
         {
             object? result;
@@ -172,7 +172,7 @@ public sealed class LlmTestServerProviderHttpTraceFilter(
         }
     }
 
-    private IDisposable? TryBeginRuntimeScope(string requestId)
+    private IDisposable? TryBeginRuntimeScope(string requestId, string? conversationId, string providerNamespace)
     {
         if (runtime is not ILlmTestServerRuntimeRequestScope runtimeRequestScope)
         {
@@ -181,7 +181,7 @@ public sealed class LlmTestServerProviderHttpTraceFilter(
 
         try
         {
-            return runtimeRequestScope.BeginRequest(requestId);
+            return runtimeRequestScope.BeginRequest(requestId, conversationId, providerNamespace);
         }
         catch (Exception exception)
         {
@@ -545,6 +545,10 @@ public sealed class LlmTestServerProviderHttpTraceFilter(
                     {
                         ModelId = runtimeEvent.ModelId,
                         ScenarioId = runtimeEvent.ScenarioId,
+                        ConversationId = runtimeEvent.ConversationId,
+                        StepId = runtimeEvent.StepId,
+                        TurnIndex = runtimeEvent.TurnIndex,
+                        IsReplay = runtimeEvent.IsReplay,
                         RuntimeEventKind = runtimeEvent.Kind,
                         RuntimeMessage = runtimeEvent.Message,
                         RuntimeResponse = runtimeEvent.Response,

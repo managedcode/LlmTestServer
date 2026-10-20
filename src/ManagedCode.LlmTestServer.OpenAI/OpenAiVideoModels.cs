@@ -138,7 +138,7 @@ public sealed record OpenAiVideoRemixRequest
 public sealed record OpenAiVideoCharacterResponse
 {
     [JsonPropertyName("id")]
-    public string Id { get; init; } = "char_llm_tck";
+    public string Id { get; init; } = "char_llm_test_server";
 
     [JsonPropertyName("created_at")]
     public long CreatedAt { get; init; }

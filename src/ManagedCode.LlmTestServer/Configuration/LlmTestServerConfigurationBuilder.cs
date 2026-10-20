@@ -4,7 +4,7 @@ using ManagedCode.LlmTestServer.Scenarios;
 
 namespace ManagedCode.LlmTestServer.Configuration;
 
-public sealed class LlmTestServerConfigurationBuilder
+public sealed partial class LlmTestServerConfigurationBuilder
 {
     private LlmTestServerConfiguration _configuration = LlmTestServerConfiguration.CreateDefault();
 
@@ -503,6 +503,8 @@ public sealed class LlmTestServerConfigurationBuilder
     {
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentOutOfRangeException.ThrowIfNegative(configuration.MaxPromptCacheEntries);
+        ArgumentOutOfRangeException.ThrowIfNegative(configuration.MaxConversations);
+        ArgumentOutOfRangeException.ThrowIfNegative(configuration.MaxConversationBytes);
         ArgumentOutOfRangeException.ThrowIfNegative(configuration.MaxVideoJobs);
         ArgumentOutOfRangeException.ThrowIfNegative(configuration.MaxVideoBytes);
         ArgumentOutOfRangeException.ThrowIfNegative(configuration.MaxStoredChatResponses);
@@ -591,6 +593,7 @@ public sealed class LlmTestServerConfigurationBuilder
 
         return scenario with
         {
+            Conversation = SnapshotConversation(scenario),
             Match = scenario.Match with { Messages = scenario.Match.Messages.Select(SnapshotMessage).ToList() },
             Responses =
             [
@@ -616,7 +619,15 @@ public sealed class LlmTestServerConfigurationBuilder
     private static LlmTestServerScenarioResponse SnapshotResponse(LlmTestServerScenarioResponse response)
     {
         ArgumentNullException.ThrowIfNull(response);
+        ArgumentNullException.ThrowIfNull(response.Content);
         ArgumentNullException.ThrowIfNull(response.StreamChunks);
+        foreach (var chunk in response.StreamChunks) { ArgumentNullException.ThrowIfNull(chunk); }
+        if (response.Error is { } error)
+        {
+            if (error.StatusCode is < 400 or > 599) { throw new ArgumentOutOfRangeException(nameof(response)); }
+            ArgumentException.ThrowIfNullOrWhiteSpace(error.Code);
+            ArgumentNullException.ThrowIfNull(error.Message);
+        }
         if (response.DelayMilliseconds < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(response));

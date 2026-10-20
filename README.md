@@ -13,8 +13,6 @@ It gives tests a local provider-compatible server that can be hosted by Aspire,
 scripted with explicit scenarios, and called through regular HTTP, official SDKs,
 or `Microsoft.Extensions.AI`.
 
-Previously **LlmTck**. See the [package and source migration guide](docs/Features/LlmTestServerMigration.md).
-
 The hosted surface is provider-namespaced. OpenAI-compatible routes live under
 `/openai`, Azure OpenAI under `/azure-openai`, Microsoft Foundry under
 `/microsoft-foundry`, Anthropic Messages under `/anthropic`, and every other
@@ -27,6 +25,7 @@ script deterministic provider responses, exercise retry/error/model-routing path
 or assert that no unexpected LLM calls occurred. When a bearer token is configured,
 provider endpoints and runtime configuration/assertion control endpoints require it.
 Test-session lifecycle uses the credentials described in the [session guide](docs/Features/TestSessions.md).
+Branching tool workflows use the [typed conversation DSL](docs/Features/ConversationDSL.md).
 
 ## First passing test
 
@@ -295,7 +294,7 @@ The default configuration advertises official OpenAI fixture model IDs:
 | `gpt-4o-mini-tts` | Audio |
 | `sora-2` | Video |
 
-Model IDs and model kinds are enforced. A chat request to an embedding model, or an embedding request to an unknown model, returns `404` with `llm_tck_unknown_model`.
+Model IDs and model kinds are enforced. A chat request to an embedding model, or an embedding request to an unknown model, returns `404` with `llm_test_server_unknown_model`.
 
 Use typed helpers for broader OpenAI model registration when tests need more than the defaults:
 
@@ -536,7 +535,7 @@ options.AddChatScenario(
         .Responds("Revised draft"));
 ```
 
-After the queue is exhausted, the provider returns `409` with `llm_tck_scenario_exhausted`.
+After the queue is exhausted, the provider returns `409` with `llm_test_server_scenario_exhausted`.
 
 ### Streaming Chunks
 
@@ -670,9 +669,9 @@ using ManagedCode.LlmTestServer.Client;
 using Microsoft.Extensions.AI;
 
 using var httpClient = new HttpClient { BaseAddress = new Uri("http://localhost:5000") };
-var tck = LlmTestServerClient.Create(httpClient, bearerToken: "test-key");
+var server = LlmTestServerClient.Create(httpClient, bearerToken: "test-key");
 
-await tck.ConfigureAsync(
+await server.ConfigureAsync(
     config => config
         .RequireBearerToken("test-key")
         .UseChatModel("test-chat")
@@ -699,10 +698,10 @@ await tck.ConfigureAsync(
                         .Fails(429, "rate_limit_exceeded", "Scripted rate limit."))),
     resetFirst: true);
 
-using IChatClient chat = tck.CreateChatClient("test-chat");
+using IChatClient chat = server.CreateChatClient("test-chat");
 using IEmbeddingGenerator<string, Embedding<float>> embeddings =
-    tck.CreateEmbeddingGenerator("test-embedding");
-using IImageGenerator images = tck.CreateImageGenerator("test-image");
+    server.CreateEmbeddingGenerator("test-embedding");
+using IImageGenerator images = server.CreateImageGenerator("test-image");
 
 var response = await chat.GetResponseAsync(
 [
@@ -711,8 +710,8 @@ var response = await chat.GetResponseAsync(
 
 var vector = await embeddings.GenerateAsync(["invoice"]);
 var image = await images.GenerateAsync(new ImageGenerationRequest { Prompt = "fixture" });
-var audio = await tck.GenerateAudioAsync("test-audio", "speak this");
-var assertions = await tck.GetAssertionsAsync();
+var audio = await server.GenerateAudioAsync("test-audio", "speak this");
+var assertions = await server.GetAssertionsAsync();
 ```
 
 `resetFirst: true` clears previous assertion events and scenario positions before the new configuration is applied. Named datasets are active after configuration; they group scenarios so a test can load a whole conversation set without flattening everything by hand.
@@ -829,12 +828,12 @@ Console.WriteLine(response.Text);
 When a bearer token is required, prefer creating the modality clients from the control client so the same token is applied consistently:
 
 ```csharp
-var tck = LlmTestServerClient.Create(httpClient, bearerToken: "test-key");
+var server = LlmTestServerClient.Create(httpClient, bearerToken: "test-key");
 
-using IChatClient chatClient = tck.CreateChatClient("docs-chat");
+using IChatClient chatClient = server.CreateChatClient("docs-chat");
 using IEmbeddingGenerator<string, Embedding<float>> embeddings =
-    tck.CreateEmbeddingGenerator("docs-embedding");
-using IImageGenerator images = tck.CreateImageGenerator("docs-image");
+    server.CreateEmbeddingGenerator("docs-embedding");
+using IImageGenerator images = server.CreateImageGenerator("docs-image");
 ```
 
 Streaming uses the same client:
@@ -947,7 +946,7 @@ Configure only the models your application is allowed to call:
 options.AddModel("approved-chat-model", LlmTestServerModelKind.Chat);
 ```
 
-If the app calls `old-chat-model` or calls `approved-chat-model` through the embeddings endpoint, LLM Test Server returns `llm_tck_unknown_model`.
+If the app calls `old-chat-model` or calls `approved-chat-model` through the embeddings endpoint, LLM Test Server returns `llm_test_server_unknown_model`.
 
 ## Build And Test
 

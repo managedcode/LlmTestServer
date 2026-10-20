@@ -56,7 +56,7 @@ public sealed class ResponseHistoryIntegrationTests
         }
         using var overflow = await http.PostAsJsonAsync("/openai/v1/responses", new { model = "gpt-4.1-mini", input = "hello" });
         await Assert.That(overflow.StatusCode).IsEqualTo(HttpStatusCode.Conflict);
-        await Assert.That(await overflow.Content.ReadAsStringAsync()).Contains("llm_tck_response_capacity_exceeded");
+        await Assert.That(await overflow.Content.ReadAsStringAsync()).Contains("llm_test_server_response_capacity_exceeded");
         using var transient = await http.PostAsJsonAsync("/openai/v1/responses", new { model = "gpt-4.1-mini", input = "hello", store = false });
         transient.EnsureSuccessStatusCode();
         var id = (await transient.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString();

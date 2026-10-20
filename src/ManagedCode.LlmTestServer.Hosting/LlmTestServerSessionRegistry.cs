@@ -90,6 +90,7 @@ internal sealed class LlmTestServerSessionRegistry(
         {
             return checked(16L * 1024 * 1024 + configurationBytes * 2 + traceOptions.Value.MaxRetainedBytes
                 + configuration.MaxStoredChatResponseBytes + configuration.MaxVideoBytes
+                + configuration.MaxConversationBytes + configuration.MaxConversations * 512L
                 + configuration.MaxPromptCacheEntries * 256L + configuration.MaxVideoJobs * 512L
                 + configuration.MaxStoredChatResponses * 512L);
         }

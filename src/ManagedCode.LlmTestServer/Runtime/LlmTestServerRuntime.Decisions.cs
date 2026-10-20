@@ -43,7 +43,7 @@ public sealed partial class LlmTestServerRuntime
             candidate.ModelId == request.ModelId && (candidate.ExpectedInput is null || candidate.ExpectedInput == request.Input));
         if (scenario is null)
         {
-            return DecisionFailure(request, 404, "llm_tck_scenario_not_found", "No decision scenario matched.", kind: LlmTestServerEventKind.Unmatched);
+            return DecisionFailure(request, 404, "llm_test_server_scenario_not_found", "No decision scenario matched.", kind: LlmTestServerEventKind.Unmatched);
         }
         if (scenario.Error is { } error)
         {
@@ -51,7 +51,7 @@ public sealed partial class LlmTestServerRuntime
         }
         if (!DecisionAnswersMatch(request, scenario))
         {
-            return DecisionFailure(request, 409, "llm_tck_fixture_mismatch", "Configured decision answers do not match the requested questions.", scenario.Id);
+            return DecisionFailure(request, 409, "llm_test_server_fixture_mismatch", "Configured decision answers do not match the requested questions.", scenario.Id);
         }
         var answers = scenario.Answers.ToDictionary(entry => entry.Key,
             entry => entry.Value with { Probabilities = new(entry.Value.Probabilities) }, StringComparer.Ordinal);

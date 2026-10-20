@@ -69,7 +69,7 @@ public sealed class LlmTestServerClientConfigurationTests
         var control = LlmTestServerClient.Create(httpClient, "test-key");
 
         await control.ConfigureAsync(
-            tck => tck
+            server => server
                 .RequireBearerToken("test-key")
                 .UseChatModel("dataset-chat")
                 .UseEmbeddingModel("dataset-embedding")
@@ -139,7 +139,7 @@ public sealed class LlmTestServerClientConfigurationTests
         await Assert.That(image.Contents).Count().IsEqualTo(1);
         await Assert.That(audio.Bytes).IsEquivalentTo((byte[])[1, 2, 3, 4]);
         await Assert.That(audio.MediaType).IsEqualTo("audio/test");
-        await Assert.That(videoId).IsEqualTo("video_llm_tck");
+        await Assert.That(videoId).IsEqualTo("video_llm_test_server");
         await Assert.That(transcription).IsEqualTo("dataset transcript");
         await Assert.That(translation).IsEqualTo("dataset translation");
         await Assert.That(assertions.Matched).IsGreaterThanOrEqualTo(8);

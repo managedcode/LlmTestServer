@@ -39,5 +39,5 @@ Integration acceptance:
 2. Model changes preserve history in ordinary and streaming official SDK calls
    (`LlmTestServerResponsesContinuationTests`).
 3. Foreign provider/credential parents, unknown/reset identities, disabled/full count/byte capacity, instruction
-   replacement and `store=false` must be verified through server HTTP/SDK requests. Migration of these additional
-   former internal cases is still in progress; do not infer coverage from the removed internal tests.
+   replacement and `store=false` must be verified through server HTTP/SDK requests. Qualification results are
+   recorded in the [delivery plan](LlmTestServerDeliveryPlan.md); this contract alone does not establish coverage.

@@ -171,8 +171,11 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         scopedEndpoints.AddEndpointFilter(async (invocation, next) =>
         {
             var registry = invocation.HttpContext.RequestServices.GetRequiredService<LlmTestServerSessionRegistry>();
-            return registry.Resolve(invocation.HttpContext) is null
-                ? SessionNotFound() : await next(invocation).ConfigureAwait(false);
+            if (registry.Resolve(invocation.HttpContext) is null) { return SessionNotFound(); }
+            var conversation = invocation.HttpContext.Request.Headers[ManagedCode.LlmTestServer.Conversations.LlmTestServerConversationHeaders.Id];
+            if (conversation.Count > 1 || conversation.Count == 1 && (string.IsNullOrWhiteSpace(conversation[0]) || conversation[0]!.Length > 128))
+            { return InvalidRequest("Supply one nonempty conversation ID of at most 128 characters."); }
+            return await next(invocation).ConfigureAwait(false);
         });
         scopedEndpoints.MapGet(
             LlmTestServerControlRoutes.Models,
@@ -185,6 +188,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
                 AuthorizeControlRequest(context, runtime) ?? Results.Json(runtime.GetAssertionSummary())
         );
         scopedEndpoints.MapGet(LlmTestServerControlRoutes.Requests, GetRequests);
+        MapConversationEndpoints(scopedEndpoints);
         scopedEndpoints.MapPost(
             LlmTestServerControlRoutes.Reset,
             async (

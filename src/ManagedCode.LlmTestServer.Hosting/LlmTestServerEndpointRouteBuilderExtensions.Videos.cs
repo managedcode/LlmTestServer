@@ -311,7 +311,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
 
         return Results.Json(
             OpenAiWireMapper.ToVideoCharacterResponse(
-                "char_llm_tck",
+                "char_llm_test_server",
                 name,
                 DateTimeOffset.UtcNow.ToUnixTimeSeconds()
             )

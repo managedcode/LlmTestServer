@@ -12,5 +12,7 @@ public sealed record LlmTestServerScenario
 
     public LlmTestServerRequestMatch Match { get; init; } = new();
 
+    public ManagedCode.LlmTestServer.Conversations.LlmTestServerConversation? Conversation { get; init; }
+
     public List<LlmTestServerScenarioResponse> Responses { get; init; } = [];
 }

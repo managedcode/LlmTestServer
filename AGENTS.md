@@ -83,6 +83,8 @@ Rule format:
 
 ### Dislikes
 
+- Treat ManagedCode.LlmTestServer as a completely new brand: remove all old project/package/type/configuration names, legacy aliases, and backward-compatibility paths. Do not provide a migration layer or preserve old branded diagnostic codes, fixture IDs, package identities, or release/deprecation machinery.
+
 - Do not mention competing products in README, documentation, source, tests, or other repository artifacts; describe our own contracts and capabilities directly.
 - Keep only integration tests that start the server and verify real HTTP/provider SDK behavior. Do not add or retain unit tests, fake clients, source/document scans, reflection-based test guards, or assertions about implementation fragments. Exercise every supported API and parameter, streaming mode, error boundary, and complete tool/conversation flow through the running server.
 - Do not introduce real-LLM toggles, external project environment variable names, or WA.Storied-specific constants into this repository; LlmTestServer tests and samples must remain deterministic, repo-owned, and free of cross-project naming leaks.

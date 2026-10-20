@@ -221,7 +221,7 @@ public sealed class GeminiEndpointTests
                 {
                     new
                     {
-                        prompt = "a deterministic tck video",
+                        prompt = "a deterministic test server video",
                     },
                 },
                 parameters = new
@@ -238,7 +238,7 @@ public sealed class GeminiEndpointTests
         var hasStartResponse = startPayload.TryGetProperty("response", out _);
 
         await Assert.That(operationName)
-            .IsEqualTo("models/veo-3.1-generate-preview/operations/gen_llm_tck");
+            .IsEqualTo("models/veo-3.1-generate-preview/operations/gen_llm_test_server");
         await Assert.That(startPayload.GetProperty("done").GetBoolean()).IsFalse();
         await Assert.That(hasStartResponse).IsFalse();
 
@@ -271,7 +271,7 @@ public sealed class GeminiEndpointTests
         var filePayload = await fileMetadataResponse.Content.ReadFromJsonAsync<JsonElement>(_jsonOptions);
         var downloadUri = filePayload.GetProperty("downloadUri").GetString();
 
-        await Assert.That(filePayload.GetProperty("name").GetString()).IsEqualTo("files/video_llm_tck");
+        await Assert.That(filePayload.GetProperty("name").GetString()).IsEqualTo("files/video_llm_test_server");
         await Assert.That(filePayload.GetProperty("state").GetString()).IsEqualTo("ACTIVE");
         await Assert.That(filePayload.GetProperty("source").GetString()).IsEqualTo("GENERATED");
         await Assert.That(

@@ -26,7 +26,7 @@ public sealed partial class LlmTestServerRuntime
             {
                 const string message = "Video store capacity exceeded. Delete jobs or increase the configured video capacity.";
                 AddEvent(LlmTestServerEventKind.ErrorReturned, null, video.ModelId, message);
-                return video with { IsSuccess = false, StatusCode = 409, ErrorCode = "llm_tck_video_capacity_exceeded", ErrorMessage = message, Bytes = [] };
+                return video with { IsSuccess = false, StatusCode = 409, ErrorCode = "llm_test_server_video_capacity_exceeded", ErrorMessage = message, Bytes = [] };
             }
 
             var sequence = _videoSequence.GetValueOrDefault(provider);

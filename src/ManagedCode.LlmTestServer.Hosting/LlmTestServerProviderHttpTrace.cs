@@ -5,6 +5,11 @@ namespace ManagedCode.LlmTestServer.Hosting;
 
 public sealed record LlmTestServerProviderHttpTrace
 {
+    public string? ConversationId { get; init; }
+    public string? StepId { get; init; }
+    public int? TurnIndex { get; init; }
+    public bool IsReplay { get; init; }
+
     public string? SessionId { get; init; }
 
     public string RequestId { get; init; } = string.Empty;
@@ -128,6 +133,11 @@ public sealed record LlmTestServerProviderHttpTraceRequestCapture
 
 public sealed record LlmTestServerProviderHttpTraceEnrichment
 {
+    public string? ConversationId { get; init; }
+    public string? StepId { get; init; }
+    public int? TurnIndex { get; init; }
+    public bool? IsReplay { get; init; }
+
     public string? OperationId { get; init; }
 
     public string? ModelId { get; init; }

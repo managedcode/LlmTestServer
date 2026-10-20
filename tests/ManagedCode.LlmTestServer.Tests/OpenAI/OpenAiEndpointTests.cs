@@ -423,7 +423,7 @@ public sealed class OpenAiEndpointTests
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
         var payload = await response.Content.ReadFromJsonAsync<JsonElement>(_jsonOptions);
         await Assert.That(payload.GetProperty("error").GetProperty("code").GetString())
-            .IsEqualTo("llm_tck_unknown_model");
+            .IsEqualTo("llm_test_server_unknown_model");
     }
 
     [Test]

@@ -26,6 +26,17 @@ public sealed class LlmTestServerScenarioDatasetBuilder(string id)
         return this;
     }
 
+    public LlmTestServerScenarioDatasetBuilder AddConversation(string scenarioId, Action<ManagedCode.LlmTestServer.Conversations.LlmTestServerConversationBuilder> configure)
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+        var builder = new ManagedCode.LlmTestServer.Conversations.LlmTestServerConversationBuilder(scenarioId);
+        configure(builder);
+        var scenario = builder.Build();
+        _dataset.ChatScenarios.RemoveAll(existing => string.Equals(existing.Id, scenarioId, StringComparison.OrdinalIgnoreCase));
+        _dataset.ChatScenarios.Add(scenario);
+        return this;
+    }
+
     public LlmTestServerScenarioDataset Build()
     {
         return _dataset with

@@ -238,6 +238,18 @@ public sealed class LlmTestServerClientConfigurationBuilder
         return UseModel(id, LlmTestServerModelKind.Video);
     }
 
+    public LlmTestServerClientConfigurationBuilder UseConversation(string id, Action<ManagedCode.LlmTestServer.Conversations.LlmTestServerConversationBuilder> configure)
+    {
+        _builder.AddConversation(id, configure);
+        return this;
+    }
+
+    public LlmTestServerClientConfigurationBuilder UseConversationCapacity(int maximumConversations, long maximumBytes)
+    {
+        _builder.WithConversationCapacity(maximumConversations, maximumBytes);
+        return this;
+    }
+
     public LlmTestServerClientConfigurationBuilder UseChatScenario(
         string id,
         Action<LlmTestServerScenarioBuilder> configure

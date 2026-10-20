@@ -14,7 +14,7 @@ public sealed partial class LlmTestServerRuntime
 {
     private const string _tooManyRequestsCode = "too_many_requests";
     private const string _contentFilterCode = "content_filter";
-    private const string _requestSupersededCode = "llm_tck_request_superseded";
+    private const string _requestSupersededCode = "llm_test_server_request_superseded";
     private const string _requestSupersededMessage =
         "The runtime was reset or reconfigured while the request was in flight.";
     private const int _openAiPromptCacheMinimumTokens = 1024;
@@ -75,6 +75,7 @@ public sealed partial class LlmTestServerRuntime
         {
             _configuration = LlmTestServerConfigurationBuilder.Snapshot(configuration);
             _scenarioReservations.Clear();
+            ClearConversations();
             _chatResponses.Clear();
             _chatResponseBytes = 0;
             _videos.Clear();
@@ -106,6 +107,7 @@ public sealed partial class LlmTestServerRuntime
         lock (_gate)
         {
             _scenarioReservations.Clear();
+            ClearConversations();
             _chatResponses.Clear();
             _chatResponseBytes = 0;
             _videos.Clear();
@@ -137,13 +139,13 @@ public sealed partial class LlmTestServerRuntime
         }
     }
 
-    public IDisposable BeginRequest(string requestId)
+    public IDisposable BeginRequest(string requestId, string? conversationId = null, string? providerNamespace = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
         var previousRequest = _activeRequest.Value;
         lock (_gate)
         {
-            _activeRequest.Value = new RuntimeRequestContext(requestId, _generation);
+            _activeRequest.Value = new RuntimeRequestContext(requestId, _generation, conversationId, providerNamespace);
         }
 
         return new RuntimeRequestScope(_activeRequest, previousRequest);
@@ -171,7 +173,8 @@ public sealed partial class LlmTestServerRuntime
 
         LlmTestServerScenarioResponse response;
         LlmTestServerScenario? scenario;
-        int responsePosition;
+        var responsePosition = -1;
+        ConversationLease? conversationLease = null;
         long generation;
 
         lock (_gate)
@@ -242,8 +245,7 @@ public sealed partial class LlmTestServerRuntime
                 );
             }
 
-            scenario = GetChatScenarios(_configuration)
-                .FirstOrDefault(candidate => ScenarioMatches(candidate, request));
+            scenario = SelectChatScenario(request, bearerToken);
 
             if (scenario is null)
             {
@@ -260,7 +262,7 @@ public sealed partial class LlmTestServerRuntime
                 return LlmTestServerChatResult.Failure(
                     request.ModelId,
                     404,
-                    "llm_tck_unmatched_request",
+                    "llm_test_server_unmatched_request",
                     "No configured LLM Test Server scenario matched the request.",
                     usage: usage
                 );
@@ -288,66 +290,76 @@ public sealed partial class LlmTestServerRuntime
                 );
             }
 
-            if (!_scenarioReservations.TryGetValue(scenario, out var reservations))
+            if (scenario.Conversation is not null)
             {
-                reservations = [];
-                _scenarioReservations.Add(scenario, reservations);
+                var immediate = PrepareConversation(scenario, request, bearerToken, out conversationLease);
+                if (immediate is not null) { return immediate; }
+                response = conversationLease!.Step.Response;
             }
-
-            responsePosition = 0;
-            while (reservations.Contains(responsePosition))
+            else
             {
-                responsePosition++;
-            }
-            if (request.PopulateCacheOnly)
-            {
-                var cacheUsage = CreateChatUsage(request, updatePromptCache: true);
-                var usage = cacheUsage with
+                if (!_scenarioReservations.TryGetValue(scenario, out var reservations))
                 {
-                    OutputTokens = 0,
-                    ReasoningTokens = 0,
-                    TotalTokens = cacheUsage.InputTokens,
-                };
-                AddEvent(LlmTestServerEventKind.Matched, scenario.Id, request.ModelId,
-                    "Prompt cache populated without generating a response.", FormatChatRequest(request),
-                    string.Empty, usage, chatRequest: request);
-                return LlmTestServerChatResult.Success(request.ModelId, scenario.Id, string.Empty, [], usage);
+                    reservations = [];
+                    _scenarioReservations.Add(scenario, reservations);
+                }
+
+                responsePosition = 0;
+                while (reservations.Contains(responsePosition))
+                {
+                    responsePosition++;
+                }
+                if (request.PopulateCacheOnly)
+                {
+                    var cacheUsage = CreateChatUsage(request, updatePromptCache: true);
+                    var usage = cacheUsage with
+                    {
+                        OutputTokens = 0,
+                        ReasoningTokens = 0,
+                        TotalTokens = cacheUsage.InputTokens,
+                    };
+                    AddEvent(LlmTestServerEventKind.Matched, scenario.Id, request.ModelId,
+                        "Prompt cache populated without generating a response.", FormatChatRequest(request),
+                        string.Empty, usage, chatRequest: request);
+                    return LlmTestServerChatResult.Success(request.ModelId, scenario.Id, string.Empty, [], usage);
+                }
+
+                if (responsePosition >= scenario.Responses.Count)
+                {
+                    var usage = CreateChatUsage(request);
+                    AddEvent(
+                        LlmTestServerEventKind.ScenarioExhausted,
+                        scenario.Id,
+                        request.ModelId,
+                        "Scenario response queue is exhausted.",
+                        FormatChatRequest(request),
+                        usage: usage,
+                        chatRequest: request
+                    );
+                    return LlmTestServerChatResult.Failure(
+                        request.ModelId,
+                        409,
+                        "llm_test_server_scenario_exhausted",
+                        "The matched scenario has no responses left.",
+                        scenario.Id,
+                        usage
+                    );
+                }
+
+                response = scenario.Responses[responsePosition];
+                var fixtureError = ValidateFixture(request, response);
+                if (fixtureError is not null)
+                {
+                    var usage = CreateChatUsage(request);
+                    AddEvent(LlmTestServerEventKind.ErrorReturned, scenario.Id, request.ModelId,
+                        "The selected fixture does not satisfy the request.", FormatChatRequest(request),
+                        fixtureError, usage, chatRequest: request);
+                    return LlmTestServerChatResult.Failure(request.ModelId, 409, "llm_test_server_fixture_mismatch", fixtureError, scenario.Id, usage);
+                }
+
+                reservations.Add(responsePosition);
             }
 
-            if (responsePosition >= scenario.Responses.Count)
-            {
-                var usage = CreateChatUsage(request);
-                AddEvent(
-                    LlmTestServerEventKind.ScenarioExhausted,
-                    scenario.Id,
-                    request.ModelId,
-                    "Scenario response queue is exhausted.",
-                    FormatChatRequest(request),
-                    usage: usage,
-                    chatRequest: request
-                );
-                return LlmTestServerChatResult.Failure(
-                    request.ModelId,
-                    409,
-                    "llm_tck_scenario_exhausted",
-                    "The matched scenario has no responses left.",
-                    scenario.Id,
-                    usage
-                );
-            }
-
-            response = scenario.Responses[responsePosition];
-            var fixtureError = ValidateFixture(request, response);
-            if (fixtureError is not null)
-            {
-                var usage = CreateChatUsage(request);
-                AddEvent(LlmTestServerEventKind.ErrorReturned, scenario.Id, request.ModelId,
-                    "The selected fixture does not satisfy the request.", FormatChatRequest(request),
-                    fixtureError, usage, chatRequest: request);
-                return LlmTestServerChatResult.Failure(request.ModelId, 409, "llm_tck_fixture_mismatch", fixtureError, scenario.Id, usage);
-            }
-
-            reservations.Add(responsePosition);
         }
 
         try
@@ -359,7 +371,7 @@ public sealed partial class LlmTestServerRuntime
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            RollBackReservedResponse(scenario, responsePosition, generation);
+            RollBackResponse(scenario, responsePosition, generation, conversationLease);
             throw;
         }
 
@@ -367,7 +379,7 @@ public sealed partial class LlmTestServerRuntime
         {
             if (cancellationToken.IsCancellationRequested)
             {
-                RollBackReservedResponse(scenario, responsePosition, generation);
+                RollBackResponse(scenario, responsePosition, generation, conversationLease);
                 cancellationToken.ThrowIfCancellationRequested();
             }
 
@@ -393,12 +405,16 @@ public sealed partial class LlmTestServerRuntime
                 { ToolCalls = [.. response.ToolCalls] }, bearerToken);
                 if (!completed.IsSuccess)
                 {
-                    RollBackReservedResponse(scenario, responsePosition, generation);
+                    RollBackResponse(scenario, responsePosition, generation, conversationLease);
                     AddEvent(LlmTestServerEventKind.ErrorReturned, scenario.Id, request.ModelId, completed.ErrorMessage!,
                         FormatChatRequest(request), completed.ErrorMessage, usage, chatRequest: request);
                     return completed;
                 }
             }
+            var finalResult = response.Error is { } error
+                ? LlmTestServerChatResult.Failure(request.ModelId, error.StatusCode, error.Code, error.Message, scenario.Id, usage)
+                : completed!;
+            if (conversationLease is not null) { CommitConversation(conversationLease, finalResult); }
             AddEvent(
                 response.Error is null ? LlmTestServerEventKind.Matched : LlmTestServerEventKind.ErrorReturned,
                 scenario.Id,
@@ -408,7 +424,9 @@ public sealed partial class LlmTestServerRuntime
                 responseText,
                 usage,
                 chatRequest: request,
-                streamChunks: response.Error is null && request.Stream ? successfulStreamChunks : null
+                streamChunks: response.Error is null && request.Stream ? successfulStreamChunks : null,
+                stepId: conversationLease?.Step.Id,
+                logicalTurnIndex: conversationLease?.Turn
             );
 
             if (response.Error is not null)
@@ -1094,7 +1112,7 @@ public sealed partial class LlmTestServerRuntime
         return LlmTestServerChatResult.Failure(
             modelId,
             404,
-            "llm_tck_unknown_model",
+            "llm_test_server_unknown_model",
             CreateUnknownModelMessage(modelId, kind),
             usage: usage
         );
@@ -1107,7 +1125,7 @@ public sealed partial class LlmTestServerRuntime
             IsSuccess = false,
             StatusCode = 404,
             ModelId = modelId,
-            ErrorCode = "llm_tck_unknown_model",
+            ErrorCode = "llm_test_server_unknown_model",
             ErrorMessage = CreateUnknownModelMessage(modelId, LlmTestServerModelKind.Embedding),
         };
     }
@@ -1119,7 +1137,7 @@ public sealed partial class LlmTestServerRuntime
             IsSuccess = false,
             StatusCode = 404,
             ModelId = modelId,
-            ErrorCode = "llm_tck_unknown_model",
+            ErrorCode = "llm_test_server_unknown_model",
             ErrorMessage = CreateUnknownModelMessage(modelId, LlmTestServerModelKind.Image),
         };
     }
@@ -1131,7 +1149,7 @@ public sealed partial class LlmTestServerRuntime
             IsSuccess = false,
             StatusCode = 404,
             ModelId = modelId,
-            ErrorCode = "llm_tck_unknown_model",
+            ErrorCode = "llm_test_server_unknown_model",
             ErrorMessage = CreateUnknownModelMessage(modelId, LlmTestServerModelKind.Audio),
         };
     }
@@ -1143,7 +1161,7 @@ public sealed partial class LlmTestServerRuntime
             IsSuccess = false,
             StatusCode = 404,
             ModelId = modelId,
-            ErrorCode = "llm_tck_unknown_model",
+            ErrorCode = "llm_test_server_unknown_model",
             ErrorMessage = CreateUnknownModelMessage(modelId, LlmTestServerModelKind.Audio),
         };
     }
@@ -1158,7 +1176,7 @@ public sealed partial class LlmTestServerRuntime
             IsSuccess = false,
             StatusCode = 404,
             ModelId = modelId,
-            ErrorCode = "llm_tck_unknown_model",
+            ErrorCode = "llm_test_server_unknown_model",
             ErrorMessage = CreateUnknownModelMessage(modelId, LlmTestServerModelKind.Video),
             Usage = usage ?? new LlmTestServerTokenUsage(),
         };
@@ -1361,7 +1379,10 @@ public sealed partial class LlmTestServerRuntime
         string? response = null,
         LlmTestServerTokenUsage? usage = null,
         LlmTestServerChatRequest? chatRequest = null,
-        IReadOnlyList<string>? streamChunks = null
+        IReadOnlyList<string>? streamChunks = null,
+        string? stepId = null,
+        int? logicalTurnIndex = null,
+        bool isReplay = false
     )
     {
         var activeRequest = _activeRequest.Value;
@@ -1376,6 +1397,10 @@ public sealed partial class LlmTestServerRuntime
             Kind = kind,
             RequestId = activeRequest?.RequestId ?? chatRequest?.RequestId,
             ScenarioId = scenarioId,
+            ConversationId = activeRequest?.ConversationId ?? (stepId is null ? null : "default"),
+            StepId = stepId,
+            TurnIndex = logicalTurnIndex,
+            IsReplay = isReplay,
             ModelId = modelId,
             Message = message,
             Request = request,
@@ -1439,6 +1464,8 @@ public sealed partial class LlmTestServerRuntime
         var truncated = false;
         var requestId = TruncateMetadata(runtimeEvent.RequestId, ref truncated);
         var scenarioId = TruncateMetadata(runtimeEvent.ScenarioId, ref truncated);
+        var conversationId = TruncateMetadata(runtimeEvent.ConversationId, ref truncated);
+        var stepId = TruncateMetadata(runtimeEvent.StepId, ref truncated);
         var modelId = TruncateMetadata(runtimeEvent.ModelId, ref truncated) ?? string.Empty;
         var message = TruncateMetadata(runtimeEvent.Message, ref truncated) ?? string.Empty;
         var promptCacheKey = TruncateMetadata(runtimeEvent.PromptCacheKey, ref truncated);
@@ -1447,6 +1474,8 @@ public sealed partial class LlmTestServerRuntime
             _maxRetainedEventCharacters
                 - CountCharacters(requestId)
                 - CountCharacters(scenarioId)
+                - CountCharacters(conversationId)
+                - CountCharacters(stepId)
                 - modelId.Length
                 - message.Length
                 - CountCharacters(promptCacheKey)
@@ -1461,6 +1490,8 @@ public sealed partial class LlmTestServerRuntime
         {
             RequestId = requestId,
             ScenarioId = scenarioId,
+            ConversationId = conversationId,
+            StepId = stepId,
             ModelId = modelId,
             Message = message,
             PromptCacheKey = promptCacheKey,
@@ -1605,6 +1636,8 @@ public sealed partial class LlmTestServerRuntime
     {
         var total = CountCharacters(runtimeEvent.RequestId)
             + CountCharacters(runtimeEvent.ScenarioId)
+            + CountCharacters(runtimeEvent.ConversationId)
+            + CountCharacters(runtimeEvent.StepId)
             + runtimeEvent.ModelId.Length
             + runtimeEvent.Message.Length
             + CountCharacters(runtimeEvent.Request)
@@ -1823,7 +1856,7 @@ public sealed partial class LlmTestServerRuntime
 
     private readonly record struct PromptCacheCandidate(string Key, int Tokens);
 
-    private readonly record struct RuntimeRequestContext(string RequestId, long Generation);
+    private readonly record struct RuntimeRequestContext(string RequestId, long Generation, string? ConversationId, string? ProviderNamespace);
 
     private static LlmTestServerTokenUsage CreateVideoUsage(string prompt)
     {

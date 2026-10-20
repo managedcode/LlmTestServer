@@ -27,7 +27,7 @@ public sealed class ModalityFailureIntegrationTests
         {
             using var unknown = await SendAsync(http, operation, invalidModel, "hello");
             await Assert.That(unknown.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
-            await Assert.That(await unknown.Content.ReadAsStringAsync()).Contains("llm_tck_unknown_model");
+            await Assert.That(await unknown.Content.ReadAsStringAsync()).Contains("llm_test_server_unknown_model");
         }
         using var success = await SendAsync(http, operation, model, "hello");
         success.EnsureSuccessStatusCode();

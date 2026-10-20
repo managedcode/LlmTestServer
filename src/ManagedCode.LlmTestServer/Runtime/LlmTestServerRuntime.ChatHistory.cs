@@ -38,7 +38,7 @@ public sealed partial class LlmTestServerRuntime
         var bytes = HistoryBytes(messages) + Encoding.UTF8.GetByteCount(request.HistoryNamespace!);
         if (_chatResponses.Count >= _configuration.MaxStoredChatResponses || bytes > _configuration.MaxStoredChatResponseBytes - _chatResponseBytes)
         {
-            return LlmTestServerChatResult.Failure(request.ModelId, 409, "llm_tck_response_capacity_exceeded", "Response history capacity exceeded. Reset the runtime or increase its configured capacity.");
+            return LlmTestServerChatResult.Failure(request.ModelId, 409, "llm_test_server_response_capacity_exceeded", "Response history capacity exceeded. Reset the runtime or increase its configured capacity.");
         }
         var id = $"resp_{Guid.NewGuid():N}";
         _chatResponses.Add(id, new StoredChatResponse(request.HistoryNamespace!, TokenHash(token), messages));

@@ -24,7 +24,7 @@
     <PackageProjectUrl>https://github.com/managedcode/LlmTestServer</PackageProjectUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageTags>llm;tck;testing;aspire;openai-compatible;azure-openai;anthropic;gemini;groq;mistral;foundry;ai;dotnet;jev;typesafe;system-one;decision-models;multimodal</PackageTags>
+    <PackageTags>llm;test-server;testing;aspire;openai-compatible;azure-openai;anthropic;gemini;groq;mistral;foundry;ai;dotnet;jev;typesafe;system-one;decision-models;multimodal</PackageTags>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <EnablePackageValidation>true</EnablePackageValidation>

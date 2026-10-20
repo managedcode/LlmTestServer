@@ -16,11 +16,11 @@ public sealed class PackageTests
     public async Task InstalledPackage_ServesAssetsAndInteractiveDashboard(CancellationToken cancellationToken)
     {
         var builder = DistributedApplicationTestingBuilder.Create([]);
-        var resource = builder.AddLlmTestServer("package-tck").WithApiKey("test-key");
+        var resource = builder.AddLlmTestServer("package-test-server").WithApiKey("test-key");
         await using var app = await builder.BuildAsync(cancellationToken);
         await app.StartAsync(cancellationToken);
-        await app.ResourceNotifications.WaitForResourceHealthyAsync("package-tck", cancellationToken);
-        using var http = app.CreateHttpClient("package-tck", "http");
+        await app.ResourceNotifications.WaitForResourceHealthyAsync("package-test-server", cancellationToken);
+        using var http = app.CreateHttpClient("package-test-server", "http");
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "test-key");
         foreach (var path in new[] { "/health", "/admin-api/models", "/_framework/blazor.web.js", "/_content/Microsoft.FluentUI.AspNetCore.Components/Microsoft.FluentUI.AspNetCore.Components.lib.module.js" })
         {
@@ -105,6 +105,7 @@ public sealed class PackageTests
                 || (await control.GetAssertionsAsync(cancellationToken)).Matched != 1)
                 throw new InvalidOperationException("Installed package sessions must isolate requests and assertions from the dashboard runtime.");
         }
+        await VerifyInstalledConversationGraphAsync(control, cancellationToken);
         using var playwright = await Playwright.CreateAsync();
         await using var browser = await playwright.Chromium.LaunchAsync(new() { Headless = true });
         var page = await browser.NewPageAsync();
@@ -159,4 +160,66 @@ public sealed class PackageTests
         await page.ScreenshotAsync(new() { Path = "package-dashboard-authorized-mobile.png", FullPage = true });
         await page.ScreenshotAsync(new() { Path = "package-dashboard-mobile-request-detail.png", FullPage = true });
     }
+
+    private static async Task VerifyInstalledConversationGraphAsync(LlmTestServerClient control, CancellationToken cancellationToken)
+    {
+        await using var session = await control.CreateSessionAsync(config => config.RequireBearerToken("test-key").UseGpt41Mini()
+            .UseConversation("package-graph", graph => graph
+                .Step("lookup", step => step.WhenLatestUserEquals("weather in Paris").WhenTurn(1)
+                    .CallsTool("weather", """{"city":"Paris"}""", "call_package_graph").Then("answer"))
+                .Step("answer", step => step.WhenToolResult("weather", "call_package_graph").WhenTurn(2)
+                    .WithToolArgumentsJson("""{"city":"Paris"}""").WhenLatestJsonValue("$.temperature", 18)
+                    .Responds("Paris is 18 °C", "Paris is ", "18 °C").Complete())), cancellationToken);
+        using var conversation = session.Control.ForConversation("installed-sdk-graph");
+        var sdk = new OpenAI.Chat.ChatClient("gpt-4.1-mini", new System.ClientModel.ApiKeyCredential("test-key"),
+            new OpenAI.OpenAIClientOptions
+            {
+                Endpoint = new Uri(conversation.HttpClient.BaseAddress!, "openai/v1"),
+                Transport = new System.ClientModel.Primitives.HttpClientPipelineTransport(conversation.HttpClient),
+            });
+        var options = new OpenAI.Chat.ChatCompletionOptions
+        {
+            Tools = { OpenAI.Chat.ChatTool.CreateFunctionTool("weather", functionParameters:
+                BinaryData.FromString("""{"type":"object","required":["city"],"properties":{"city":{"const":"Paris"}}}""")) },
+        };
+        List<OpenAI.Chat.ChatMessage> messages = [new OpenAI.Chat.UserChatMessage("weather in Paris")];
+        var first = (await sdk.CompleteChatAsync(messages, options, cancellationToken)).Value;
+        var call = first.ToolCalls.Single();
+        if (call.Id != "call_package_graph" || call.FunctionName != "weather"
+            || call.FunctionArguments.ToString() != """{"city":"Paris"}""")
+            throw new InvalidOperationException("Installed conversation graph lost its SDK tool-call fixture.");
+        messages.Add(new OpenAI.Chat.AssistantChatMessage(first));
+        messages.Add(new OpenAI.Chat.ToolChatMessage(call.Id, """{"temperature":18}"""));
+        var explanation = await conversation.Control.ExplainMatchAsync(new()
+        {
+            Request = new()
+            {
+                Messages =
+                [
+                    new() { Role = "user", Content = "weather in Paris" },
+                    new() { Role = "assistant", ToolCalls = [new() { Id = call.Id, Name = "weather", ArgumentsJson = """{"city":"Paris"}""" }] },
+                    new() { Role = "tool", ToolCallId = call.Id, Content = """{"temperature":18}""" },
+                ],
+                Tools = [new() { Name = "weather", ParametersJson = """{"type":"object","required":["city"],"properties":{"city":{"const":"Paris"}}}""" }],
+            },
+        }, cancellationToken);
+        if (explanation.ConversationId != conversation.Id || explanation.SelectedScenarioId != "package-graph"
+            || explanation.SelectedStepId != "answer" || explanation.TurnIndex != 2
+            || (await conversation.Control.GetConversationsAsync(cancellationToken)).Single().ExecutedSteps != 1)
+            throw new InvalidOperationException("Installed match explanation must identify the active step without consuming it.");
+        var answer = (await sdk.CompleteChatAsync(messages, options, cancellationToken)).Value;
+        if (answer.Content[0].Text != "Paris is 18 °C")
+            throw new InvalidOperationException("Installed SDK conversation did not match its JSON tool result.");
+        var replay = new StringBuilder();
+        await foreach (var update in sdk.CompleteChatStreamingAsync(messages, options, cancellationToken))
+            foreach (var part in update.ContentUpdate) replay.Append(part.Text);
+        var state = (await conversation.Control.GetConversationsAsync(cancellationToken)).Single();
+        var events = (await session.Control.GetAssertionsAsync(cancellationToken)).Events;
+        if (replay.ToString() != "Paris is 18 °C" || state.ConversationId != conversation.Id || state.ExecutedSteps != 2
+            || !state.IsTerminal || !events.Last().IsReplay || events.Last().StepId != "answer"
+            || events.Any(item => item.ConversationId != conversation.Id)
+            || (await control.GetAssertionsAsync(cancellationToken)).Matched != 1)
+            throw new InvalidOperationException("Installed conversation replay must preserve graph state, header scope and default runtime isolation.");
+    }
+
 }

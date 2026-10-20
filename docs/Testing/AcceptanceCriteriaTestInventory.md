@@ -22,6 +22,9 @@ have been removed. This inventory is documentation; tests do not read it to asse
 | Parallel session queues, reset/configure, credentials and admission/disposal | `SessionIsolationIntegrationTests`, `SessionBoundaryIntegrationTests` |
 | Session response history, video/fault state, cancellation and in-flight deletion | `SessionStateIntegrationTests` |
 | Session provider matrix, official SDK JSON/SSE, native decisions, cache and journal limits | `SessionProviderIntegrationTests` |
+| Conversation branches, turns, JSON predicates, tools, replay, exhaustion and invalid graph/configuration | `ConversationHttpIntegrationTests` |
+| Conversation official SDK tool loops, Responses history/replay and streaming | `ConversationSdkIntegrationTests` |
+| Conversation provider/credential/session isolation, cancellation and in-flight mutation | `ConversationProviderIntegrationTests` |
 | Client model presets actually reach the server | `LlmTestServerClientConfigurationTests` |
 | MEAI chat, embedding and image clients call the server | `MicrosoftExtensionsAiClientTests.MicrosoftExtensionsAiClients_InvokeLlmTestServerThroughOpenAiCompatibilityEndpointsAsync` |
 | Official OpenAI SDK chat, Responses, tools, embeddings and modalities | `OpenAiSdkCompatibilityTests`, `ToolFixtureClientTests` |
@@ -47,17 +50,17 @@ have been removed. This inventory is documentation; tests do not read it to asse
 | Public request journal auth, all filter/paging parameters, validation, reset | `RequestJournalIntegrationTests` |
 | Bounded request/response diagnostics preserve full HTTP response bytes | `RequestJournalIntegrationTests.Journal_BoundsRetentionWithoutTruncatingActualProviderResponsesAsync` |
 | Aspire starts packaged service and exercises official SDKs through allocated endpoint | `AspireIntegrationTests` |
-| New/legacy configuration key precedence enforced by running Aspire server | `AspireAuthorizationIntegrationTests` |
+| Configuration key enforced by running Aspire server | `AspireAuthorizationIntegrationTests` |
 | Installed NuGet assets, typed configuration, official SDK and interactive Chromium dashboard | `scripts/package-consumer/PackageTests.cs`, run by `scripts/verify-package.py` with isolated build configuration/cache |
 | Actual public GitHub release and all NuGet bytes | `scripts/verify-release.py`, executed after publication |
 | Clean public-feed installed consumer | `scripts/verify-package.py --public-feed`, executed after publication |
 
-## Migration qualification still in progress
+## Integration qualification still in progress
 
-Removing old internal tests does not prove equivalent public API coverage. The remaining migration obligations
-are tracked in `artifacts/llm-test-server-migration/integration-parity.json` and the implementation ledger in
-[the migration plan](../Features/LlmTestServerMigrationPlan.md). Remaining work includes final coverage qualification, installed-package browser flows and container
-execution; the configuration/history/cancellation integrations passed in the 629/629 integration-only suite (90.86% production line coverage). Add real server flows for uncovered behavior; do not restore internal tests or lower the 90% coverage gate.
+Removing old internal tests does not prove equivalent public API coverage. The remaining integration obligations
+are tracked in the integration-parity verification artifact and the implementation ledger in
+[the delivery plan](../Features/LlmTestServerDeliveryPlan.md). Remaining work includes final coverage qualification, installed-package browser flows and container
+execution; the current configuration/history/conversation integrations passed in the 722/722 integration-only suite (91.34% production line coverage). Add real server flows for uncovered behavior; do not restore internal tests or lower the 90% coverage gate.
 
 Each implemented operation must be exercised with every supported parameter, positive and invalid/boundary
 values, supported streaming modes, auth/version handling and stateful continuation where applicable. A passing

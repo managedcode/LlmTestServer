@@ -13,6 +13,11 @@ public sealed record LlmTestServerRuntimeEvent
     /// </summary>
     public string? RequestId { get; init; }
 
+    public string? ConversationId { get; init; }
+    public string? StepId { get; init; }
+    public int? TurnIndex { get; init; }
+    public bool IsReplay { get; init; }
+
     public string? ScenarioId { get; init; }
 
     public string ModelId { get; init; } = string.Empty;

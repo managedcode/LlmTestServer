@@ -6,5 +6,5 @@ namespace ManagedCode.LlmTestServer.Runtime;
 /// </summary>
 public interface ILlmTestServerRuntimeRequestScope
 {
-    IDisposable BeginRequest(string requestId);
+    IDisposable BeginRequest(string requestId, string? conversationId = null, string? providerNamespace = null);
 }

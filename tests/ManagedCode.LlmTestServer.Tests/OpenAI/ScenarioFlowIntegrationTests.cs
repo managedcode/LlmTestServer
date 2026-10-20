@@ -29,7 +29,7 @@ public sealed class ScenarioFlowIntegrationTests
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "scenario-key");
         using var reordered = await http.PostAsJsonAsync("/openai/v1/chat/completions", new { body.model, messages = body.messages.Reverse().ToArray() });
         await Assert.That(reordered.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
-        await Assert.That(await reordered.Content.ReadAsStringAsync()).Contains("llm_tck_unmatched_request");
+        await Assert.That(await reordered.Content.ReadAsStringAsync()).Contains("llm_test_server_unmatched_request");
         foreach (var expected in new[] { "first", "second" })
         {
             using var response = await http.PostAsJsonAsync("/openai/v1/chat/completions", body);

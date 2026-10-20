@@ -37,7 +37,7 @@
 
 Місце: `src/ManagedCode.LlmTestServer/Runtime/LlmTestServerRuntime.cs:312–316`.
 
-Для текстової fixture `not json` і `RequireJson=true` runtime повернув **409 / llm_tck_fixture_mismatch**, але summary містив **TotalEvents=0, ErrorsReturned=0, Events=[]**. Early return обходить AddEvent та облік usage.
+Для текстової fixture `not json` і `RequireJson=true` runtime повернув **409 / llm_test_server_fixture_mismatch**, але summary містив **TotalEvents=0, ErrorsReturned=0, Events=[]**. Early return обходить AddEvent та облік usage.
 
 HTTP trace може показати помилку, але користувачі runtime/control assertions не отримують відповідного діагностичного запису. Треба додати окремий вид події/лічильник mismatch або послідовно використовувати error event. Черга відповідей при цьому повинна залишатися незмінною. Це слід перевірити одночасним assertion на 409, journal та наступну відповідь.
 

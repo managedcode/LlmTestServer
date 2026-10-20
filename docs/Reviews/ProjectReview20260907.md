@@ -58,7 +58,7 @@ Cancellation перевіряється тільки через `Task.Delay`. Б
 
 **Відтворення A:** виклик із `new CancellationToken(true)` повернув `first`; наступний отримав `second`.
 
-**Відтворення B:** запит A резервує `first` із затримкою, B отримує `second`, A скасовується; наступний запит повертає **409 / llm_tck_scenario_exhausted**, хоча `first` ніхто не отримав.
+**Відтворення B:** запит A резервує `first` із затримкою, B отримує `second`, A скасовується; наступний запит повертає **409 / llm_test_server_scenario_exhausted**, хоча `first` ніхто не отримав.
 
 **Наслідок:** паралельні integration tests і retry після cancellation залежать від порядку завершення запитів. Наявний тест перевіряє лише одиничне скасування delayed request.
 
@@ -126,7 +126,7 @@ Deployment chat передає запит у спільний handler без ч�
 
 **Доказ:** `/azure-openai/openai/deployments/gpt-4.1-mini/chat/completions?api-version=not-a-version` повернув 200 і спожив сценарій.
 
-**Наслідок:** помилкова Azure SDK/config інтеграція проходить локальний TCK. [Офіційна legacy REST-специфікація](https://github.com/Azure/azure-rest-api-specs/blob/main/specification/cognitiveservices/data-plane/AzureOpenAI/inference/stable/2024-10-21/inference.json) вимагає api-version; нові `/openai/v1` маршрути мають інше правило і не повинні отримати dated-version вимогу.
+**Наслідок:** помилкова Azure SDK/config інтеграція проходить локальний LLM Test Server. [Офіційна legacy REST-специфікація](https://github.com/Azure/azure-rest-api-specs/blob/main/specification/cognitiveservices/data-plane/AzureOpenAI/inference/stable/2024-10-21/inference.json) вимагає api-version; нові `/openai/v1` маршрути мають інше правило і не повинні отримати dated-version вимогу.
 
 **Виправлення:** явна політика версій окремо для legacy Azure, Foundry inference і preview video, з негативними тестами missing/unsupported version до runtime queue consumption.
 

@@ -142,9 +142,9 @@ public sealed record LlmTestServerVideoResult
 
     public string Prompt { get; init; } = string.Empty;
 
-    public string VideoId { get; init; } = "video_llm_tck";
+    public string VideoId { get; init; } = "video_llm_test_server";
 
-    public string GenerationId { get; init; } = "gen_llm_tck";
+    public string GenerationId { get; init; } = "gen_llm_test_server";
 
     public string? RemixedFromVideoId { get; init; }
 

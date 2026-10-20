@@ -657,7 +657,7 @@ public sealed class OpenAiCompatibleProviderRouteTests
         await Assert.That(listPayload.GetProperty("data").GetArrayLength()).IsEqualTo(1);
         await Assert.That(jobPayload.GetProperty("id").GetString()).IsEqualTo(jobId);
         await Assert.That(generationPayload.GetProperty("id").GetString()).IsEqualTo(generationId);
-        await Assert.That(generationPayload.GetProperty("job_id").GetString()).IsEqualTo("video_llm_tck");
+        await Assert.That(generationPayload.GetProperty("job_id").GetString()).IsEqualTo("video_llm_test_server");
         await Assert.That(thumbnail.Content.Headers.ContentType?.MediaType).IsEqualTo("image/jpg");
         await Assert.That(video.Content.Headers.ContentType?.MediaType).IsEqualTo("video/mp4");
         await Assert.That(Encoding.ASCII.GetString(videoBytes, 4, 4)).IsEqualTo("ftyp");
