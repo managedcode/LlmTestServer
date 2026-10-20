@@ -78,3 +78,7 @@ Each implemented operation must be exercised with every supported parameter, pos
 values, supported streaming modes, auth/version handling and stateful continuation where applicable. A passing
 subset or this inventory alone does not establish full parameter coverage. New provider claims require official
 method-level contracts plus passing HTTP/SDK behavior evidence.
+
+## Native OpenAI Responses web search
+
+The `OpenAI/NativeWebSearch*IntegrationTests.cs` suites exercise the running server through HTTP and the official Responses SDK: typed ordered outputs, citations, native SSE lifecycle, options and schema rejection, mixed function rounds, explicit/stored continuation, cache accounting, ownership, reset/cancellation, replay and bounded diagnostics. Initial qualification: 99/99 native cases and 85/85 existing provider evidence cases. The installed-package consumer adds an independent `NativePackageTests` flow; container verification covers native JSON/SSE and terminal request evidence. See [the exact supported subset and qualification](../Features/OpenAiNativeWebSearch.md). Ordinary function-only responses retain their existing output limits and are covered separately by the large-response regression.

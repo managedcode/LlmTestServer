@@ -364,6 +364,7 @@ public sealed partial class LlmTestServerRuntime
 
         }
 
+        response = LlmTestServerResponseItems.Project(response);
         try
         {
             if (response.DelayMilliseconds > 0)
@@ -392,7 +393,7 @@ public sealed partial class LlmTestServerRuntime
 
             var responseText = response.Error?.Message ?? response.Content;
             var responseOutput = response.Error is null
-                ? response.Content + string.Concat(response.ToolCalls.Select(call => call.Name + call.ArgumentsJson))
+                ? response.Content + string.Concat(response.ToolCalls.Select(call => call.Name + call.ArgumentsJson)) + LlmTestServerResponseItems.NativeTokenText(response.OutputItems)
                 : null;
             IReadOnlyList<string> successfulStreamChunks = response.StreamChunks.Count > 0
                 ? response.StreamChunks
@@ -402,7 +403,7 @@ public sealed partial class LlmTestServerRuntime
             {
                 completed = RetainChatResponse(request, LlmTestServerChatResult.Success(request.ModelId, scenario.Id,
                     response.Content, successfulStreamChunks) with
-                { ToolCalls = [.. response.ToolCalls], WireMetadata = GetResponseMetadata() }, bearerToken);
+                { ToolCalls = [.. response.ToolCalls], OutputItems = LlmTestServerResponseItems.Snapshot(response.OutputItems), WireMetadata = GetResponseMetadata() }, bearerToken);
                 if (!completed.IsSuccess)
                 {
                     RollBackResponse(scenario, responsePosition, generation, conversationLease);
@@ -433,7 +434,8 @@ public sealed partial class LlmTestServerRuntime
                 logicalTurnIndex: conversationLease?.Turn,
                 responseToolCalls: response.Error is null ? response.ToolCalls : null,
                 retryAfterSeconds: response.Error?.RetryAfterSeconds,
-                wireMetadata: finalResult.WireMetadata
+                wireMetadata: finalResult.WireMetadata,
+                responseOutputItems: finalResult.OutputItems
             );
 
             if (response.Error is not null)
@@ -990,7 +992,9 @@ public sealed partial class LlmTestServerRuntime
     {
         return item with
         {
-            Messages = item.Messages.Select(message => message with { ToolCalls = [.. message.ToolCalls] }).ToArray(),
+            Messages = item.Messages.Select(message => message with { ToolCalls = [.. message.ToolCalls], OutputItems = LlmTestServerResponseItems.Snapshot(message.OutputItems) }).ToArray(),
+            ResponseOutputItems = LlmTestServerResponseItems.Snapshot(item.ResponseOutputItems),
+            NativeTools = LlmTestServerResponseItems.SnapshotDeclarations(item.NativeTools),
             StreamChunks = item.StreamChunks.ToArray(),
         };
     }
@@ -1374,7 +1378,8 @@ public sealed partial class LlmTestServerRuntime
 
         return roleMatches && contentMatches
             && ((mode != LlmTestServerMatchMode.Exact && expected.ToolCallId is null) || expected.ToolCallId == actual.ToolCallId)
-            && ((mode != LlmTestServerMatchMode.Exact && expected.ToolCalls.Count == 0) || expected.ToolCalls.SequenceEqual(actual.ToolCalls));
+            && ((mode != LlmTestServerMatchMode.Exact && expected.ToolCalls.Count == 0) || expected.ToolCalls.SequenceEqual(actual.ToolCalls))
+            && (expected.OutputItems.Count == 0 || System.Text.Json.JsonSerializer.Serialize(expected.OutputItems) == System.Text.Json.JsonSerializer.Serialize(actual.OutputItems));
     }
 
     private void AddEvent(
@@ -1392,7 +1397,8 @@ public sealed partial class LlmTestServerRuntime
         bool isReplay = false,
         IReadOnlyList<LlmTestServerToolCall>? responseToolCalls = null,
         int? retryAfterSeconds = null,
-        ManagedCode.LlmTestServer.Determinism.LlmTestServerResponseMetadata? wireMetadata = null
+        ManagedCode.LlmTestServer.Determinism.LlmTestServerResponseMetadata? wireMetadata = null,
+        IReadOnlyList<LlmTestServerResponseItem>? responseOutputItems = null
     )
     {
         var activeRequest = _activeRequest.Value;
@@ -1412,6 +1418,7 @@ public sealed partial class LlmTestServerRuntime
             TurnIndex = logicalTurnIndex,
             IsReplay = isReplay,
             ResponseToolCalls = responseToolCalls ?? [],
+            ResponseOutputItems = responseOutputItems ?? [],
             RetryAfterSeconds = retryAfterSeconds,
             WireMetadata = wireMetadata ?? activeRequest?.WireMetadata,
             ModelId = modelId,
@@ -1419,6 +1426,7 @@ public sealed partial class LlmTestServerRuntime
             Request = request,
             Messages = chatRequest?.Messages ?? [],
             Tools = chatRequest?.Tools ?? [],
+            NativeTools = chatRequest?.NativeTools ?? [],
             Response = response,
             IsStreaming = chatRequest?.Stream ?? false,
             StreamChunks = streamChunks ?? [],
@@ -1499,7 +1507,9 @@ public sealed partial class LlmTestServerRuntime
         var streamChunks = RetainChunks(runtimeEvent.StreamChunks, ref remaining, ref truncated);
         var messages = RetainMessages(runtimeEvent.Messages, ref remaining, ref truncated);
         var tools = RetainTools(runtimeEvent.Tools, ref remaining, ref truncated);
+        var nativeTools = RetainNativeTools(runtimeEvent.NativeTools, ref remaining, ref truncated);
         var responseCalls = RetainResponseCalls(runtimeEvent.ResponseToolCalls, ref remaining, ref truncated);
+        var responseItems = RetainOutputItems(runtimeEvent.ResponseOutputItems, ref remaining, ref truncated);
         var request = RetainText(runtimeEvent.Request, ref remaining, ref truncated);
 
         return runtimeEvent with
@@ -1513,7 +1523,9 @@ public sealed partial class LlmTestServerRuntime
             PromptCacheKey = promptCacheKey,
             Messages = messages,
             Tools = tools,
+            NativeTools = nativeTools,
             ResponseToolCalls = responseCalls,
+            ResponseOutputItems = responseItems,
             Response = response,
             StreamChunks = streamChunks,
             Request = request,
@@ -1553,10 +1565,47 @@ public sealed partial class LlmTestServerRuntime
                 remaining -= _retainedMessageCost;
                 calls.Add(new() { Id = RetainRequiredText(call.Id, ref remaining, ref truncated), Name = RetainRequiredText(call.Name, ref remaining, ref truncated), ArgumentsJson = RetainRequiredText(call.ArgumentsJson, ref remaining, ref truncated) });
             }
-            retained.Add(new LlmTestServerMessage { Role = role, Content = content, ToolCallId = callId, ToolCalls = calls });
+            var outputItems = RetainOutputItems(source.OutputItems, ref remaining, ref truncated);
+            retained.Add(new LlmTestServerMessage { Role = role, Content = content, ToolCallId = callId, ToolCalls = calls, OutputItems = outputItems });
         }
 
         return retained.Count == 0 ? [] : Array.AsReadOnly(retained.ToArray());
+    }
+
+    private static List<LlmTestServerNativeToolDeclaration> RetainNativeTools(IReadOnlyList<LlmTestServerNativeToolDeclaration> tools, ref int remaining, ref bool truncated)
+    {
+        var retained = new List<LlmTestServerNativeToolDeclaration>();
+        foreach (var tool in tools)
+        {
+            var cost = NativeToolCharacters(tool);
+            if (cost > remaining) { truncated = true; break; }
+            remaining -= cost;
+            retained.AddRange(LlmTestServerResponseItems.SnapshotDeclarations([tool]));
+        }
+        return retained;
+    }
+
+    private static int NativeToolCharacters(LlmTestServerNativeToolDeclaration tool)
+    {
+        return _retainedToolCost + System.Text.Json.JsonSerializer.Serialize(tool).Length;
+    }
+
+    private static List<LlmTestServerResponseItem> RetainOutputItems(IReadOnlyList<LlmTestServerResponseItem> items, ref int remaining, ref bool truncated)
+    {
+        var retained = new List<LlmTestServerResponseItem>();
+        foreach (var item in items)
+        {
+            var cost = OutputItemCharacters(item);
+            if (cost > remaining) { truncated = true; break; }
+            remaining -= cost;
+            retained.AddRange(LlmTestServerResponseItems.Snapshot([item]));
+        }
+        return retained;
+    }
+
+    private static int OutputItemCharacters(LlmTestServerResponseItem item)
+    {
+        return _retainedMessageCost + System.Text.Json.JsonSerializer.Serialize(item).Length;
     }
 
     private static IReadOnlyList<LlmTestServerToolCall> RetainResponseCalls(IReadOnlyList<LlmTestServerToolCall> calls, ref int remaining, ref bool truncated)
@@ -1677,9 +1726,11 @@ public sealed partial class LlmTestServerRuntime
         foreach (var item in runtimeEvent.Messages)
         {
             total += _retainedMessageCost + item.Role.Length + item.Content.Length + CountCharacters(item.ToolCallId)
-                + item.ToolCalls.Sum(call => _retainedMessageCost + call.Id.Length + call.Name.Length + call.ArgumentsJson.Length);
+                + item.ToolCalls.Sum(call => _retainedMessageCost + call.Id.Length + call.Name.Length + call.ArgumentsJson.Length)
+                + item.OutputItems.Sum(OutputItemCharacters);
         }
 
+        total += runtimeEvent.ResponseOutputItems.Sum(OutputItemCharacters) + runtimeEvent.NativeTools.Sum(NativeToolCharacters);
         foreach (var call in runtimeEvent.ResponseToolCalls)
         { total += _retainedMessageCost + call.Id.Length + call.Name.Length + call.ArgumentsJson.Length; }
         foreach (var item in runtimeEvent.Tools)
@@ -1718,8 +1769,9 @@ public sealed partial class LlmTestServerRuntime
 
     private static string MessageTokenText(LlmTestServerMessage message)
     {
-        return message.ToolCalls.Count == 0 && message.ToolCallId is null ? message.Content
+        var text = message.ToolCalls.Count == 0 && message.ToolCallId is null ? message.Content
         : message.Content + " " + message.ToolCallId + " " + string.Join(" ", message.ToolCalls.Select(call => call.Id + " " + call.Name + " " + call.ArgumentsJson));
+        return text + LlmTestServerResponseItems.NativeTokenText(message.OutputItems);
     }
 
     private LlmTestServerTokenUsage CreateChatUsage(
@@ -1730,7 +1782,9 @@ public sealed partial class LlmTestServerRuntime
     {
         var inputTokens = request.Messages.Sum(message =>
             LlmTestServerTokenCounter.CountTextTokens(MessageTokenText(message))
-        ) + request.Tools.Sum(tool => LlmTestServerTokenCounter.CountTextTokens(tool.Name + " " + tool.Description + " " + tool.ParametersJson));
+        ) + request.Tools.Sum(tool =>
+            LlmTestServerTokenCounter.CountTextTokens(tool.Name + " " + tool.Description + " " + tool.ParametersJson)
+        ) + LlmTestServerTokenCounter.CountTextTokens(NativeDeclarationTokenText(request));
         var (cachedInputTokens, cacheCreationInputTokens) = CalculatePromptCacheUsage(
             request,
             updatePromptCache
@@ -1803,8 +1857,12 @@ public sealed partial class LlmTestServerRuntime
         var candidates = new List<PromptCacheCandidate>();
         var cachePrefix = new StringBuilder();
         var toolText = string.Join("\n", request.Tools.Select(tool => tool.Name + " " + tool.Description + " " + tool.ParametersJson));
+        var nativeText = NativeDeclarationTokenText(request);
+        if (nativeText.Length > 0) { toolText += "\n" + nativeText; }
         cachePrefix.Append(toolText);
-        var cumulativeTokens = LlmTestServerTokenCounter.CountTextTokens(toolText);
+        var cumulativeTokens = request.Tools.Sum(tool => LlmTestServerTokenCounter.CountTextTokens(
+            tool.Name + " " + tool.Description + " " + tool.ParametersJson))
+            + LlmTestServerTokenCounter.CountTextTokens(nativeText);
 
         foreach (var message in request.Messages)
         {

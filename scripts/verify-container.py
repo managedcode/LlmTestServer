@@ -117,6 +117,87 @@ def main():
         assertions = json.loads(request("/admin-api/assertions")[1])
         assert assertions["matched"] == 2 and assertions["modelNotFound"] == 1
         results.append("unknown-model validation and real runtime assertions")
+        source_url = "https://example.com/container-source"
+        search_id = "ws_container_native"
+        message_id = "msg_container_native"
+        citation = {"startIndex": 0, "endIndex": 5, "url": source_url, "title": "Container fixture"}
+        native_items = [
+            {"kind": "web_search", "id": search_id, "queries": ["container fixture facts"],
+             "sources": [{"url": source_url}]},
+            {"kind": "message", "id": message_id, "content": "Paris fixture.",
+             "streamChunks": ["Paris ", "fixture."], "citations": [citation]},
+        ]
+        native_configuration = {
+            "requiredBearerToken": token,
+            "models": [{"id": "gpt-4.1-mini", "kind": "chat"}],
+            "chatScenarios": [{"id": "container-native", "modelId": "gpt-4.1-mini",
+                               "responses": [{"outputItems": native_items} for _ in range(3)]}],
+        }
+        status, configured, _ = request("/admin-api/configure", body=native_configuration)
+        assert status == 200, ("Native fixture configuration failed", status, configured)
+        native_request = {
+            "model": "gpt-4.1-mini", "input": "run the native fixture",
+            "tools": [{"type": "web_search", "search_context_size": "low",
+                       "filters": {"allowed_domains": ["example.com"]},
+                       "user_location": {"type": "approximate", "country": "FR"}}],
+            "tool_choice": {"type": "web_search"},
+        }
+
+        def check_native_output(payload, *, include_sources):
+            output = payload["output"]
+            assert [item["type"] for item in output] == ["web_search_call", "message"]
+            search, message = output
+            assert search["id"] == search_id and search["status"] == "completed"
+            assert "role" not in search and "content" not in search and "call_id" not in search
+            assert search["action"]["type"] == "search"
+            assert search["action"]["queries"] == ["container fixture facts"]
+            if include_sources:
+                assert search["action"]["sources"] == [{"type": "url", "url": source_url}]
+            else:
+                assert "sources" not in search["action"]
+            assert message["id"] == message_id and message["role"] == "assistant"
+            assert len(message["content"]) == 1
+            text = message["content"][0]
+            assert text["type"] == "output_text" and text["text"] == "Paris fixture."
+            assert text["annotations"] == [{"type": "url_citation", "start_index": 0,
+                                             "end_index": 5, "url": source_url, "title": "Container fixture"}]
+
+        status, response, _ = request("/openai/v1/responses", body=native_request)
+        assert status == 200, ("Native JSON failed", status, response)
+        check_native_output(json.loads(response), include_sources=False)
+        included_request = native_request | {"include": ["web_search_call.action.sources"]}
+        status, response, _ = request("/openai/v1/responses", body=included_request)
+        assert status == 200, ("Native JSON with sources failed", status, response)
+        included = json.loads(response)
+        check_native_output(included, include_sources=True)
+        results.append("native Responses configure, ordered JSON, source include gating and URL citation")
+        status, response, headers = request("/openai/v1/responses", body=included_request | {"stream": True})
+        assert status == 200 and headers.get("Content-Type", "").startswith("text/event-stream")
+        assert response.endswith(b"\n\n"), "Native stream has no complete final SSE frame"
+        frames = [json.loads(line[6:]) for line in response.splitlines()
+                  if line.startswith(b"data: ") and line != b"data: [DONE]"]
+        names = [frame["type"] for frame in frames]
+        assert [frame["sequence_number"] for frame in frames] == list(range(len(frames)))
+        progress = [frame for frame in frames if frame["type"].startswith("response.web_search_call.")]
+        assert [frame["type"] for frame in progress] == ["response.web_search_call.in_progress",
+            "response.web_search_call.searching", "response.web_search_call.completed"]
+        assert all(frame["item_id"] == search_id and frame["output_index"] == 0 for frame in progress)
+        assert names.index("response.web_search_call.completed") < names.index("response.output_text.delta")
+        assert "".join(frame["delta"] for frame in frames if frame["type"] == "response.output_text.delta") == "Paris fixture."
+        annotations = [frame for frame in frames if frame["type"] == "response.output_text.annotation.added"]
+        assert len(annotations) == 1 and annotations[0]["item_id"] == message_id
+        assert annotations[0]["annotation"] == included["output"][1]["content"][0]["annotations"][0]
+        assert names[-1] == "response.completed"
+        assert frames[-1]["response"]["output"] == included["output"]
+        check_native_output(frames[-1]["response"], include_sources=True)
+        status, response, _ = request("/admin-api/requests?streaming=true&limit=1")
+        assert status == 200
+        trace = json.loads(response)[0]
+        assert trace["terminalMarkerObserved"] is True and trace["isCompleted"] is True
+        assert trace["responseToolCalls"] == [] and len(trace["nativeTools"]) == 1
+        assert trace["responseOutputItems"][0]["kind"] == "web_search"
+        assert trace["responseOutputItems"][0]["id"] == search_id
+        results.append("native SSE progress, deltas, citation, completed output and terminal request evidence")
         assert request("/admin-api/reset", method="POST")[0] == 200
         assert json.loads(request("/admin-api/assertions")[1])["totalEvents"] == 0
         results.append("management reset")

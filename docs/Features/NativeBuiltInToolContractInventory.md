@@ -1,9 +1,10 @@
 # Native built-in tool contract inventory
 
-Status: **Proposed contracts; not implemented or qualified.**
+Status: **OpenAI completed-search subset implemented with 99 focused HTTP/SDK cases passing; remaining contracts proposed.**
 Audit date: **2026-10-20**.
 Scope: first E5 native search, file retrieval and code execution contracts for OpenAI Responses,
-Anthropic Messages and Gemini generateContent. This inventory is a documentation prerequisite, not a support claim.
+Anthropic Messages and Gemini generateContent. The bounded OpenAI completed-search subset is described in [its feature contract](OpenAiNativeWebSearch.md).
+All other cells below are prerequisites and proposed contracts, not support claims.
 Related: [delivery plan](LlmTestServerDeliveryPlan.md), [conversation DSL](ConversationDSL.md),
 [request verification](RequestVerificationAndDeterminism.md), [existing function-tool fixtures](ToolAndStructuredFixtures.md).
 

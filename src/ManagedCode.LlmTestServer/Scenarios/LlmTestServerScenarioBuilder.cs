@@ -37,6 +37,14 @@ public sealed class LlmTestServerScenarioBuilder(string id)
         return this;
     }
 
+    public LlmTestServerScenarioBuilder RespondsWithItems(params LlmTestServerResponseItem[] items)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        if (items.Length == 0) { throw new ArgumentException("At least one output item is required.", nameof(items)); }
+        _scenario.Responses.Add(new() { OutputItems = LlmTestServerResponseItems.Snapshot(items, validateChunks: true) });
+        return this;
+    }
+
     public LlmTestServerScenarioBuilder Responds(string content, params string[] streamChunks)
     {
         ArgumentNullException.ThrowIfNull(content);

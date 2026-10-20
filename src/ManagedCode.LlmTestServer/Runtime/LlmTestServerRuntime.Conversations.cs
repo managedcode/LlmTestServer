@@ -53,7 +53,7 @@ public sealed partial class LlmTestServerRuntime : ILlmTestServerConversationDia
             var result = CopyConversationResult(state.LastResult!);
             AddEvent(LlmTestServerEventKind.Matched, scenario.Id, request.ModelId, "Conversation response replayed.",
                 FormatChatRequest(request), result.Content, result.Usage, request, request.Stream ? result.StreamChunks : null,
-                state.LastStep.Id, turn, true, result.ToolCalls, wireMetadata: result.WireMetadata);
+                state.LastStep.Id, turn, true, result.ToolCalls, wireMetadata: result.WireMetadata, responseOutputItems: result.OutputItems);
             return result;
         }
         if (state?.Busy == true) { return Failure("conversation_busy", "A conversation step is already in flight."); }
@@ -145,15 +145,17 @@ public sealed partial class LlmTestServerRuntime : ILlmTestServerConversationDia
 
     private static long ResponseStateBytes(LlmTestServerScenario scenario, LlmTestServerScenarioResponse response)
     {
+        response = LlmTestServerResponseItems.Project(response);
         return 1024L
             + Bytes(scenario.Id) + Bytes(scenario.ModelId) + Bytes(response.Content) + response.StreamChunks.Sum(chunk => Bytes(chunk))
             + response.ToolCalls.Sum(call => Bytes(call.Id) + Bytes(call.Name) + Bytes(call.ArgumentsJson) + 128)
+            + LlmTestServerResponseItems.Bytes(response.OutputItems)
             + (response.Error is { } error ? Bytes(error.Code) + Bytes(error.Message) : 0);
     }
 
     private static LlmTestServerChatResult CopyConversationResult(LlmTestServerChatResult result)
     {
-        return result with { ToolCalls = [.. result.ToolCalls], StreamChunks = [.. result.StreamChunks] };
+        return result with { ToolCalls = [.. result.ToolCalls], StreamChunks = [.. result.StreamChunks], OutputItems = LlmTestServerResponseItems.Snapshot(result.OutputItems) };
     }
 
     private static int LogicalTurn(IEnumerable<LlmTestServerMessage> messages)

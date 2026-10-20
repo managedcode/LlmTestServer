@@ -618,7 +618,7 @@ public sealed partial class LlmTestServerConfigurationBuilder
             ArgumentException.ThrowIfNullOrWhiteSpace(call.Name);
             LlmTestServerJsonSchema.ValidateJson(call.ArgumentsJson);
         }
-        return message with { ToolCalls = [.. message.ToolCalls] };
+        return message with { ToolCalls = [.. message.ToolCalls], OutputItems = LlmTestServerResponseItems.Snapshot(message.OutputItems) };
     }
 
     private static LlmTestServerScenarioResponse SnapshotResponse(LlmTestServerScenarioResponse response)
@@ -646,7 +646,10 @@ public sealed partial class LlmTestServerConfigurationBuilder
             ArgumentException.ThrowIfNullOrWhiteSpace(call.Name);
             LlmTestServerJsonSchema.ValidateJson(call.ArgumentsJson);
         }
-        return response with { StreamChunks = [.. response.StreamChunks], ToolCalls = [.. response.ToolCalls] };
+        ArgumentNullException.ThrowIfNull(response.OutputItems);
+        if (response.OutputItems.Count > 0 && (response.Content.Length > 0 || response.ToolCalls.Count > 0 || response.StreamChunks.Count > 0 || response.Error is not null))
+        { throw new ArgumentException("An ordered output plan cannot also specify legacy output fields or an error.", nameof(response)); }
+        return response with { StreamChunks = [.. response.StreamChunks], ToolCalls = [.. response.ToolCalls], OutputItems = LlmTestServerResponseItems.Snapshot(response.OutputItems, validateChunks: true) };
     }
 
     private static LlmTestServerScenarioDataset SnapshotDataset(LlmTestServerScenarioDataset dataset)

@@ -32,7 +32,8 @@ project = (root / "scripts/package-consumer/Consumer.csproj.template").read_text
 for key, value in {"__VERSION__": version, "__ASPIRE_VERSION__": versions["Aspire.Hosting.Testing"], "__TUNIT_VERSION__": versions["TUnit"], "__PLAYWRIGHT_VERSION__": versions["Microsoft.Playwright"], "__OPENAI_VERSION__": versions["OpenAI"]}.items():
     project = project.replace(key, value)
 (consumer / "Consumer.csproj").write_text(project)
-(consumer / "PackageTests.cs").write_text((root / "scripts/package-consumer/PackageTests.cs").read_text())
+for source in sorted((root / "scripts/package-consumer").glob("*.cs")):
+    shutil.copy2(source, consumer / source.name)
 (consumer / "global.json").write_text((root / "global.json").read_text())
 # Keep evidence repository-owned without inheriting the source repository's CPM,
 # analyzers or project references into this otherwise independent consumer.

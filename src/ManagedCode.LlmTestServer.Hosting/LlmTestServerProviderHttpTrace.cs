@@ -53,6 +53,8 @@ public sealed record LlmTestServerProviderHttpTraceEnrichment
     public string? WireClockMode { get; init; }
     public DateTimeOffset? WireCreatedAt { get; init; }
     public long? WireSequence { get; init; }
+    public IReadOnlyList<LlmTestServerNativeToolDeclaration>? NativeTools { get; init; }
+    public IReadOnlyList<LlmTestServerResponseItem>? ResponseOutputItems { get; init; }
     public IReadOnlyList<LlmTestServerToolCall>? ResponseToolCalls { get; init; }
     public string? ConversationId { get; init; }
     public string? StepId { get; init; }

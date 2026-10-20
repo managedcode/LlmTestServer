@@ -14,7 +14,7 @@ public enum OpenAiCacheUsageShape
     DeepSeekPromptCache,
 }
 
-public static class OpenAiWireMapper
+public static partial class OpenAiWireMapper
 {
     public static LlmTestServerChatRequest ToRuntimeRequest(
         OpenAiChatCompletionRequest request,
@@ -47,7 +47,8 @@ public static class OpenAiWireMapper
 
     public static LlmTestServerChatRequest ToRuntimeRequest(
         OpenAiResponseRequest request,
-        LlmTestServerPromptCachePolicy promptCachePolicy = LlmTestServerPromptCachePolicy.None
+        LlmTestServerPromptCachePolicy promptCachePolicy = LlmTestServerPromptCachePolicy.None,
+        bool allowNativeTools = false
     )
     {
         var messages = ReadResponseInputMessages(request.Input);
@@ -63,7 +64,7 @@ public static class OpenAiWireMapper
             );
         }
 
-        return OpenAiToolMapper.Apply(new()
+        var normalized = OpenAiToolMapper.Apply(new()
         {
             ModelId = request.Model,
             AllowParallelToolCalls = request.ParallelToolCalls,
@@ -75,9 +76,10 @@ public static class OpenAiWireMapper
                 promptCachePolicy
             ),
             Messages = messages,
-        }, request.Tools.Select(tool => new OpenAiTool { Type = tool.Type, Function = new() { Name = tool.Name, Description = tool.Description, Parameters = tool.Parameters } }).ToList(),
-            request.ToolChoice.ValueKind == JsonValueKind.Object ? JsonSerializer.SerializeToElement(new { function = request.ToolChoice }) : request.ToolChoice,
+        }, request.Tools.Where(tool => tool.Type == "function").Select(tool => new OpenAiTool { Type = tool.Type, Function = new() { Name = tool.Name ?? string.Empty, Description = tool.Description, Parameters = tool.Parameters.ValueKind == JsonValueKind.Undefined ? JsonSerializer.SerializeToElement(new { type = "object" }) : tool.Parameters } }).ToList(),
+            FunctionResponseChoice(request.ToolChoice),
             request.Text?.Format is { } format ? new() { Type = format.Type, JsonSchema = format.Type == "json_schema" ? new() { Schema = format.Schema } : null } : null);
+        return ApplyNativeResponseRequest(request, normalized, allowNativeTools);
     }
 
     public static OpenAiChatCompletionResponse ToChatResponse(
@@ -138,7 +140,8 @@ public static class OpenAiWireMapper
         LlmTestServerChatResult result,
         string responseId,
         long created,
-        OpenAiCacheUsageShape cacheUsageShape = OpenAiCacheUsageShape.None
+        OpenAiCacheUsageShape cacheUsageShape = OpenAiCacheUsageShape.None,
+        IReadOnlyCollection<string>? includedProperties = null
     )
     {
         return new()
@@ -146,7 +149,7 @@ public static class OpenAiWireMapper
             Id = responseId,
             CreatedAt = created,
             Model = result.ModelId,
-            Output = CreateResponseOutput(result),
+            Output = CreateResponseOutput(result, includedProperties),
             Usage = new OpenAiResponseUsage
             {
                 InputTokens = result.Usage.InputTokens,
@@ -164,53 +167,6 @@ public static class OpenAiWireMapper
                     : null,
             },
         };
-    }
-
-    private static List<OpenAiResponseOutputMessage> CreateResponseOutput(LlmTestServerChatResult result)
-    {
-        var output = new List<OpenAiResponseOutputMessage>();
-        if (result.Content.Length > 0 || result.ToolCalls.Count == 0)
-        {
-            output.Add(CreateOutputMessage(result.Content, completed: true, result.WireMetadata));
-        }
-
-        output.AddRange(result.ToolCalls.Select(call => new OpenAiResponseOutputMessage
-        { Type = "function_call", Id = "fc_" + call.Id, CallId = call.Id, Name = call.Name, Arguments = call.ArgumentsJson }));
-        return output;
-    }
-
-    public static IEnumerable<object> ToResponseStreamEvents(
-        LlmTestServerChatResult result, string responseId, long created,
-        OpenAiCacheUsageShape cacheUsageShape = OpenAiCacheUsageShape.None)
-    {
-        var response = ToResponse(result, responseId, created, cacheUsageShape);
-        var sequence = 0;
-        yield return new { type = "response.created", sequence_number = sequence++, response = response with { Status = "in_progress", Output = [] } };
-        yield return new { type = "response.in_progress", sequence_number = sequence++, response = response with { Status = "in_progress", Output = [] } };
-        for (var index = 0; index < response.Output.Count; index++)
-        {
-            var item = response.Output[index];
-            yield return new { type = "response.output_item.added", sequence_number = sequence++, output_index = index, item = item with { Status = "in_progress", Content = [], Arguments = item.Arguments is null ? null : "" } };
-            if (item.Type == "function_call")
-            {
-                yield return new { type = "response.function_call_arguments.delta", sequence_number = sequence++, item_id = item.Id, output_index = index, delta = item.Arguments };
-                yield return new { type = "response.function_call_arguments.done", sequence_number = sequence++, item_id = item.Id, output_index = index, arguments = item.Arguments };
-            }
-            else
-            {
-                yield return new { type = "response.content_part.added", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, part = new OpenAiResponseOutputText() };
-                IReadOnlyList<string> chunks = result.StreamChunks.Count > 0 ? result.StreamChunks : [result.Content];
-                foreach (var chunk in chunks)
-                {
-                    yield return new { type = "response.output_text.delta", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, delta = chunk, logprobs = Array.Empty<object>() };
-                }
-
-                yield return new { type = "response.output_text.done", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, text = result.Content, logprobs = Array.Empty<object>() };
-                yield return new { type = "response.content_part.done", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, part = item.Content[0] };
-            }
-            yield return new { type = "response.output_item.done", sequence_number = sequence++, output_index = index, item };
-        }
-        yield return new { type = "response.completed", sequence_number = sequence, response };
     }
 
     public static object ToResponseCreatedEvent(
@@ -240,7 +196,7 @@ public static class OpenAiWireMapper
             type = "response.output_item.added",
             response_id = responseId,
             output_index = 0,
-            item = CreateOutputMessage(string.Empty, completed: false, metadata),
+            item = (OpenAiResponseOutputItem)CreateOutputMessage(string.Empty, completed: false, metadata),
         };
     }
 
@@ -275,7 +231,7 @@ public static class OpenAiWireMapper
             type = "response.output_item.done",
             response_id = responseId,
             output_index = 0,
-            item = CreateOutputMessage(result.Content, completed: true, result.WireMetadata),
+            item = (OpenAiResponseOutputItem)CreateOutputMessage(result.Content, completed: true, result.WireMetadata),
         };
     }
 
@@ -696,7 +652,7 @@ public static class OpenAiWireMapper
 
     private static List<LlmTestServerMessage> ReadResponseInputMessages(JsonElement input)
     {
-        return input.ValueKind switch
+        var messages = input.ValueKind switch
         {
             JsonValueKind.String =>
             [
@@ -709,7 +665,7 @@ public static class OpenAiWireMapper
             JsonValueKind.Array => input
                 .EnumerateArray()
                 .Select(ReadResponseInputMessage)
-                .Where(message => !string.IsNullOrWhiteSpace(message.Content) || message.ToolCalls.Count > 0 || message.ToolCallId is not null)
+                .Where(message => !string.IsNullOrWhiteSpace(message.Content) || message.ToolCalls.Count > 0 || message.ToolCallId is not null || message.OutputItems.Count > 0)
                 .ToList(),
             JsonValueKind.Object =>
             [
@@ -717,6 +673,7 @@ public static class OpenAiWireMapper
             ],
             _ => [],
         };
+        return CoalesceNativeAssistantGroups(messages);
     }
 
     private static LlmTestServerMessage ReadResponseInputMessage(JsonElement item)
@@ -732,9 +689,28 @@ public static class OpenAiWireMapper
 
         if (item.TryGetProperty("type", out var itemType))
         {
+            if (itemType.GetString() == "web_search_call")
+            {
+                return new() { Role = "assistant", OutputItems = [ReadNativeWebSearchItem(item)] };
+            }
             if (itemType.GetString() == "function_call")
             {
-                return new() { Role = "assistant", ToolCalls = [new() { Id = item.GetProperty("call_id").GetString()!, Name = item.GetProperty("name").GetString()!, ArgumentsJson = item.GetProperty("arguments").GetString()! }] };
+                var call = new LlmTestServerToolCall
+                {
+                    Id = item.GetProperty("call_id").GetString()!,
+                    Name = item.GetProperty("name").GetString()!,
+                    ArgumentsJson = item.GetProperty("arguments").GetString()!
+                };
+                return new()
+                {
+                    Role = "assistant",
+                    ToolCalls = [call],
+                    OutputItems = [new LlmTestServerResponseFunctionCallItem
+                    {
+                        Id = item.TryGetProperty("id", out var outputId) ? outputId.GetString()! : "fc_" + call.Id,
+                        Call = call
+                    }]
+                };
             }
 
             if (itemType.GetString() == "function_call_output")
@@ -752,6 +728,7 @@ public static class OpenAiWireMapper
             {
                 Role = role,
                 Content = ReadResponseInputContent(content),
+                OutputItems = role == "assistant" ? ReadNativeMessageItems(item, content) : [],
             };
         }
 
@@ -771,7 +748,7 @@ public static class OpenAiWireMapper
         };
     }
 
-    private static string ReadResponseInputContent(JsonElement content)
+    internal static string ReadResponseInputContent(JsonElement content)
     {
         return content.ValueKind switch
         {

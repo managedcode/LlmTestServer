@@ -2,6 +2,8 @@ namespace ManagedCode.LlmTestServer.Scenarios;
 
 public sealed record LlmTestServerScenarioResponse
 {
+    public List<LlmTestServerResponseItem> OutputItems { get; init; } = [];
+
     public List<LlmTestServerToolCall> ToolCalls { get; init; } = [];
 
     public string Content { get; init; } = string.Empty;

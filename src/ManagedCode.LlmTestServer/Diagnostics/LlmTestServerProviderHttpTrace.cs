@@ -12,8 +12,11 @@ public sealed record LlmTestServerProviderHttpTrace
     public string? RetryGroupId { get; init; }
     public string? RetryAfter { get; init; }
     public bool? TerminalMarkerObserved { get; init; }
+    public IReadOnlyList<LlmTestServerNativeToolDeclaration> NativeTools { get; init; } = [];
+    public IReadOnlyList<LlmTestServerResponseItem> ResponseOutputItems { get; init; } = [];
     public IReadOnlyList<LlmTestServerToolCall> ResponseToolCalls { get; init; } = [];
     public string? ConversationId { get; init; }
+    public bool ConversationIdWasProvided { get; init; }
     public string? StepId { get; init; }
     public int? TurnIndex { get; init; }
     public bool IsReplay { get; init; }

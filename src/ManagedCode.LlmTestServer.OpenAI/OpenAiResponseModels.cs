@@ -5,6 +5,9 @@ namespace ManagedCode.LlmTestServer.OpenAI;
 
 public sealed record OpenAiResponseRequest
 {
+    [JsonPropertyName("include")]
+    public List<string> Include { get; init; } = [];
+
     [JsonPropertyName("parallel_tool_calls")]
     public bool ParallelToolCalls { get; init; } = true;
 
@@ -52,7 +55,7 @@ public sealed record OpenAiResponse
     public string Model { get; init; } = string.Empty;
 
     [JsonPropertyName("output")]
-    public List<OpenAiResponseOutputMessage> Output { get; init; } = [];
+    public List<OpenAiResponseOutputItem> Output { get; init; } = [];
 
     [JsonPropertyName("usage")]
     public OpenAiResponseUsage Usage { get; init; } = new();
@@ -61,26 +64,30 @@ public sealed record OpenAiResponse
     public string Status { get; init; } = "completed";
 }
 
-public sealed record OpenAiResponseOutputMessage
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[JsonDerivedType(typeof(OpenAiResponseOutputMessage), "message")]
+[JsonDerivedType(typeof(OpenAiResponseFunctionCall), "function_call")]
+[JsonDerivedType(typeof(OpenAiResponseWebSearchCall), "web_search_call")]
+public abstract record OpenAiResponseOutputItem
 {
-    [JsonPropertyName("call_id")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? CallId { get; init; }
-    [JsonPropertyName("name")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Name { get; init; }
-    [JsonPropertyName("arguments")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Arguments { get; init; }
+    [JsonIgnore] public abstract string Type { get; }
+    [JsonPropertyName("id")] public string Id { get; init; } = string.Empty;
+    [JsonPropertyName("status")] public string Status { get; init; } = "completed";
+}
 
-    [JsonPropertyName("type")]
-    public string Type { get; init; } = "message";
+public sealed record OpenAiResponseOutputMessage : OpenAiResponseOutputItem
+{
+    [JsonIgnore] public override string Type => "message";
+    [JsonPropertyName("role")] public string Role { get; init; } = "assistant";
+    [JsonPropertyName("content")] public List<OpenAiResponseOutputText> Content { get; init; } = [];
+}
 
-    [JsonPropertyName("id")]
-    public string Id { get; init; } = string.Empty;
-
-    [JsonPropertyName("status")]
-    public string Status { get; init; } = "completed";
-
-    [JsonPropertyName("role")]
-    public string Role { get; init; } = "assistant";
-
-    [JsonPropertyName("content")]
-    public List<OpenAiResponseOutputText> Content { get; init; } = [];
+public sealed record OpenAiResponseFunctionCall : OpenAiResponseOutputItem
+{
+    [JsonIgnore] public override string Type => "function_call";
+    [JsonPropertyName("call_id")] public string CallId { get; init; } = string.Empty;
+    [JsonPropertyName("name")] public string Name { get; init; } = string.Empty;
+    [JsonPropertyName("arguments")] public string Arguments { get; init; } = "{}";
 }
 
 public sealed record OpenAiResponseOutputText
@@ -133,10 +140,13 @@ public sealed record OpenAiOutputTokensDetails
 
 public sealed record OpenAiResponseTool
 {
+    [JsonPropertyName("search_context_size")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? SearchContextSize { get; init; }
+    [JsonPropertyName("user_location")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public OpenAiWebSearchLocation? UserLocation { get; init; }
+    [JsonPropertyName("filters")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public OpenAiWebSearchFilters? Filters { get; init; }
     [JsonPropertyName("type")] public string Type { get; init; } = "function";
-    [JsonPropertyName("name")] public string Name { get; init; } = string.Empty;
-    [JsonPropertyName("description")] public string? Description { get; init; }
-    [JsonPropertyName("parameters")] public JsonElement Parameters { get; init; } = JsonSerializer.SerializeToElement(new { type = "object" });
+    [JsonPropertyName("name")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Name { get; init; }
+    [JsonPropertyName("description")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Description { get; init; }
+    [JsonPropertyName("parameters")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public JsonElement Parameters { get; init; }
 }
 public sealed record OpenAiResponseTextOptions
 {

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using ManagedCode.LlmTestServer.Diagnostics;
 using ManagedCode.LlmTestServer.Scenarios;
 using Microsoft.Extensions.Options;
@@ -54,7 +55,14 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
             var index = 0;
             for (var node = _order.Last; node is not null; node = node.Previous)
             {
-                snapshot[index++] = _traces[node.Value];
+                var trace = _traces[node.Value];
+                snapshot[index++] = trace with
+                {
+                    NativeTools = Array.AsReadOnly(trace.NativeTools.Select(CloneNativeTool).ToArray()),
+                    ResponseOutputItems = Array.AsReadOnly(trace.ResponseOutputItems.Select(CloneOutputItem).ToArray()),
+                    Messages = Array.AsReadOnly(trace.Messages.Select(message => message with
+                    { OutputItems = message.OutputItems.Select(CloneOutputItem).ToList() }).ToArray()),
+                };
             }
 
             return snapshot;
@@ -204,6 +212,8 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
                     Usage = enrichment.Usage ?? trace.Usage,
                     Messages = enrichment.Messages ?? trace.Messages,
                     ResponseToolCalls = enrichment.ResponseToolCalls ?? trace.ResponseToolCalls,
+                    NativeTools = enrichment.NativeTools ?? trace.NativeTools,
+                    ResponseOutputItems = enrichment.ResponseOutputItems ?? trace.ResponseOutputItems,
                     StreamChunks = enrichment.StreamChunks ?? trace.StreamChunks,
                     IsStreaming = enrichment.IsStreaming ?? trace.IsStreaming,
                     RuntimePayloadTruncated =
@@ -364,6 +374,8 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
         var retryGroupId = RetainText(trace.RetryGroupId, _maxMetadataBytes, ref remaining, ref retentionTruncated);
         var retryAfter = RetainText(trace.RetryAfter, _maxMetadataBytes, ref remaining, ref retentionTruncated);
         var responseToolCalls = RetainToolCalls(trace.ResponseToolCalls, ref remaining, ref retentionTruncated);
+        var nativeTools = RetainNativeTools(trace.NativeTools, ref remaining, ref retentionTruncated);
+        var responseOutputItems = RetainOutputItems(trace.ResponseOutputItems, ref remaining, ref retentionTruncated);
         var messages = RetainMessages(
             trace.Messages,
             ref remaining,
@@ -399,6 +411,8 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
             TransportError = transportError,
             Messages = messages,
             ResponseToolCalls = responseToolCalls,
+            NativeTools = nativeTools,
+            ResponseOutputItems = responseOutputItems,
             RetryGroupId = retryGroupId,
             WireClockMode = wireClockMode,
             RetryAfter = retryAfter,
@@ -445,7 +459,8 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
             );
             var callId = RetainText(message.ToolCallId, _maxMetadataBytes, ref remaining, ref truncated);
             var calls = RetainToolCalls(message.ToolCalls, ref remaining, ref truncated);
-            retained.Add(new LlmTestServerMessage { Role = role, Content = content, ToolCallId = callId, ToolCalls = [.. calls] });
+            var outputItems = RetainOutputItems(message.OutputItems, ref remaining, ref truncated);
+            retained.Add(new LlmTestServerMessage { Role = role, Content = content, ToolCallId = callId, ToolCalls = [.. calls], OutputItems = [.. outputItems] });
         }
 
         if (retained.Count < source.Count)
@@ -469,6 +484,74 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
             retained.Add(new() { Id = id, Name = name, ArgumentsJson = arguments });
         }
         return Array.AsReadOnly(retained.ToArray());
+    }
+
+    private IReadOnlyList<LlmTestServerNativeToolDeclaration> RetainNativeTools(
+        IReadOnlyList<LlmTestServerNativeToolDeclaration> source, ref int remaining, ref bool truncated)
+    {
+        var retained = new List<LlmTestServerNativeToolDeclaration>();
+        foreach (var tool in source)
+        {
+            var payloadBytes = JsonSerializer.SerializeToUtf8Bytes(tool).LongLength;
+            var nestedOverhead = tool.WebSearchOptions is { } options
+                ? (long)options.AllowedDomains.Count * _chunkOverheadBytes
+                    + (options.UserLocation is null ? 0 : _messageOverheadBytes)
+                : 0;
+            var cost = _messageOverheadBytes + payloadBytes + nestedOverhead;
+            if (payloadBytes > _maxPreviewBytes || cost > remaining) { truncated = true; break; }
+            remaining -= (int)cost;
+            retained.Add(CloneNativeTool(tool));
+        }
+        return Array.AsReadOnly(retained.ToArray());
+    }
+
+    private IReadOnlyList<LlmTestServerResponseItem> RetainOutputItems(
+        IReadOnlyList<LlmTestServerResponseItem> source, ref int remaining, ref bool truncated)
+    {
+        var retained = new List<LlmTestServerResponseItem>();
+        foreach (var item in source)
+        {
+            var payloadBytes = JsonSerializer.SerializeToUtf8Bytes<LlmTestServerResponseItem>(item).LongLength;
+            var nestedOverhead = item switch
+            {
+                LlmTestServerResponseMessageItem message => (long)message.StreamChunks.Count * _chunkOverheadBytes
+                    + (long)message.Citations.Count * _messageOverheadBytes,
+                LlmTestServerResponseWebSearchItem web => (long)web.Queries.Count * _chunkOverheadBytes
+                    + (long)web.Sources.Count * _messageOverheadBytes,
+                LlmTestServerResponseFunctionCallItem => _messageOverheadBytes,
+                _ => 0,
+            };
+            var cost = _messageOverheadBytes + payloadBytes + nestedOverhead;
+            if (payloadBytes > _maxPreviewBytes || cost > remaining) { truncated = true; break; }
+            remaining -= (int)cost;
+            retained.Add(CloneOutputItem(item));
+        }
+        return Array.AsReadOnly(retained.ToArray());
+    }
+
+    private static LlmTestServerNativeToolDeclaration CloneNativeTool(LlmTestServerNativeToolDeclaration tool)
+    {
+        return tool with
+        {
+            WebSearchOptions = tool.WebSearchOptions is { } options ? options with
+            {
+                AllowedDomains = [.. options.AllowedDomains],
+                UserLocation = options.UserLocation is { } location ? location with { } : null,
+            } : null,
+        };
+    }
+
+    private static LlmTestServerResponseItem CloneOutputItem(LlmTestServerResponseItem item)
+    {
+        return item switch
+        {
+            LlmTestServerResponseMessageItem message => message with
+            { StreamChunks = [.. message.StreamChunks], Citations = message.Citations.Select(citation => citation with { }).ToList() },
+            LlmTestServerResponseFunctionCallItem function => function with { Call = function.Call with { } },
+            LlmTestServerResponseWebSearchItem web => web with
+            { Queries = [.. web.Queries], Sources = web.Sources.Select(source => source with { }).ToList() },
+            _ => throw new InvalidOperationException("Unsupported structured response item."),
+        };
     }
 
     private IReadOnlyList<string> RetainChunks(

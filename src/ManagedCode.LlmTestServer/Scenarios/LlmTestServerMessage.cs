@@ -2,6 +2,8 @@ namespace ManagedCode.LlmTestServer.Scenarios;
 
 public sealed record LlmTestServerMessage
 {
+    public List<LlmTestServerResponseItem> OutputItems { get; init; } = [];
+
     public string? ToolCallId { get; init; }
 
     public string Role { get; init; } = "user";

@@ -1150,7 +1150,9 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         CancellationToken cancellationToken
     )
     {
-        var read = await ReadJsonAsync<OpenAiResponseRequest>(context, cancellationToken, validation: OpenAiRequestValidation.ValidateResponse)
+        var allowNativeTools = context.Request.Path.Equals("/openai/v1/responses", StringComparison.Ordinal);
+        var read = await ReadJsonAsync<OpenAiResponseRequest>(context, cancellationToken,
+                validation: allowNativeTools ? OpenAiRequestValidation.ValidateNativeResponse : OpenAiRequestValidation.ValidateResponse)
             .ConfigureAwait(false);
         if (read.Error is not null)
         {
@@ -1187,7 +1189,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
             .CompleteChatAsync(
                 CorrelateChatRequest(
                     context,
-                    OpenAiWireMapper.ToRuntimeRequest(request, promptCachePolicy) with
+                    OpenAiWireMapper.ToRuntimeRequest(request, promptCachePolicy, allowNativeTools) with
                     {
                         HistoryNamespace = context.Request.Path.Value!.Split('/', StringSplitOptions.RemoveEmptyEntries)[0],
                         PreviousResponseId = request.PreviousResponseId,
@@ -1217,13 +1219,14 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
                     responseId,
                     created,
                     cacheUsageShape,
-                    cancellationToken
+                    cancellationToken,
+                    request.Include
                 )
                 .ConfigureAwait(false);
             return Results.Empty;
         }
 
-        return Results.Json(OpenAiWireMapper.ToResponse(result, responseId, created, cacheUsageShape));
+        return Results.Json(OpenAiWireMapper.ToResponse(result, responseId, created, cacheUsageShape, request.Include));
     }
 
     private static async Task<IResult> CompleteAnthropicMessageAsync(

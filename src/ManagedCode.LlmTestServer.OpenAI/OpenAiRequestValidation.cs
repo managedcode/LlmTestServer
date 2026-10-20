@@ -16,7 +16,12 @@ public static class OpenAiRequestValidation
         return Check(body, value => Validate(value, true));
     }
 
-    private static void Validate(JsonElement body, bool responses)
+    public static LlmTestServerRequestValidationResult ValidateNativeResponse(JsonElement body)
+    {
+        return Check(body, value => Validate(value, true, nativeWebSearch: true));
+    }
+
+    private static void Validate(JsonElement body, bool responses, bool nativeWebSearch = false)
     {
         if (body.TryGetProperty("functions", out _) || body.TryGetProperty("function_call", out _))
         {
@@ -24,6 +29,11 @@ public static class OpenAiRequestValidation
         }
         foreach (var tool in OptionalArray(body, "tools"))
         {
+            if (nativeWebSearch && tool.GetProperty("type").GetString() == OpenAiNativeWebSearchValidation._toolType)
+            {
+                OpenAiNativeWebSearchValidation.ValidateTool(tool);
+                continue;
+            }
             Choice(tool.GetProperty("type"), "function");
             var function = responses ? tool : tool.GetProperty("function");
             Name(function); OptionalSchema(function, "parameters");
@@ -32,8 +42,15 @@ public static class OpenAiRequestValidation
         {
             if (choice.ValueKind == JsonValueKind.Object)
             {
-                Choice(choice.GetProperty("type"), "function");
-                Name(responses ? choice : choice.GetProperty("function"));
+                if (nativeWebSearch && choice.GetProperty("type").GetString() == OpenAiNativeWebSearchValidation._toolType)
+                {
+                    // Exact choice fields and declaration applicability are validated below.
+                }
+                else
+                {
+                    Choice(choice.GetProperty("type"), "function");
+                    Name(responses ? choice : choice.GetProperty("function"));
+                }
             }
             else { Choice(choice, "auto", "none", "required"); }
         }
@@ -46,6 +63,7 @@ public static class OpenAiRequestValidation
         {
             ValidateFormat(format, true);
         }
+        if (responses) { OpenAiNativeWebSearchValidation.ValidateResponseOptions(body, nativeWebSearch); }
         var field = responses ? "input" : "messages";
         if (!body.TryGetProperty(field, out var messages) || messages.ValueKind != JsonValueKind.Array) { return; }
         foreach (var message in messages.EnumerateArray())
