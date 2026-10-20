@@ -26,6 +26,8 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         var responseId = OpenAiWireMapper.CreateResponseId(result.WireMetadata);
         var created = (result.WireMetadata ?? WireMetadata(context)).CreatedAt.ToUnixTimeSeconds();
         var isDeepSeek = context.Request.Path.Equals("/deepseek/v1/chat/completions", StringComparison.Ordinal);
+        var isModelInference = context.Request.Path.Equals("/microsoft-foundry/chat/completions", StringComparison.Ordinal)
+            || context.Request.Path.Equals("/microsoft-foundry/models/chat/completions", StringComparison.Ordinal);
 
         LlmTestServerStreamDeliveryEvidence.Begin(context, result.StreamDelivery);
         foreach (var chunk in result.ToolCalls.Count > 0 ? new List<string> { result.Content } : result.StreamChunks)
@@ -46,14 +48,14 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
 
         var finalChunk = OpenAiWireMapper.ToChatChunk(result, string.Empty, responseId, created,
             result.OutputDisposition?.Kind == LlmTestServerOutputDispositionKind.Filtered ? "content_filter" : result.ToolCalls.Count > 0 ? "tool_calls" : "stop");
-        if (isDeepSeek)
+        if (isDeepSeek || isModelInference)
         {
             finalChunk = finalChunk with { Usage = OpenAiWireMapper.ToChatResponse(result, cacheUsageShape).Usage };
         }
         var finalPayload = JsonSerializer.Serialize(finalChunk, _jsonOptions);
         await context.Response.WriteAsync($"data: {finalPayload}\n\n", cancellationToken)
             .ConfigureAwait(false);
-        if (includeUsage && !isDeepSeek)
+        if (includeUsage && !isDeepSeek && !isModelInference)
         {
             var usageChunk = new OpenAiChatCompletionChunk
             {
@@ -563,6 +565,15 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
             "/openai/v1/chat/completions" => LlmTestServerOutputDispositionSurface.OpenAiChatCompletions,
             "/openai/v1/responses" => LlmTestServerOutputDispositionSurface.OpenAiResponses,
             "/deepseek/v1/chat/completions" => LlmTestServerOutputDispositionSurface.DeepSeekChatCompletions,
+            "/azure-openai/openai/v1/chat/completions" => LlmTestServerOutputDispositionSurface.AzureOpenAiV1ChatCompletions,
+            "/azure-openai/openai/v1/responses" => LlmTestServerOutputDispositionSurface.AzureOpenAiV1Responses,
+            "/microsoft-foundry/openai/v1/chat/completions" => LlmTestServerOutputDispositionSurface.MicrosoftFoundryV1ChatCompletions,
+            "/microsoft-foundry/openai/v1/responses" => LlmTestServerOutputDispositionSurface.MicrosoftFoundryV1Responses,
+            "/microsoft-foundry/chat/completions" => LlmTestServerOutputDispositionSurface.MicrosoftFoundryChatCompletions,
+            "/microsoft-foundry/models/chat/completions" => LlmTestServerOutputDispositionSurface.MicrosoftFoundryModelsChatCompletions,
+            var path when context.Request.RouteValues["deployment"] is string deployment
+                && path == "/azure-openai/openai/deployments/" + deployment + "/chat/completions"
+                => LlmTestServerOutputDispositionSurface.AzureOpenAiDeploymentChatCompletions,
             "/anthropic/v1/messages" => LlmTestServerOutputDispositionSurface.AnthropicMessages,
             var path when context.Request.RouteValues["model"] is string model
                 && (path == "/gemini/v1beta/models/" + model + ":generateContent"

@@ -1,6 +1,7 @@
 @using ManagedCode.LlmTestServer.Diagnostics
 @namespace ManagedCode.LlmTestServer.Hosting
 @using System.Globalization
+@using System.Runtime.CompilerServices
 @using System.Text
 @using System.Text.Encodings.Web
 @using System.Text.Json
@@ -16,6 +17,7 @@
 @inject ILlmTestServerRuntime Runtime
 @inject ILlmTestServerProviderHttpTraceStore TraceStore
 @inject IOptions<LlmTestServerProviderHttpTraceOptions> TraceOptions
+@inject NavigationManager Navigation
 
 @{
   var visibleTraces = FilterTraces();
@@ -26,7 +28,7 @@
 <div class="@WorkspaceCss">
   <header class="topbar">
     <div class="brand">
-      <div class="brand-mark" aria-hidden="true">T</div>
+      <div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 240 240" width="32" height="32" focusable="false"><rect width="240" height="240" rx="56" fill="#161616"/><g transform="rotate(-45 120 120)"><path d="M120 76H86a44 44 0 0 0 0 88h34z" fill="#f4efe6"/><path d="M120 76h34a44 44 0 0 1 0 88h-34z" fill="#a4f258"/></g></svg></div>
       <div class="brand-copy">
         <div class="eyebrow">Deterministic provider lab</div>
         <h1><span class="brand-full">LLM Test Server request dashboard</span><span class="brand-short">LLM Test Server</span></h1>
@@ -66,6 +68,33 @@
               <input type="password" placeholder="Optional runtime token" autocomplete="off" spellcheck="false" @bind="_bearerToken" @bind:event="oninput">
             </label>
             <button class="toolbar-button danger" type="button" disabled="@_resetting" @onclick="ResetAsync">@(_resetting ? "Resetting…" : "Reset runtime")</button>
+          </div>
+          <div class="diagnostics-charts" data-testid="runtime-charts">
+            @InsightCard(AssertionChart())
+            @InsightCard(FixtureChart())
+            <section class="viz-card insight-card event-card" data-testid="insight-runtime-events" aria-labelledby="runtime-events-chart-title">
+              <header class="viz-card-header insight-card-header"><div><h4 id="runtime-events-chart-title">Event timeline</h4><p>Oldest to newest, colored by result</p></div></header>
+              <div class="insight-body">
+                @if (_events.Count == 0)
+                {
+                  <p class="viz-empty">No runtime events yet.</p>
+                }
+                else
+                {
+                  <div class="event-strip">
+                    @foreach (var runtimeEvent in _events.TakeLast(120))
+                    {
+                      <span class="@($"event-dot {EventTone(runtimeEvent.Kind)}")" data-tip="@($"{runtimeEvent.Kind}\n{runtimeEvent.ModelId} · {runtimeEvent.Timestamp.ToLocalTime():HH:mm:ss}")"></span>
+                    }
+                  </div>
+                  <ul class="viz-legend viz-legend-inline">
+                    <li><i class="event-dot success"></i><span>Matched</span></li>
+                    <li><i class="event-dot warning"></i><span>Unmatched or exhausted</span></li>
+                    <li><i class="event-dot error"></i><span>Errors</span></li>
+                  </ul>
+                }
+              </div>
+            </section>
           </div>
           <div class="diagnostics-grid">
             <section class="diagnostic-card">
@@ -155,29 +184,37 @@
   <main class="mail-workspace">
     <nav class="nav-rail" aria-label="Request navigation">
       <div class="rail-scroll">
+        <section class="rail-section rail-views">
+          <button class="@(_insightsOpen ? "rail-item rail-view selected" : "rail-item rail-view")" type="button" data-testid="insights-rail" aria-pressed="@AriaBoolean(_insightsOpen)" @onclick="ToggleInsights">
+            <span class="rail-glyph"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-dasharray="21 14"></circle><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-opacity=".3" stroke-width="2.4" stroke-dasharray="13 22" stroke-dashoffset="-22"></circle></svg></span>
+            <span>Traffic insights</span>
+            <strong></strong>
+          </button>
+        </section>
+
         <section class="rail-section" aria-labelledby="request-summary-title">
           <h2 class="rail-heading" id="request-summary-title">Request summary</h2>
-          <button class="@RailFilterCss(string.Empty)" type="button" aria-pressed="@AriaBoolean(IsOutcomeFilter(string.Empty))" @onclick="() => SetOutcomeFilter(string.Empty)">
+          <button class="@RailFilterCss(string.Empty)" style="--share: @RailShare(_traces.Count)" data-tip="@RailTip("All requests", _traces.Count)" type="button" aria-pressed="@AriaBoolean(IsOutcomeFilter(string.Empty))" @onclick="() => SetOutcomeFilter(string.Empty)">
             <span class="rail-icon all" aria-hidden="true">≡</span>
             <span>All requests</span>
             <strong>@_traces.Count</strong>
           </button>
-          <button class='@RailFilterCss("success")' type="button" aria-pressed='@AriaBoolean(IsOutcomeFilter("success"))' @onclick='() => SetOutcomeFilter("success")'>
+          <button class='@RailFilterCss("success")' style="--share: @RailShare(SuccessfulTraceCount); --tone: #3f8d55" data-tip="@RailTip("Successful", SuccessfulTraceCount)" data-tip-color="#3f8d55" type="button" aria-pressed='@AriaBoolean(IsOutcomeFilter("success"))' @onclick='() => SetOutcomeFilter("success")'>
             <span class="rail-icon success" aria-hidden="true">✓</span>
             <span>Successful</span>
             <strong>@SuccessfulTraceCount</strong>
           </button>
-          <button class='@RailFilterCss("error")' type="button" aria-pressed='@AriaBoolean(IsOutcomeFilter("error"))' @onclick='() => SetOutcomeFilter("error")'>
+          <button class='@RailFilterCss("error")' style="--share: @RailShare(FailedTraceCount); --tone: #c94f3d" data-tip="@RailTip("Errors", FailedTraceCount)" data-tip-color="#c94f3d" type="button" aria-pressed='@AriaBoolean(IsOutcomeFilter("error"))' @onclick='() => SetOutcomeFilter("error")'>
             <span class="rail-icon error" aria-hidden="true">!</span>
             <span>Errors</span>
             <strong>@FailedTraceCount</strong>
           </button>
-          <button class='@RailFilterCss("stream")' type="button" aria-pressed='@AriaBoolean(IsOutcomeFilter("stream"))' @onclick='() => SetOutcomeFilter("stream")'>
+          <button class='@RailFilterCss("stream")' style="--share: @RailShare(StreamingTraceCount); --tone: #2a78d6" data-tip="@RailTip("Streaming", StreamingTraceCount)" data-tip-color="#2a78d6" type="button" aria-pressed='@AriaBoolean(IsOutcomeFilter("stream"))' @onclick='() => SetOutcomeFilter("stream")'>
             <span class="rail-icon stream" aria-hidden="true">↝</span>
             <span>Streaming</span>
             <strong>@StreamingTraceCount</strong>
           </button>
-          <button class='@RailFilterCss("cache")' type="button" aria-pressed='@AriaBoolean(IsOutcomeFilter("cache"))' @onclick='() => SetOutcomeFilter("cache")'>
+          <button class='@RailFilterCss("cache")' style="--share: @RailShare(CacheTraceCount); --tone: #5aa02c" data-tip="@RailTip("Cache activity", CacheTraceCount)" data-tip-color="#5aa02c" type="button" aria-pressed='@AriaBoolean(IsOutcomeFilter("cache"))' @onclick='() => SetOutcomeFilter("cache")'>
             <span class="rail-icon cache" aria-hidden="true">◇</span>
             <span>Cache activity</span>
             <strong>@CacheTraceCount</strong>
@@ -194,8 +231,8 @@
           </div>
           @foreach (var provider in providerOptions)
           {
-            <button class="@ProviderFilterCss(provider)" type="button" aria-pressed="@AriaBoolean(IsProviderFilter(provider))" @onclick="() => SetProviderFilter(provider)">
-              <span class="provider-dot" aria-hidden="true"></span>
+            <button class="@ProviderFilterCss(provider)" style="--share: @RailShare(ProviderTraceCount(provider)); --tone: @ProviderColor(provider)" data-tip="@RailTip(ProviderName(provider), ProviderTraceCount(provider))" data-tip-color="@ProviderColor(provider)" type="button" aria-pressed="@AriaBoolean(IsProviderFilter(provider))" @onclick="() => SetProviderFilter(provider)">
+              <span class="provider-dot" aria-hidden="true" style="background: @ProviderColor(provider)"></span>
               <span>@ProviderName(provider)</span>
               <strong>@ProviderTraceCount(provider)</strong>
             </button>
@@ -236,7 +273,7 @@
           <h2 id="request-table-title">Provider requests</h2>
           <p>@visibleTraces.Count of @_traces.Count · newest first</p>
         </div>
-        <span class="count-pill" aria-label="Visible request count">@visibleTraces.Count</span>
+        <button class="@(_insightsOpen ? "insights-trigger selected" : "insights-trigger")" type="button" data-testid="insights-open" aria-pressed="@AriaBoolean(_insightsOpen)" @onclick="ToggleInsights"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-dasharray="21 14"></circle><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-opacity=".3" stroke-width="2.4" stroke-dasharray="13 22" stroke-dashoffset="-22"></circle></svg><span>Insights</span></button>
       </header>
 
       <div class="inbox-tools" aria-label="Request filters">
@@ -291,39 +328,37 @@
             var messageCount = messages.Count;
             <button @key="trace.RequestId" class="@InboxItemCss(trace)" type="button" role="listitem" aria-current="@(IsSelected(trace) ? "true" : null)" aria-label="Inspect @ProviderName(trace.ProviderId) request to @ModelName(trace)" data-testid="request-row" data-request-id="@trace.RequestId" @onclick="() => SelectTrace(trace.RequestId)">
               <span class="inbox-item-top">
-                <span class="provider-avatar" aria-hidden="true">@ProviderInitial(trace.ProviderId)</span>
+                <span class="provider-avatar" aria-hidden="true" style="--provider: @ProviderColor(trace.ProviderId)">@ProviderInitial(trace.ProviderId)</span>
                 <span class="inbox-identity">
-                  <strong>@ProviderName(trace.ProviderId)</strong>
-                  <span class="inbox-model" title="@ModelName(trace)">@ModelName(trace)</span>
+                  <strong class="inbox-model" title="@ModelName(trace)">@ModelName(trace)</strong>
+                  <span class="inbox-provider">@ProviderName(trace.ProviderId)</span>
                 </span>
                 <time datetime="@trace.StartedAt.ToString("O", CultureInfo.InvariantCulture)">@trace.StartedAt.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture)</time>
               </span>
               <span class="inbox-preview" title="@RequestPreview(trace)">@RequestPreview(trace)</span>
               <span class="inbox-meta-row">
-                <span class="inbox-endpoint" title="@trace.Path">
-                  <span class="method-chip">@trace.Method</span>
-                  <span class="mono">@trace.Path</span>
-                </span>
-                <span class="inbox-item-bottom">
-                  <span class="@StatusCssFor(trace)">@InboxStatusText(trace)</span>
-                  <span class="inbox-stat">@FormatDuration(trace.DurationMilliseconds)</span>
-                  @if (usage is not null)
-                  {
+                <span class="@StatusCssFor(trace)">@InboxStatusText(trace)</span>
+                <span class="inbox-stat">@FormatDuration(trace.DurationMilliseconds)</span>
+                @if (usage is not null)
+                {
+                  <span class="inbox-tokens" data-tip="@TokenSparkTitle(usage)">
+                    <span class="inbox-spark" aria-hidden="true">
+                      @foreach (var part in TokenSpark(usage))
+                      {
+                        <span style="flex-grow: @part.Tokens; background: @part.Color"></span>
+                      }
+                    </span>
                     <span class="inbox-stat">@usage.TotalTokens.ToString("N0", CultureInfo.InvariantCulture) tok</span>
-                    @if (usage.CachedInputTokens > 0 || usage.CacheCreationInputTokens > 0)
-                    {
-                      <span class="inbox-stat cache">cache @usage.CachedInputTokens.ToString("N0", CultureInfo.InvariantCulture)/@usage.CacheCreationInputTokens.ToString("N0", CultureInfo.InvariantCulture)</span>
-                    }
-                  }
-                  @if (trace.IsStreaming)
-                  {
-                    <span class="mode-chip">stream</span>
-                  }
-                  @if (messageCount > 1)
-                  {
-                    <span class="inbox-stat">@messageCount turns</span>
-                  }
-                </span>
+                  </span>
+                }
+                @if (trace.IsStreaming)
+                {
+                  <span class="inbox-stat inbox-flag">stream</span>
+                }
+                @if (messageCount > 1)
+                {
+                  <span class="inbox-stat inbox-flag">@messageCount turns</span>
+                }
               </span>
             </button>
           }
@@ -332,7 +367,65 @@
     </section>
 
     <aside class="reading-pane" aria-label="Selected request details" data-testid="request-details">
-      @if (SelectedTrace is not { } selected)
+      @if (_insightsOpen)
+      {
+        var insights = LlmTestServerDashboardInsights.Create(visibleTraces, _traces, ProviderName, ModelName, UsageFor, trace => MessagesFor(trace).Count);
+        <section class="insights" data-testid="insights-panel" aria-labelledby="insights-title">
+          <header class="insights-header">
+            <button class="mobile-back" type="button" @onclick="CloseInsights">← Requests</button>
+            <div>
+              <h2 id="insights-title">Traffic insights</h2>
+              <p>@(HasActiveFilters ? $"{insights.RequestCount} of {_traces.Count} retained requests · filters applied" : $"All {insights.RequestCount} retained requests")</p>
+            </div>
+            <div class="insights-actions">
+              @if (HasActiveFilters)
+              {
+                <button class="toolbar-button" type="button" @onclick="ClearFilters">Clear filters</button>
+              }
+              <button class="toolbar-button" type="button" @onclick="CloseInsights">Done</button>
+            </div>
+          </header>
+          @if (insights.RequestCount == 0)
+          {
+            <div class="reading-empty">
+              <strong>@(_traces.Count == 0 ? "No provider requests yet" : "No requests match these filters")</strong>
+              <span>Charts appear after the first provider call.</span>
+            </div>
+          }
+          else
+          {
+            <div class="insights-scroll">
+              <div class="insights-grid">
+                <section class="viz-card insight-recent" data-testid="insight-recent" aria-labelledby="insight-recent-title">
+                  <header class="viz-card-header insight-card-header">
+                    <div><h4 id="insight-recent-title">Recent requests</h4><p>Oldest to newest · height is tokens, color is outcome</p></div>
+                  </header>
+                  <div class="insight-body">
+                    @{ var recentMax = Math.Max(1L, insights.Recent.Max(item => item.Tokens)); }
+                    <div class="recent-columns" style="--count: @insights.Recent.Count">
+                      @foreach (var item in insights.Recent)
+                      {
+                        <button type="button" class="recent-column" data-tip="@item.Title" data-tip-color="@item.Color" aria-label="@item.Title" @onclick="() => SelectTrace(item.RequestId)"><span style="height: @RecentHeight(item.Tokens, recentMax); background: @item.Color"></span></button>
+                      }
+                    </div>
+                    <ul class="viz-legend viz-legend-inline">
+                      @foreach (var outcome in insights.Recent.GroupBy(item => (item.Outcome, item.Color)))
+                      {
+                        <li><i style="background: @outcome.Key.Color"></i><span>@outcome.Key.Outcome</span></li>
+                      }
+                    </ul>
+                  </div>
+                </section>
+                @foreach (var chart in insights.Charts)
+                {
+                  @InsightCard(chart)
+                }
+              </div>
+            </div>
+          }
+        </section>
+      }
+      else if (SelectedTrace is not { } selected)
       {
         <div class="reading-empty">
           <div class="reading-empty-icon" aria-hidden="true">↳</div>
@@ -346,33 +439,53 @@
         var selectedMessages = MessagesFor(selected);
         var selectedChunks = ChunksFor(selected);
         var selectedEvent = RuntimeEventFor(selected);
+        var hasConversation = selected.ConversationIdWasProvided && !string.IsNullOrWhiteSpace(selected.ConversationId);
+        var conversationScope = _analyticsConversation && hasConversation;
+        var analytics = LlmTestServerDashboardAnalytics.Create(_evidenceSnapshot, selected, conversationScope);
+        var usageIncomplete = analytics.UsageRequestCount < analytics.RequestCount || analytics.PendingCount > 0
+            || conversationScope && _evidenceSnapshot.EvictedCount > 0;
+        var sankey = LlmTestServerDashboardCharts.Sankey(analytics.FlowSources, analytics.FlowTargets);
+        var mixArcs = LlmTestServerDashboardCharts.Donut(analytics.InputMix);
+        var cacheArcs = LlmTestServerDashboardCharts.Donut(analytics.CacheMix);
 
         <header class="reading-header">
           <button class="mobile-back" type="button" @onclick="BackToRequests">← Requests</button>
+          <span class="provider-avatar reading-avatar" aria-hidden="true" style="--provider: @ProviderColor(selected.ProviderId)">@ProviderInitial(selected.ProviderId)</span>
           <div class="reading-title">
-            <div class="reading-eyebrow">
-              <span class="provider-chip">@ProviderName(selected.ProviderId)</span>
-              <span class="method-chip">@selected.Method</span>
-              <span class="@StatusCssFor(selected)">@StatusText(selected)</span>
-              @if (selected.IsStreaming)
-              {
-                <span class="mode-chip">stream</span>
-              }
-            </div>
             <h2>@ModelName(selected)</h2>
-            <div class="reading-route mono">@selected.Path</div>
+            <div class="reading-route"><span>@ProviderName(selected.ProviderId)</span><span class="mono">@selected.Method @selected.Path</span>@if (selected.IsStreaming) { <span>stream</span> }</div>
           </div>
+          <span class="@StatusCssFor(selected) reading-status">@StatusText(selected)</span>
           <div class="reading-id mono" data-testid="selected-request-id">@selected.RequestId</div>
         </header>
 
-        <section class="facts-strip" aria-labelledby="metadata-title">
+        <section class="facts-strip vitals" aria-labelledby="metadata-title">
           <h3 class="sr-only" id="metadata-title">Request metadata</h3>
-          <span class="sr-only" id="usage-title">Tokens & cache</span>
-          <div class="fact"><span>Latency</span><strong>@FormatDuration(selected.DurationMilliseconds)</strong></div>
-          <div class="fact"><span>Total tokens</span><strong>@(selectedUsage?.TotalTokens.ToString("N0", CultureInfo.InvariantCulture) ?? "—")</strong></div>
-          <div class="fact"><span>Cache read / Cache write</span><strong>@(selectedUsage is null ? "—" : $"{selectedUsage.CachedInputTokens:N0} / {selectedUsage.CacheCreationInputTokens:N0}")</strong></div>
-          <div class="fact fact-grow"><span>Scenario</span><strong>@Empty(selected.ScenarioId)</strong></div>
-          <div class="fact"><span>Started</span><strong>@selected.StartedAt.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture)</strong></div>
+          <div class="vital vital-tokens">
+            <span class="vital-label" id="usage-title">Tokens & cache</span>
+            @if (selectedUsage is null)
+            {
+              <span class="vital-empty">No usage reported</span>
+            }
+            else
+            {
+              <span class="vital-bar" data-tip="@TokenSparkTitle(selectedUsage)">
+                @foreach (var part in TokenSpark(selectedUsage))
+                {
+                  <span style="flex-grow: @part.Tokens; background: @part.Color"></span>
+                }
+              </span>
+              <span class="vital-caption"><strong>@selectedUsage.TotalTokens.ToString("N0", CultureInfo.InvariantCulture)</strong> Total tokens</span>
+            }
+          </div>
+          <div class="vital vital-cache">
+            @{ var cacheShare = selectedUsage is { InputTokens: > 0 } ? (double)selectedUsage.CachedInputTokens / selectedUsage.InputTokens : 0; }
+            <svg class="vital-ring" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="14" class="vital-ring-track"></circle><circle cx="18" cy="18" r="14" class="vital-ring-value" stroke-dasharray="@LlmTestServerDashboardCharts.Number(cacheShare * 87.96) 87.96"></circle></svg>
+            <span class="vital-text"><strong>@(selectedUsage is null ? "—" : LlmTestServerDashboardCharts.Percent(cacheShare) + " cached")</strong><span title="Cache read / Cache write">@(selectedUsage is null ? "—" : $"{selectedUsage.CachedInputTokens.ToString("N0", CultureInfo.InvariantCulture)} read · {selectedUsage.CacheCreationInputTokens.ToString("N0", CultureInfo.InvariantCulture)} written")</span></span>
+          </div>
+          <div class="vital vital-meta">
+            <span class="vital-text"><strong>@FormatDuration(selected.DurationMilliseconds)</strong><span>@Empty(selected.ScenarioId) · @selected.StartedAt.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture)</span></span>
+          </div>
         </section>
 
         <nav class="detail-tabs" role="tablist" aria-label="Request detail views">
@@ -383,6 +496,7 @@
           {
             <button id="stream-tab" class="@DetailTabCss(_streamTab)" type="button" role="tab" aria-controls="stream-panel" aria-selected="@AriaBoolean(IsDetailTab(_streamTab))" @onclick="() => SetDetailTab(_streamTab)">Stream <span>@selectedChunks.Count</span></button>
           }
+          <button id="analytics-tab" data-testid="analytics-tab" class="@DetailTabCss(_analyticsTab)" type="button" role="tab" aria-controls="analytics-panel" aria-selected="@AriaBoolean(IsDetailTab(_analyticsTab))" @onclick="() => SetDetailTab(_analyticsTab)">Tokens</button>
           <button id="runtime-tab" class="@DetailTabCss(_runtimeTab)" type="button" role="tab" aria-controls="runtime-panel" aria-selected="@AriaBoolean(IsDetailTab(_runtimeTab))" @onclick="() => SetDetailTab(_runtimeTab)">Runtime</button>
         </nav>
 
@@ -396,20 +510,21 @@
                   <span class="mono">@selected.Method</span>
                 </header>
                 <div class="overview-card-body request-thread">
+                  @ConversationStrip(selectedMessages, selectedUsage)
                   @foreach (var message in selectedMessages)
                   {
                     @if (ShouldCollapseTurn(message.Role, message.Content))
                     {
                       <details class="overview-message collapsed-message">
-                        <summary><span class="message-role">@message.Role</span><span class="message-preview">@TurnPreview(message.Content)</span><span class="message-size">@FormatCharacterCount(message.Content)</span></summary>
-                        <div class="message-content">@message.Content</div>
+                        <summary><span class="message-role" style="--role: @RoleColor(message)">@RoleLabel(message)</span><span class="message-preview">@TurnPreview(message.Content)</span>@MessageMeter(message, selectedMessages)</summary>
+                        @MessageBody(message, "message-content")
                       </details>
                     }
                     else
                     {
                       <article class="overview-message">
-                        <span class="message-role">@message.Role</span>
-                        <div class="message-content">@message.Content</div>
+                        <span class="message-head"><span class="message-role" style="--role: @RoleColor(message)">@RoleLabel(message)</span>@MessageMeter(message, selectedMessages)</span>
+                        @MessageBody(message, "message-content")
                       </article>
                     }
                   }
@@ -423,13 +538,39 @@
                 </header>
                 <div class="overview-card-body response-body">
                   <span class="message-role">@RuntimeResponseRole(selected)</span>
+                  @if (selected.ResponseToolCalls.Count > 0)
+                  {
+                    <div class="tool-call-cards" data-testid="overview-tool-calls">
+                      @foreach (var call in selected.ResponseToolCalls)
+                      {
+                        <article class="tool-call-card">
+                          <header data-tip="@($"Tool call\n{call.Name} · {call.Id}")" data-tip-color="var(--mix-tool-calls)"><span class="tool-call-glyph" aria-hidden="true">ƒ</span><strong class="mono">@call.Name</strong><span class="mono">@call.Id</span></header>
+                          <pre class="tool-call-args">@LlmTestServerJsonHighlighter.Highlight(call.ArgumentsJson, false)</pre>
+                        </article>
+                      }
+                    </div>
+                  }
                   @if (!string.IsNullOrWhiteSpace(selected.RuntimeResponse))
                   {
                     <div class="response-copy">@selected.RuntimeResponse</div>
                   }
+                  else if (selected.ResponseToolCalls.Count > 0)
+                  {
+                    <details class="raw-json">
+                      <summary>Raw provider response</summary>
+                      <pre class="response-copy response-json" data-testid="overview-response-json">@LlmTestServerJsonHighlighter.Highlight(selected.ResponsePreview, selected.ResponsePreviewTruncated)</pre>
+                    </details>
+                  }
                   else
                   {
-                    <pre class="response-copy response-json" data-testid="overview-response-json">@PrettyPayload(selected.ResponsePreview, selected.ResponsePreviewTruncated)</pre>
+                    <pre class="response-copy response-json" data-testid="overview-response-json">@LlmTestServerJsonHighlighter.Highlight(selected.ResponsePreview, selected.ResponsePreviewTruncated)</pre>
+                  }
+                  @if (selectedUsage is { OutputTokens: > 0 })
+                  {
+                    <div class="output-meter" title="Visible response and reasoning tokens">
+                      <span class="output-meter-bar"><span style="flex-grow: @Math.Max(0, selectedUsage.OutputTokens - selectedUsage.ReasoningTokens); background: var(--output-visible)"></span><span style="flex-grow: @selectedUsage.ReasoningTokens; background: var(--output-reasoning)"></span></span>
+                      <span class="output-meter-legend"><span><i style="background: var(--output-visible)"></i>Response @LlmTestServerDashboardCharts.Tokens(Math.Max(0, selectedUsage.OutputTokens - selectedUsage.ReasoningTokens))</span><span><i style="background: var(--output-reasoning)"></i>Reasoning @LlmTestServerDashboardCharts.Tokens(selectedUsage.ReasoningTokens)</span></span>
+                    </div>
                   }
                 </div>
               </section>
@@ -458,20 +599,21 @@
                 }
 
                 <div class="thread-heading"><strong>Request context</strong><span>@selectedMessages.Count input turn@(selectedMessages.Count == 1 ? string.Empty : "s") · chronological</span></div>
+                @ConversationStrip(selectedMessages, selectedUsage)
                 @foreach (var message in selectedMessages)
                 {
                   @if (ShouldCollapseTurn(message.Role, message.Content))
                   {
                     <details class="@TurnCss(message.Role) turn-disclosure" data-testid="conversation-turn" data-collapsed-by-default="true">
-                      <summary><span class="turn-role">@message.Role</span><span class="turn-preview">@TurnPreview(message.Content)</span><span class="turn-size">@FormatCharacterCount(message.Content)</span></summary>
-                      <div class="turn-content">@message.Content</div>
+                      <summary><span class="turn-role" style="--role: @RoleColor(message)">@RoleLabel(message)</span><span class="turn-preview">@TurnPreview(message.Content)</span>@MessageMeter(message, selectedMessages)</summary>
+                      @MessageBody(message, "turn-content")
                     </details>
                   }
                   else
                   {
                     <article class="@TurnCss(message.Role)" data-testid="conversation-turn">
-                      <div class="turn-role">@message.Role</div>
-                      <div class="turn-content">@message.Content</div>
+                      <div class="message-head"><span class="turn-role" style="--role: @RoleColor(message)">@RoleLabel(message)</span>@MessageMeter(message, selectedMessages)</div>
+                      @MessageBody(message, "turn-content")
                     </article>
                   }
                 }
@@ -485,12 +627,12 @@
             </div>
             <div class="wire-grid">
               <article class="payload-card">
-                <div class="payload-head"><span>Request</span><span>@Empty(selected.RequestContentType)</span></div>
-                <pre class="payload-content" data-testid="request-payload">@PrettyPayload(selected.RequestPreview, selected.RequestPreviewTruncated)</pre>
+                <div class="payload-head"><span>Request</span>@SizeMeter(selected.RequestByteCount ?? 0, Math.Max(selected.RequestByteCount ?? 0, selected.ResponseByteCount))<span>@Empty(selected.RequestContentType)</span></div>
+                <pre class="payload-content" data-testid="request-payload">@LlmTestServerJsonHighlighter.Highlight(selected.RequestPreview, selected.RequestPreviewTruncated)</pre>
               </article>
               <article class="payload-card">
-                <div class="payload-head"><span>Response</span><span>@Empty(selected.ResponseContentType)</span></div>
-                <pre class="payload-content" data-testid="response-payload">@PrettyPayload(selected.ResponsePreview, selected.ResponsePreviewTruncated)</pre>
+                <div class="payload-head"><span>Response</span>@SizeMeter(selected.ResponseByteCount, Math.Max(selected.RequestByteCount ?? 0, selected.ResponseByteCount))<span>@Empty(selected.ResponseContentType)</span></div>
+                <pre class="payload-content" data-testid="response-payload">@LlmTestServerJsonHighlighter.Highlight(selected.ResponsePreview, selected.ResponsePreviewTruncated)</pre>
               </article>
             </div>
           </section>
@@ -501,6 +643,13 @@
               <div class="panel-heading">
                 <div><h3 id="chunks-title">Stream chunks</h3><span>@selectedChunks.Count ordered chunk@(selectedChunks.Count == 1 ? string.Empty : "s")</span></div>
               </div>
+              @{ var chunkTokens = selectedChunks.Select(chunk => LlmTestServerTokenCounter.CountTextTokens(chunk)).ToArray(); var chunkMax = Math.Max(1, chunkTokens.Max()); }
+              <div class="chunk-chart" data-testid="stream-chunk-chart" aria-label="Tokens per streamed chunk">
+                @for (var index = 0; index < selectedChunks.Count; index++)
+                {
+                  <span data-tip="@($"Chunk #{index + 1}\n{chunkTokens[index]} tokens · {selectedChunks[index].Length} chars")" data-tip-color="var(--mix-assistant)"><span style="height: @RecentHeight(chunkTokens[index], chunkMax)"></span></span>
+                }
+              </div>
               <ol class="chunk-list">
                 @for (var index = 0; index < selectedChunks.Count; index++)
                 {
@@ -510,8 +659,257 @@
             </section>
           }
 
+          <section id="analytics-panel" data-testid="analytics-panel" class="@DetailPanelCss(_analyticsTab) analytics-panel" role="tabpanel" aria-labelledby="analytics-tab" hidden="@(!IsDetailTab(_analyticsTab))">
+            <div class="analytics-scroll">
+              <header class="analytics-heading">
+                <div>
+                  <h3>Token analytics</h3>
+                  <p data-testid="analytics-scope-label">@(hasConversation ? $"Conversation “{selected.ConversationId}” · same session and provider; models may differ" : "This request · no explicit conversation label")</p>
+                </div>
+                <div class="analytics-scope" role="group" aria-label="Analytics scope">
+                  <button type="button" data-testid="analytics-scope-request" aria-pressed="@AriaBoolean(!conversationScope)" @onclick="() => _analyticsConversation = false">Request</button>
+                  <button type="button" data-testid="analytics-scope-conversation" aria-pressed="@AriaBoolean(conversationScope)" disabled="@(!hasConversation)" title="@(hasConversation ? null : "Send X-Llm-Test-Server-Conversation to group requests")" @onclick="() => _analyticsConversation = true">Conversation</button>
+                </div>
+              </header>
+
+              <p class="analytics-scope-line" data-testid="analytics-retention" data-incomplete="@AriaBoolean(usageIncomplete)">
+                <span><span data-testid="analytics-requests" data-value="@analytics.RequestCount">@analytics.RequestCount</span> request@(analytics.RequestCount == 1 ? string.Empty : "s") · <span data-testid="analytics-usage-requests" data-value="@analytics.UsageRequestCount">@analytics.UsageRequestCount</span> with usage · journal @_evidenceSnapshot.Requests.Count of @_evidenceSnapshot.TotalObserved retained</span>
+                @if (conversationScope && _evidenceSnapshot.EvictedCount > 0) { <span class="analytics-flag">@_evidenceSnapshot.EvictedCount earlier request(s) evicted · totals may be partial</span> }
+                @if (analytics.PendingCount > 0) { <span class="analytics-flag">@analytics.PendingCount pending · totals may change</span> }
+                @if (analytics.UsageRequestCount < analytics.RequestCount) { <span class="analytics-flag">no usage reported for @(analytics.RequestCount - analytics.UsageRequestCount) request(s)</span> }
+              </p>
+              @if (analytics.PayloadTruncated || _evidenceSnapshot.RetentionTruncated)
+              {
+                <p class="analytics-flag-note" data-testid="analytics-payload-retention">Payloads were shortened by the retention budget. Token counts are complete; tool observations may be partial.</p>
+              }
+
+              <div class="token-hero">
+                <div class="token-hero-total">
+                  <span class="token-hero-value" data-testid="analytics-total" data-value="@AnalyticsValue(analytics.TotalTokens, analytics)">@AnalyticsNumber(analytics.TotalTokens, analytics)</span>
+                  <span class="token-hero-caption">@(conversationScope ? "tokens across the conversation" : "tokens in this request")</span>
+                </div>
+                <dl class="token-hero-stats">
+                  <div><dt>Input</dt><dd><span data-testid="analytics-input" data-value="@AnalyticsValue(analytics.InputTokens, analytics)">@AnalyticsNumber(analytics.InputTokens, analytics)</span><small>@(analytics.ItemizedRequestCount > 0 ? $"{AnalyticsShare(analytics.SystemTokens + analytics.ToolDefinitionTokens, analytics.InputTokens)} system and tool schemas" : "per-role split unavailable")</small></dd></div>
+                  <div><dt>Output</dt><dd><span data-testid="analytics-output" data-value="@AnalyticsValue(analytics.OutputTokens, analytics)">@AnalyticsNumber(analytics.OutputTokens, analytics)</span><small>incl. <span data-testid="analytics-reasoning" data-value="@AnalyticsValue(analytics.ReasoningTokens, analytics)">@AnalyticsNumber(analytics.ReasoningTokens, analytics)</span> reasoning</small></dd></div>
+                  <div><dt>Cached input</dt><dd><span data-testid="analytics-cache-share" data-value="@AnalyticsRatioValue(analytics.CacheShare)">@AnalyticsPercent(analytics.CacheShare)</span><small>@AnalyticsNumber(analytics.CacheReadTokens, analytics) read from cache</small></dd></div>
+                </dl>
+              </div>
+
+              <section class="viz-card sankey-card" aria-labelledby="analytics-flow-title">
+                <header class="viz-card-header">
+                  <h4 id="analytics-flow-title">Where the tokens go</h4>
+                  <p>Prompt parts and generated output, by how they are billed</p>
+                </header>
+                @if (sankey is null)
+                {
+                  <div class="viz-empty" data-testid="analytics-flow-empty">No token usage was reported for this scope, so there is nothing to break down.</div>
+                }
+                else
+                {
+                  <div class="sankey" data-testid="analytics-flow" style="height: @(LlmTestServerDashboardCharts.Number(sankey.Height))px">
+                    <svg class="sankey-svg" viewBox="0 0 @LlmTestServerDashboardCharts.Number(LlmTestServerDashboardCharts.SankeyWidth) @LlmTestServerDashboardCharts.Number(sankey.Height)" preserveAspectRatio="none" role="img" aria-label="Token flow: @string.Join(", ", sankey.Sources.Select(node => $"{node.Segment.Label} {LlmTestServerDashboardCharts.Tokens(node.Segment.Tokens)}")) into @LlmTestServerDashboardCharts.Tokens(sankey.Total) tokens; @string.Join(", ", sankey.Targets.Select(node => $"{node.Segment.Label} {LlmTestServerDashboardCharts.Tokens(node.Segment.Tokens)}"))">
+                      @foreach (var band in sankey.Bands)
+                      {
+                        <path class="sankey-band" d="@band.Path" style="fill: @band.Color" data-tip="@band.Title" data-tip-color="@band.Color"></path>
+                      }
+                      @foreach (var node in sankey.Sources)
+                      {
+                        <rect class="sankey-node" x="@LlmTestServerDashboardCharts.Number(LlmTestServerDashboardCharts.SourceX)" y="@LlmTestServerDashboardCharts.Number(node.Y)" width="@LlmTestServerDashboardCharts.Number(LlmTestServerDashboardCharts.NodeWidth)" height="@LlmTestServerDashboardCharts.Number(node.Height)" style="fill: @node.Segment.Color" data-tip="@NodeTip(node)" data-tip-color="@node.Segment.Color"></rect>
+                      }
+                      <rect class="sankey-center" x="@LlmTestServerDashboardCharts.Number(LlmTestServerDashboardCharts.CenterX)" y="@LlmTestServerDashboardCharts.Number(sankey.CenterY)" width="@LlmTestServerDashboardCharts.Number(LlmTestServerDashboardCharts.NodeWidth)" height="@LlmTestServerDashboardCharts.Number(sankey.CenterHeight)" data-tip="@($"Request total\n{LlmTestServerDashboardCharts.Tokens(sankey.Total)} tokens")"></rect>
+                      @foreach (var node in sankey.Targets)
+                      {
+                        <rect class="sankey-node" x="@LlmTestServerDashboardCharts.Number(LlmTestServerDashboardCharts.TargetX)" y="@LlmTestServerDashboardCharts.Number(node.Y)" width="@LlmTestServerDashboardCharts.Number(LlmTestServerDashboardCharts.NodeWidth)" height="@LlmTestServerDashboardCharts.Number(node.Height)" style="fill: @node.Segment.Color" data-tip="@NodeTip(node)" data-tip-color="@node.Segment.Color"></rect>
+                      }
+                    </svg>
+                    <div class="sankey-total" style="top: @(LlmTestServerDashboardCharts.Number(sankey.CenterY))px">@LlmTestServerDashboardCharts.Tokens(sankey.Total) <span>tokens</span></div>
+                    @foreach (var node in sankey.Sources)
+                    {
+                      <div class="sankey-label sankey-source" data-testid="analytics-flow-source" data-key="@node.Segment.Key" style="top: @(LlmTestServerDashboardCharts.Number(node.Center))px">
+                        <span class="sankey-name"><i style="background: @node.Segment.Color"></i>@node.Segment.Label</span>
+                        <span class="sankey-value"><strong>@LlmTestServerDashboardCharts.Tokens(node.Segment.Tokens)</strong> @LlmTestServerDashboardCharts.Percent(node.Share)</span>
+                      </div>
+                    }
+                    @foreach (var node in sankey.Targets)
+                    {
+                      <div class="sankey-label sankey-target" data-testid="analytics-flow-target" data-key="@node.Segment.Key" style="top: @(LlmTestServerDashboardCharts.Number(node.Center))px">
+                        <span class="sankey-name"><i style="background: @node.Segment.Color"></i>@node.Segment.Label</span>
+                        <span class="sankey-value"><strong>@LlmTestServerDashboardCharts.Tokens(node.Segment.Tokens)</strong> @LlmTestServerDashboardCharts.Percent(node.Share)</span>
+                      </div>
+                    }
+                  </div>
+                  <div class="sankey-legend" aria-hidden="true">
+                    @foreach (var column in new[] { sankey.Sources, sankey.Targets })
+                    {
+                      <ul class="viz-legend">
+                        @foreach (var node in column)
+                        {
+                          <li><i style="background: @node.Segment.Color"></i><span>@node.Segment.Label</span><strong>@LlmTestServerDashboardCharts.Tokens(node.Segment.Tokens)</strong><em>@LlmTestServerDashboardCharts.Percent(node.Share)</em></li>
+                        }
+                      </ul>
+                    }
+                  </div>
+                }
+              </section>
+
+              <div class="viz-pair">
+                <section class="viz-card donut-card" aria-labelledby="analytics-mix-title">
+                  <header class="viz-card-header">
+                    <h4 id="analytics-mix-title">Context mix</h4>
+                    <p>What the input is made of</p>
+                  </header>
+                  <div class="donut-layout">
+                    <div class="donut">
+                      <svg viewBox="0 0 128 128" role="img" aria-label="Input composition">
+                        <circle class="donut-track" cx="64" cy="64" r="@LlmTestServerDashboardCharts.Number(LlmTestServerDashboardCharts.DonutRadius)"></circle>
+                        @foreach (var arc in mixArcs)
+                        {
+                          <circle class="donut-arc" cx="64" cy="64" r="@LlmTestServerDashboardCharts.Number(LlmTestServerDashboardCharts.DonutRadius)" stroke-dasharray="@arc.DashArray" stroke-dashoffset="@arc.DashOffset" style="stroke: @arc.Segment.Color" data-tip="@ArcTip(arc)" data-tip-color="@arc.Segment.Color"></circle>
+                        }
+                      </svg>
+                      <div class="donut-center"><strong>@AnalyticsNumber(analytics.InputTokens, analytics)</strong><span>input</span></div>
+                    </div>
+                    @if (mixArcs.Count == 0)
+                    {
+                      <p class="viz-empty">No input tokens reported.</p>
+                    }
+                    else
+                    {
+                      <ul class="viz-legend">
+                        @foreach (var arc in mixArcs)
+                        {
+                          <li><i style="background: @arc.Segment.Color"></i><span>@arc.Segment.Label</span><strong><span data-testid="analytics-mix-@arc.Segment.Key" data-value="@arc.Segment.Tokens">@LlmTestServerDashboardCharts.Tokens(arc.Segment.Tokens)</span></strong><em>@LlmTestServerDashboardCharts.Percent(arc.Share)</em></li>
+                        }
+                      </ul>
+                    }
+                  </div>
+                  @if (analytics.NotItemizedTokens > 0)
+                  {
+                    <p class="viz-footnote">Not itemized: input reported without per-role messages, such as embeddings or media prompts.</p>
+                  }
+                </section>
+
+                <section class="viz-card donut-card" aria-labelledby="analytics-cache-title">
+                  <header class="viz-card-header">
+                    <h4 id="analytics-cache-title">Prompt cache</h4>
+                    <p>How the input was served</p>
+                  </header>
+                  <div class="donut-layout">
+                    <div class="donut">
+                      <svg viewBox="0 0 128 128" role="img" aria-label="Prompt cache usage">
+                        <circle class="donut-track" cx="64" cy="64" r="@LlmTestServerDashboardCharts.Number(LlmTestServerDashboardCharts.DonutRadius)"></circle>
+                        @foreach (var arc in cacheArcs)
+                        {
+                          <circle class="donut-arc" cx="64" cy="64" r="@LlmTestServerDashboardCharts.Number(LlmTestServerDashboardCharts.DonutRadius)" stroke-dasharray="@arc.DashArray" stroke-dashoffset="@arc.DashOffset" style="stroke: @arc.Segment.Color" data-tip="@ArcTip(arc)" data-tip-color="@arc.Segment.Color"></circle>
+                        }
+                      </svg>
+                      <div class="donut-center"><strong>@AnalyticsPercent(analytics.CacheShare)</strong><span>cache read</span></div>
+                    </div>
+                    <ul class="viz-legend">
+                      <li><i style="background: var(--cache-read)"></i><span>Cache read</span><strong><span data-testid="analytics-cache-read" data-value="@AnalyticsValue(analytics.CacheReadTokens, analytics)">@AnalyticsNumber(analytics.CacheReadTokens, analytics)</span></strong><em>@AnalyticsShare(analytics.CacheReadTokens, analytics.InputTokens)</em></li>
+                      <li><i style="background: var(--cache-write)"></i><span>Cache write</span><strong><span data-testid="analytics-cache-write" data-value="@AnalyticsValue(analytics.CacheWriteTokens, analytics)">@AnalyticsNumber(analytics.CacheWriteTokens, analytics)</span></strong><em>@AnalyticsShare(analytics.CacheWriteTokens, analytics.InputTokens)</em></li>
+                      <li><i style="background: var(--cache-none)"></i><span>Uncached</span><strong>@AnalyticsNumber(analytics.UncachedInputTokens, analytics)</strong><em>@AnalyticsShare(analytics.UncachedInputTokens, analytics.InputTokens)</em></li>
+                    </ul>
+                  </div>
+                  <p class="viz-footnote">Cache reads in <span data-testid="analytics-cache-hits" data-value="@analytics.CacheHitCount">@analytics.CacheHitCount</span> of @analytics.UsageRequestCount request@(analytics.UsageRequestCount == 1 ? string.Empty : "s") with usage · <span data-testid="analytics-cache-hit-rate" data-value="@AnalyticsRatioValue(analytics.CacheHitRate)">@AnalyticsPercent(analytics.CacheHitRate)</span></p>
+                </section>
+                @InsightCard(new("output-mix", "Output", "Visible response and reasoning", AnalyticsNumber(analytics.OutputTokens, analytics), "output", analytics.OutputMix))
+                @InsightCard(new("tool-mix", "Tool tokens", "Schemas, call arguments and results", LlmTestServerDashboardCharts.Tokens(analytics.ToolDefinitionTokens + analytics.ToolCallTokens + analytics.ToolResultTokens), "tool tokens", analytics.ToolMix))
+              </div>
+
+              @if (conversationScope && analytics.Requests.Count > 1)
+              {
+                var timelineMax = Math.Max(1L, analytics.Requests.Max(point => (long)(point.Usage?.TotalTokens ?? 0)));
+                <section class="viz-card timeline-card" aria-labelledby="analytics-timeline-title">
+                  <header class="viz-card-header">
+                    <h4 id="analytics-timeline-title">Context growth</h4>
+                    <p>Tokens per request, oldest first · repeated context counts on every request</p>
+                  </header>
+                  <div class="timeline" data-testid="analytics-timeline">
+                    @for (var index = 0; index < analytics.Requests.Count; index++)
+                    {
+                      var point = analytics.Requests[index];
+                      var pointUsage = point.Usage;
+                      <button type="button" class="@(string.Equals(point.RequestId, selected.RequestId, StringComparison.Ordinal) ? "timeline-step current" : "timeline-step")" data-testid="analytics-timeline-step" data-tip="@TimelineTitle(index, point)" aria-label="@TimelineTitle(index, point)" @onclick="() => SelectAnalyticsRequest(point.RequestId)">
+                        <span class="timeline-bar">
+                          @if (pointUsage is null)
+                          {
+                            <span class="timeline-missing"></span>
+                          }
+                          else
+                          {
+                            <span class="timeline-stack" style="height: @(TimelineHeight(pointUsage.TotalTokens, timelineMax))">
+                              <span style="flex-grow: @pointUsage.CachedInputTokens; background: var(--cache-read)"></span>
+                              <span style="flex-grow: @pointUsage.CacheCreationInputTokens; background: var(--cache-write)"></span>
+                              <span style="flex-grow: @Math.Max(0, pointUsage.InputTokens - pointUsage.CachedInputTokens - pointUsage.CacheCreationInputTokens); background: var(--cache-none)"></span>
+                              <span style="flex-grow: @pointUsage.OutputTokens; background: var(--output-visible)"></span>
+                            </span>
+                          }
+                        </span>
+                        <span class="timeline-index">#@(index + 1)</span>
+                      </button>
+                    }
+                  </div>
+                  <ul class="viz-legend viz-legend-inline">
+                    <li><i style="background: var(--cache-read)"></i><span>Cache read</span></li>
+                    <li><i style="background: var(--cache-write)"></i><span>Cache write</span></li>
+                    <li><i style="background: var(--cache-none)"></i><span>Uncached</span></li>
+                    <li><i style="background: var(--output-visible)"></i><span>Output</span></li>
+                  </ul>
+                </section>
+              }
+
+              <section class="viz-card analytics-tools" aria-labelledby="analytics-tools-title">
+                <header class="viz-card-header">
+                  <h4 id="analytics-tools-title">Function tools</h4>
+                  <p><span data-testid="analytics-tool-calls" data-value="@analytics.CallsReturned">@analytics.CallsReturned</span> calls returned · <span data-testid="analytics-tool-results" data-value="@analytics.ResultsObserved">@analytics.ResultsObserved</span> results in context · <span data-testid="analytics-tool-result-ids" data-value="@analytics.DistinctResultIds">@analytics.DistinctResultIds</span> distinct result IDs</p>
+                </header>
+                @if (analytics.Tools.Count == 0)
+                {
+                  <p class="viz-empty">No function calls or tool results in this scope.</p>
+                }
+                else
+                {
+                  var toolMax = Math.Max(1, analytics.Tools.Max(tool => Math.Max(tool.CallsReturned, tool.ResultsObserved)));
+                  <ul class="tool-capsules" aria-label="Function tool observations by name">
+                    @foreach (var tool in analytics.Tools)
+                    {
+                      <li data-testid="analytics-tool-row" data-tool-name="@tool.Name">
+                        <span class="tool-capsule-name mono" data-testid="analytics-tool-name">@tool.Name</span>
+                        <span class="tool-capsule-bars" aria-hidden="true">
+                          <span class="tool-capsule-calls" style="width: @ToolMeterWidth(tool.CallsReturned, toolMax)"></span>
+                          <span class="tool-capsule-results" style="width: @ToolMeterWidth(tool.ResultsObserved, toolMax)"></span>
+                        </span>
+                        <span class="tool-capsule-stats"><span><i class="swatch-calls"></i><span data-testid="analytics-tool-calls-returned" data-value="@tool.CallsReturned">@tool.CallsReturned</span> returned</span><span><i class="swatch-results"></i><span data-testid="analytics-tool-results-observed" data-value="@tool.ResultsObserved">@tool.ResultsObserved</span> in context</span><span><span data-testid="analytics-result-ids" data-value="@tool.ResultIds.Count">@tool.ResultIds.Count</span> result IDs</span></span>
+                      </li>
+                    }
+                  </ul>
+                  <details class="analytics-observed-ids"><summary>Observed tool-result call IDs</summary>@foreach (var tool in analytics.Tools.Where(tool => tool.ResultIds.Count > 0)) { <p><strong>@tool.Name</strong> <span class="mono">@string.Join(", ", tool.ResultIds)</span></p> }</details>
+                }
+              </section>
+
+              <details class="analytics-notes">
+                <summary>How these numbers are counted</summary>
+                <ul>
+                  <li>Input includes cache read and cache write; output includes reasoning. Total is input plus output, so subsets are never added twice.</li>
+                  <li>The context mix uses the server tokenizer per message and per tool schema; the parts add up exactly to the reported input. Tool-call arguments inside assistant turns are split out from assistant text.</li>
+                  <li>Conversation totals sum every retained request with the same label, session and provider, so repeated context counts again on each request. They are not a billing estimate.</li>
+                  <li>Cache-read request rate uses requests that reported usage, not provider cache eligibility.</li>
+                  <li>Returned calls and in-context results are observations of the retained journal, not proof that an external function ran. Replayed responses count as returned calls for each request.</li>
+                </ul>
+              </details>
+            </div>
+          </section>
+
           <section id="runtime-panel" class="@DetailPanelCss(_runtimeTab)" role="tabpanel" aria-labelledby="runtime-tab" hidden="@(!IsDetailTab(_runtimeTab))">
             <div class="panel-heading"><div><h3 id="runtime-title">Runtime detail</h3><span>Correlation and transport metadata</span></div></div>
+            <div class="anatomy" data-testid="runtime-anatomy" aria-label="Request path">
+              <div class="anatomy-node"><span>Request</span><strong>@FormatBytes(selected.RequestByteCount)</strong><em>@Empty(selected.RequestContentType)</em></div>
+              <div class="anatomy-link"><span>@selected.Method</span></div>
+              <div class="anatomy-node anatomy-server"><span>LLM Test Server</span><strong>@FormatDuration(selected.DurationMilliseconds)</strong><em>@Empty(selected.ScenarioId)</em></div>
+              <div class="@(selected.IsSuccess is false ? "anatomy-link failed" : "anatomy-link")"><span>@InboxStatusText(selected)</span></div>
+              <div class="anatomy-node"><span>Response</span><strong>@FormatBytes(selected.ResponseByteCount)</strong><em>@Empty(selected.ResponseContentType)</em></div>
+            </div>
             <div class="runtime-grid">
               <div class="meta-card"><div class="meta-label">Operation</div><div class="meta-value mono">@Empty(selected.OperationId)</div></div>
               <div class="meta-card"><div class="meta-label">Transport</div><div class="meta-value">@selected.TransportState</div></div>
@@ -519,13 +917,7 @@
               <div class="meta-card"><div class="meta-label">Response content</div><div class="meta-value mono">@Empty(selected.ResponseContentType)</div></div>
               <div class="meta-card"><div class="meta-label">Error code</div><div class="meta-value mono">@Empty(selected.ErrorCode)</div></div>
               <div class="meta-card"><div class="meta-label">Retention</div><div class="meta-value">@FormatBytes(selected.RetainedByteCount)</div></div>
-              <div class="meta-card"><div class="meta-label">Bytes</div><div class="meta-value">@FormatBytes(selected.RequestByteCount) → @FormatBytes(selected.ResponseByteCount)</div></div>
               <div class="meta-card"><div class="meta-label">Prompt cache</div><div class="meta-value">@(selectedEvent?.PromptCachePolicy.ToString() ?? "Not reported")</div></div>
-              @if (selectedUsage is not null)
-              {
-                <div class="meta-card"><div class="meta-label">Input / output</div><div class="meta-value">@selectedUsage.InputTokens.ToString("N0", CultureInfo.InvariantCulture) / @selectedUsage.OutputTokens.ToString("N0", CultureInfo.InvariantCulture) tokens</div></div>
-                <div class="meta-card"><div class="meta-label">Reasoning</div><div class="meta-value">@selectedUsage.ReasoningTokens.ToString("N0", CultureInfo.InvariantCulture) tokens</div></div>
-              }
             </div>
             @if (!string.IsNullOrWhiteSpace(selected.RuntimeMessage))
             {
@@ -548,14 +940,10 @@
     private const string _wireTab = "wire";
     private const string _streamTab = "stream";
     private const string _runtimeTab = "runtime";
+    private const string _analyticsTab = "analytics";
     private const int _collapsedTurnThreshold = 420;
     private const int _turnPreviewLimit = 132;
     private static readonly TimeSpan _autoRefreshInterval = TimeSpan.FromSeconds(15);
-    private static readonly JsonSerializerOptions _prettyJsonOptions = new()
-    {
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        WriteIndented = true,
-    };
     private static readonly IReadOnlyList<ProviderRoute> _providerRoutes =
     [
         new("OpenAI", LlmTestServerProviderRouteNamespaces.OpenAI),
@@ -579,6 +967,10 @@
     private IReadOnlyDictionary<string, LlmTestServerRuntimeEvent> _eventsByRequestId =
         new Dictionary<string, LlmTestServerRuntimeEvent>(StringComparer.Ordinal);
     private LlmTestServerAssertionSummary _summary = new();
+    private LlmTestServerRequestSnapshot _evidenceSnapshot = new();
+    private bool _analyticsConversation;
+    private bool _insightsOpen;
+    private IReadOnlyDictionary<string, string> _providerColors = new Dictionary<string, string>(StringComparer.Ordinal);
     private string _bearerToken = string.Empty;
     private string _search = string.Empty;
     private string _providerFilter = string.Empty;
@@ -643,6 +1035,11 @@
 
     protected override void OnInitialized()
     {
+        // `/?view=insights` deep-links straight to the traffic charts.
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(Navigation.Uri).Query);
+        _insightsOpen = query.TryGetValue("view", out var view)
+            && string.Equals(view.ToString(), "insights", StringComparison.OrdinalIgnoreCase);
+        _mobileDetailsOpen = _insightsOpen;
         RefreshState();
     }
 
@@ -757,7 +1154,9 @@
         }
 
         _eventsByRequestId = eventsByRequestId;
-        _traces = TraceStore.GetSnapshot();
+        _evidenceSnapshot = TraceStore.GetEvidenceSnapshot();
+        _traces = _evidenceSnapshot.Requests;
+        _providerColors = LlmTestServerDashboardInsights.CategoricalColors(_traces, trace => trace.ProviderId);
         if (_selectedRequestId is null
             || !_traces.Any(trace =>
                 string.Equals(trace.RequestId, _selectedRequestId, StringComparison.Ordinal)
@@ -780,6 +1179,8 @@
     {
         _models = [];
         _traces = [];
+        _evidenceSnapshot = new();
+        _analyticsConversation = false;
         _events = [];
         _eventsByRequestId = new Dictionary<string, LlmTestServerRuntimeEvent>(StringComparer.Ordinal);
         _summary = new LlmTestServerAssertionSummary();
@@ -936,6 +1337,7 @@
 
     private void SelectTrace(string requestId)
     {
+        _insightsOpen = false;
         _selectedRequestId = requestId;
         _activeDetailTab = _overviewTab;
         _mobileDetailsOpen = true;
@@ -980,6 +1382,405 @@
     private void SetDetailTab(string tab)
     {
         _activeDetailTab = tab;
+    }
+
+    private static string AnalyticsValue(long value, LlmTestServerDashboardAnalytics analytics)
+        => analytics.UsageRequestCount > 0 ? value.ToString(CultureInfo.InvariantCulture) : string.Empty;
+
+    private static string AnalyticsNumber(long value, LlmTestServerDashboardAnalytics analytics)
+        => analytics.UsageRequestCount > 0 ? value.ToString("N0", CultureInfo.InvariantCulture) : "—";
+
+    private static string AnalyticsRatioValue(decimal? value) => value?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+
+    private static string AnalyticsPercent(decimal? value) => value?.ToString("0.0%", CultureInfo.InvariantCulture) ?? "N/A";
+
+    private static string AnalyticsShare(long value, long total)
+        => total > 0 ? LlmTestServerDashboardCharts.Percent((double)value / total) : string.Empty;
+
+    private static string TimelineHeight(long tokens, long max)
+        => $"{LlmTestServerDashboardCharts.Number(Math.Max(3, tokens * 100d / max))}%";
+
+    private static string ToolMeterWidth(int count, int max)
+        => $"{LlmTestServerDashboardCharts.Number(count * 100d / max)}%";
+
+    private static string TimelineTitle(int index, LlmTestServerDashboardRequestPoint point)
+    {
+        var header = $"Request #{index + 1} · {point.ModelId ?? "unknown model"} · {point.StartedAt.ToLocalTime():HH:mm:ss}";
+        return point.Usage is not { } usage
+            ? $"{header}\nNo usage reported"
+            : string.Create(CultureInfo.InvariantCulture,
+                $"{header}\n{usage.TotalTokens:N0} tokens · {usage.InputTokens:N0} input ({usage.CachedInputTokens:N0} cache read, {usage.CacheCreationInputTokens:N0} cache write) · {usage.OutputTokens:N0} output");
+    }
+
+    private static IEnumerable<LlmTestServerDashboardSegment> TokenSpark(LlmTestServerTokenUsage usage)
+    {
+        var mix = usage.InputComposition is { } composition && composition.TotalTokens == usage.InputTokens
+            ? new LlmTestServerDashboardAnalytics
+            {
+                SystemTokens = composition.SystemTokens,
+                ToolDefinitionTokens = composition.ToolDefinitionTokens,
+                UserTokens = composition.UserTokens,
+                AssistantTokens = composition.AssistantTokens,
+                ToolCallTokens = composition.ToolCallTokens,
+                ToolResultTokens = composition.ToolResultTokens,
+                OtherRoleTokens = composition.OtherTokens,
+            }.InputMix
+            : [new("not-itemized", "Input", usage.InputTokens, "var(--mix-not-itemized)")];
+        return mix.Append(new("output", "Output", usage.OutputTokens, "var(--output-source)")).Where(part => part.Tokens > 0);
+    }
+
+    private static string TokenSparkTitle(LlmTestServerTokenUsage usage)
+    {
+        var total = Math.Max(1, usage.TotalTokens);
+        return $"{LlmTestServerDashboardCharts.Tokens(usage.TotalTokens)} tokens\n" + string.Join("\n", TokenSpark(usage).Select(part =>
+            $"{part.Label} · {LlmTestServerDashboardCharts.Tokens(part.Tokens)} · {LlmTestServerDashboardCharts.Percent((double)part.Tokens / total)}"));
+    }
+
+    private static string NodeTip(LlmTestServerSankeyNode node)
+    {
+        return $"{node.Segment.Label}\n{LlmTestServerDashboardCharts.Tokens(node.Segment.Tokens)} tokens · {LlmTestServerDashboardCharts.Percent(node.Share)}";
+    }
+
+    private static string ArcTip(LlmTestServerDonutArc arc)
+    {
+        return $"{arc.Segment.Label}\n{LlmTestServerDashboardCharts.Tokens(arc.Segment.Tokens)} · {LlmTestServerDashboardCharts.Percent(arc.Share)}";
+    }
+
+    private static string SegmentTip(LlmTestServerDashboardSegment segment, long total)
+    {
+        return total > 0
+            ? $"{segment.Label}\n{LlmTestServerDashboardCharts.Tokens(segment.Tokens)} · {LlmTestServerDashboardCharts.Percent((double)segment.Tokens / total)}"
+            : $"{segment.Label}\n{LlmTestServerDashboardCharts.Tokens(segment.Tokens)}";
+    }
+
+    private string RailTip(string label, int count)
+    {
+        return $"{label}\n{count} of {_traces.Count} requests · {LlmTestServerDashboardCharts.Percent(_traces.Count == 0 ? 0 : (double)count / _traces.Count)}";
+    }
+
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<LlmTestServerMessage, StrongBox<int>> _messageTokens = new();
+
+    private int MessageTokens(LlmTestServerMessage message)
+    {
+        // Mirrors the runtime's per-message accounting so the bars add up to the reported input.
+        return _messageTokens.GetValue(message, static item => new StrongBox<int>(LlmTestServerTokenCounter.CountTextTokens(
+            item.ToolCalls.Count == 0 && item.ToolCallId is null
+                ? item.Content
+                : item.Content + " " + item.ToolCallId + " " + string.Join(" ", item.ToolCalls.Select(call => call.Id + " " + call.Name + " " + call.ArgumentsJson))))).Value;
+    }
+
+    private static RenderFragment MessageBody(LlmTestServerMessage message, string css) => __builder =>
+    {
+        // Tool results are usually JSON; show them like the wire payloads instead of a single long line.
+        var content = message.Content.TrimStart();
+        if ((message.ToolCallId is not null || string.Equals(message.Role, "tool", StringComparison.OrdinalIgnoreCase))
+            && content.Length > 1 && content[0] is '{' or '[')
+        {
+            <pre class="@($"{css} tool-json")">@LlmTestServerJsonHighlighter.Highlight(message.Content, false)</pre>
+        }
+        else
+        {
+            <div class="@css">@message.Content</div>
+        }
+    };
+
+    private static string RoleLabel(LlmTestServerMessage message)
+    {
+        return message.ToolCalls.Count > 0 ? $"{message.Role} · tool call" : message.Role;
+    }
+
+    private static string RoleColor(LlmTestServerMessage message)
+    {
+        if (message.ToolCallId is not null || string.Equals(message.Role, "tool", StringComparison.OrdinalIgnoreCase))
+        {
+            return "var(--mix-tool-results)";
+        }
+
+        return message.Role.ToLowerInvariant() switch
+        {
+            "system" or "developer" => "var(--mix-system)",
+            "user" => "var(--mix-user)",
+            "assistant" or "model" or "chatbot" => message.ToolCalls.Count > 0 && string.IsNullOrWhiteSpace(message.Content)
+                ? "var(--mix-tool-calls)"
+                : "var(--mix-assistant)",
+            _ => "var(--mix-other)",
+        };
+    }
+
+    private RenderFragment ConversationStrip(IReadOnlyList<LlmTestServerMessage> messages, LlmTestServerTokenUsage? usage) => __builder =>
+    {
+        if (messages.Count == 0)
+        {
+            return;
+        }
+
+        var schemas = usage?.InputComposition is { } composition && composition.TotalTokens == usage.InputTokens ? composition.ToolDefinitionTokens : 0;
+        var total = Math.Max(1, messages.Sum(MessageTokens) + schemas);
+        <div class="convo-strip" data-testid="conversation-strip">
+          <div class="convo-strip-bar" role="img" aria-label="@($"Request context: {messages.Count} messages, {LlmTestServerDashboardCharts.Tokens(total)} tokens")">
+            @for (var index = 0; index < messages.Count; index++)
+            {
+              var message = messages[index];
+              <span style="flex-grow: @Math.Max(1, MessageTokens(message)); background: @RoleColor(message)" data-tip="@($"#{index + 1} {RoleLabel(message)}\n{LlmTestServerDashboardCharts.Tokens(MessageTokens(message))} tokens · {LlmTestServerDashboardCharts.Percent((double)MessageTokens(message) / total)}")" data-tip-color="@RoleColor(message)"></span>
+            }
+            @if (schemas > 0)
+            {
+              <span style="flex-grow: @schemas; background: var(--mix-tool-definitions)" data-tip="@($"Tool schemas\n{LlmTestServerDashboardCharts.Tokens(schemas)} tokens · {LlmTestServerDashboardCharts.Percent((double)schemas / total)}")" data-tip-color="var(--mix-tool-definitions)"></span>
+            }
+          </div>
+          <div class="convo-strip-caption"><span>@messages.Count messages@(schemas > 0 ? " + tool schemas" : string.Empty)</span><strong>@LlmTestServerDashboardCharts.Tokens(total) tokens</strong></div>
+        </div>
+    };
+
+    private RenderFragment MessageMeter(LlmTestServerMessage message, IReadOnlyList<LlmTestServerMessage> messages) => __builder =>
+    {
+        var tokens = MessageTokens(message);
+        var max = Math.Max(1, messages.Max(MessageTokens));
+        <span class="msg-meter" data-tip="@($"{RoleLabel(message)}\n{LlmTestServerDashboardCharts.Tokens(tokens)} tokens · {FormatCharacterCount(message.Content)}")" data-tip-color="@RoleColor(message)"><span class="msg-meter-bar"><span style="width: @ToolMeterWidth(tokens, max); background: @RoleColor(message)"></span></span><span class="msg-meter-value">@LlmTestServerDashboardCharts.Tokens(tokens) tok</span></span>
+    };
+
+    private static RenderFragment SizeMeter(long bytes, long max) => __builder =>
+    {
+        <span class="size-meter"><span class="size-meter-bar"><span style="width: @LlmTestServerDashboardCharts.Number(max > 0 ? Math.Max(2, bytes * 100d / max) : 0)%"></span></span><span>@FormatBytes(bytes)</span></span>
+    };
+
+    private string RailShare(int count)
+    {
+        return LlmTestServerDashboardCharts.Number(_traces.Count == 0 ? 0 : (double)count / _traces.Count);
+    }
+
+    private LlmTestServerInsightChart AssertionChart()
+    {
+        return new("assertions", "Assertions", "Runtime outcome of every scripted call",
+            LlmTestServerDashboardCharts.Tokens(_summary.TotalEvents), "events",
+            [
+                new("matched", "Matched", _summary.Matched, "#3f8d55"),
+                new("unmatched", "Unmatched", _summary.Unmatched, "#e8b445"),
+                new("model-not-found", "Model not found", _summary.ModelNotFound, "#ed732e"),
+                new("auth-failed", "Auth failed", _summary.AuthFailed, "#c94f3d"),
+                new("scenario-exhausted", "Scenario exhausted", _summary.ScenarioExhausted, "#a8a29e"),
+                new("errors-returned", "Errors returned", _summary.ErrorsReturned, "#8a2f22"),
+            ]);
+    }
+
+    private LlmTestServerInsightChart FixtureChart()
+    {
+        string[] colors = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6"];
+        var kinds = _models.GroupBy(model => model.Kind.ToString()).OrderByDescending(group => group.Count()).ThenBy(group => group.Key, StringComparer.Ordinal).ToArray();
+        return new("fixtures", "Model fixtures", "Loaded models by kind", LlmTestServerDashboardCharts.Tokens(_models.Count),
+            _models.Count == 1 ? "model" : "models",
+            kinds.Select((group, index) => new LlmTestServerDashboardSegment(group.Key, group.Key, group.Count(),
+                index < colors.Length ? colors[index] : "#a8a29e")).ToArray());
+    }
+
+    private void ToggleInsights()
+    {
+        _insightsOpen = !_insightsOpen;
+        _mobileDetailsOpen = _insightsOpen;
+    }
+
+    private void CloseInsights()
+    {
+        _insightsOpen = false;
+        _mobileDetailsOpen = false;
+    }
+
+    private string ProviderColor(string provider)
+    {
+        return _providerColors.GetValueOrDefault(provider) ?? "#a8a29e";
+    }
+
+    private string? InsightSelection(string? kind)
+    {
+        return kind switch
+        {
+            LlmTestServerDashboardInsights.ProviderFilter => NullIfEmpty(_providerFilter),
+            LlmTestServerDashboardInsights.ModelFilter => NullIfEmpty(_modelFilter),
+            LlmTestServerDashboardInsights.SearchFilter => NullIfEmpty(_search),
+            LlmTestServerDashboardInsights.OutcomeFilter => _outcomeFilter switch
+            {
+                "success" => "success",
+                "stream" => "stream",
+                _ => null,
+            },
+            _ => null,
+        };
+
+        static string? NullIfEmpty(string value) => string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+
+    private RenderFragment InsightCard(LlmTestServerInsightChart chart) => __builder =>
+    {
+        var v = LlmTestServerInsightCardView.Create(chart, $"insight-{chart.Key}", InsightSelection(chart.FilterKind));
+        <section class="@($"viz-card insight-card insight-{v.Chart.Form.ToString().ToLowerInvariant()}")" data-testid="@v.TestId" aria-label="@v.Chart.Title">
+          <header class="viz-card-header insight-card-header">
+            <div>
+              <h4>@v.Chart.Title</h4>
+              <p>@v.Chart.Subtitle</p>
+            </div>
+            @if (v.Chart.Form != LlmTestServerInsightForm.Donut && v.Visible.Count > 0)
+            {
+              <span class="insight-headline"><strong>@v.Chart.CenterValue</strong> @v.Chart.CenterLabel</span>
+            }
+          </header>
+        <div class="insight-body">
+
+          @if (v.Visible.Count == 0)
+          {
+            <p class="viz-empty">Nothing recorded yet.</p>
+          }
+          else if (v.Chart.Form == LlmTestServerInsightForm.Donut)
+          {
+            <div class="donut-layout">
+              <div class="donut">
+                <svg viewBox="0 0 128 128" role="img" aria-label="@v.AriaSummary">
+                  <circle class="donut-track" cx="64" cy="64" r="@LlmTestServerDashboardCharts.Number(LlmTestServerDashboardCharts.DonutRadius)"></circle>
+                  @foreach (var arc in v.Arcs)
+                  {
+                    <circle class="@InsightArcCss(v, arc.Segment.Key)" cx="64" cy="64" r="@LlmTestServerDashboardCharts.Number(LlmTestServerDashboardCharts.DonutRadius)" stroke-dasharray="@arc.DashArray" stroke-dashoffset="@arc.DashOffset" style="stroke: @arc.Segment.Color" data-tip="@ArcTip(arc)" data-tip-color="@arc.Segment.Color"></circle>
+                  }
+                </svg>
+                <div class="donut-center"><strong>@v.Chart.CenterValue</strong><span>@v.Chart.CenterLabel</span></div>
+              </div>
+              <ul class="viz-legend">
+                @foreach (var segment in v.Visible)
+                {
+                  <li>@InsightLegendRow(v, segment)</li>
+                }
+              </ul>
+            </div>
+          }
+          else if (v.Chart.Form == LlmTestServerInsightForm.Bars)
+          {
+            <ul class="capsules">
+              @foreach (var segment in v.Visible)
+              {
+                <li>
+                  <button type="button" class="@InsightCapsuleCss(v, segment.Key)" disabled="@(!InsightCanSelect(v, segment))" aria-pressed="@InsightPressed(v, segment.Key)" data-tip="@SegmentTip(segment, v.Total)" data-tip-color="@segment.Color" @onclick="() => InsightSelect(v, segment)">
+                    <span class="capsule-track"><span class="capsule-fill" style="width: @InsightWidth(segment.Tokens, v.Max); --tone: @segment.Color"></span><span class="capsule-label">@segment.Label</span></span>
+                    <span class="capsule-value" data-testid="@($"{v.TestId}-value")" data-key="@segment.Key" data-value="@segment.Tokens">@LlmTestServerDashboardCharts.Tokens(segment.Tokens)</span>
+                  </button>
+                </li>
+              }
+            </ul>
+          }
+          else if (v.Chart.Form == LlmTestServerInsightForm.Columns)
+          {
+            <div class="columns" role="img" aria-label="@v.AriaSummary">
+              @foreach (var segment in v.Chart.Segments.Where(segment => segment.Key != "running" || segment.Tokens > 0))
+              {
+                <div class="column" data-tip="@SegmentTip(segment, v.Total)" data-tip-color="@segment.Color">
+                  <span class="column-value" data-testid="@($"{v.TestId}-value")" data-key="@segment.Key" data-value="@segment.Tokens">@LlmTestServerDashboardCharts.Tokens(segment.Tokens)</span>
+                  <span class="column-bar"><span style="height: @InsightWidth(segment.Tokens, v.Max); background: @segment.Color"></span></span>
+                  <span class="column-label">@segment.Label</span>
+                </div>
+              }
+            </div>
+          }
+          else
+          {
+            <div class="dot-matrix" role="img" aria-label="@v.AriaSummary">
+              @foreach (var color in v.Dots)
+              {
+                <span style="background: @color"></span>
+              }
+            </div>
+            <ul class="viz-legend viz-legend-inline">
+              @foreach (var segment in v.Visible)
+              {
+                <li>@InsightLegendRow(v, segment)</li>
+              }
+            </ul>
+          }
+        </div>
+        </section>
+    };
+
+    private RenderFragment InsightLegendRow(LlmTestServerInsightCardView v, LlmTestServerDashboardSegment segment) => __builder =>
+    {
+        var share = v.Total > 0 ? LlmTestServerDashboardCharts.Percent((double)segment.Tokens / v.Total) : string.Empty;
+        if (InsightCanSelect(v, segment))
+        {
+            <button type="button" class="viz-legend-button" aria-pressed="@InsightPressed(v, segment.Key)" @onclick="() => InsightSelect(v, segment)">
+              <i style="background: @segment.Color"></i><span>@segment.Label</span><strong><span data-testid="@($"{v.TestId}-value")" data-key="@segment.Key" data-value="@segment.Tokens">@LlmTestServerDashboardCharts.Tokens(segment.Tokens)</span></strong><em>@share</em>
+            </button>
+        }
+        else
+        {
+            <i style="background: @segment.Color"></i><span>@segment.Label</span><strong><span data-testid="@($"{v.TestId}-value")" data-key="@segment.Key" data-value="@segment.Tokens">@LlmTestServerDashboardCharts.Tokens(segment.Tokens)</span></strong><em>@share</em>
+        }
+    };
+
+    private static bool InsightCanSelect(LlmTestServerInsightCardView v, LlmTestServerDashboardSegment segment)
+    {
+        return v.Chart.FilterKind is not null && segment.Key != LlmTestServerDashboardInsights.OtherKey && segment.Key != "—";
+    }
+
+    private void InsightSelect(LlmTestServerInsightCardView v, LlmTestServerDashboardSegment segment)
+    {
+        if (InsightCanSelect(v, segment))
+        {
+            ApplyInsightFilter(v.Chart.FilterKind!, segment.Key);
+        }
+    }
+
+    private static string InsightPressed(LlmTestServerInsightCardView v, string key)
+    {
+        return string.Equals(v.SelectedKey, key, StringComparison.Ordinal) ? "true" : "false";
+    }
+
+    private static string InsightArcCss(LlmTestServerInsightCardView v, string key)
+    {
+        return v.SelectedKey is null || string.Equals(v.SelectedKey, key, StringComparison.Ordinal) ? "donut-arc" : "donut-arc muted";
+    }
+
+    private static string InsightCapsuleCss(LlmTestServerInsightCardView v, string key)
+    {
+        return v.SelectedKey is null || string.Equals(v.SelectedKey, key, StringComparison.Ordinal) ? "capsule" : "capsule muted";
+    }
+
+    private static string InsightWidth(long value, long max)
+    {
+        return $"{LlmTestServerDashboardCharts.Number(Math.Max(value > 0 ? 2 : 0, value * 100d / max))}%";
+    }
+
+    private void ApplyInsightFilter(string kind, string key)
+    {
+        // Selecting the active segment again clears that filter.
+        switch (kind)
+        {
+            case LlmTestServerDashboardInsights.ProviderFilter:
+                _providerFilter = IsProviderFilter(key) ? string.Empty : key;
+                break;
+            case LlmTestServerDashboardInsights.ModelFilter:
+                _modelFilter = string.Equals(_modelFilter, key, StringComparison.OrdinalIgnoreCase) ? string.Empty : key;
+                break;
+            case LlmTestServerDashboardInsights.SearchFilter:
+                _search = string.Equals(_search, key, StringComparison.Ordinal) ? string.Empty : key;
+                break;
+            case LlmTestServerDashboardInsights.OutcomeFilter:
+                var outcome = key switch
+                {
+                    "success" => "success",
+                    "stream" => "stream",
+                    "client-error" or "server-error" or "transport" => "error",
+                    _ => string.Empty,
+                };
+                _outcomeFilter = IsOutcomeFilter(outcome) ? string.Empty : outcome;
+                break;
+        }
+    }
+
+    private static string RecentHeight(long tokens, long max)
+    {
+        return $"{LlmTestServerDashboardCharts.Number(Math.Max(6, tokens * 100d / max))}%";
+    }
+
+    private void SelectAnalyticsRequest(string requestId)
+    {
+        _selectedRequestId = requestId;
+        _activeDetailTab = _analyticsTab;
     }
 
     private LlmTestServerRuntimeEvent? RuntimeEventFor(LlmTestServerProviderHttpTrace trace)
@@ -1197,10 +1998,10 @@
 
         if (bytes < 1024)
         {
-            return $"{bytes.Value:N0} B";
+            return string.Create(CultureInfo.InvariantCulture, $"{bytes.Value:N0} B");
         }
 
-        return $"{bytes.Value / 1024d:N1} KiB";
+        return string.Create(CultureInfo.InvariantCulture, $"{bytes.Value / 1024d:N1} KiB");
     }
 
     private static string TurnCss(string role)
@@ -1239,6 +2040,11 @@
             return "provider error";
         }
 
+        if (trace.ResponseToolCalls.Count > 0)
+        {
+            return "assistant · tool call";
+        }
+
         return string.IsNullOrWhiteSpace(trace.RuntimeResponse)
             ? "provider response"
             : "assistant";
@@ -1260,24 +2066,6 @@
         };
     }
 
-    private static string PrettyPayload(string? payload, bool truncated)
-    {
-        if (string.IsNullOrWhiteSpace(payload))
-        {
-            return "No body captured.";
-        }
-
-        var suffix = truncated ? "\n\n[preview truncated]" : string.Empty;
-        try
-        {
-            using var document = JsonDocument.Parse(payload);
-            return JsonSerializer.Serialize(document.RootElement, _prettyJsonOptions) + suffix;
-        }
-        catch (JsonException)
-        {
-            return payload + suffix;
-        }
-    }
 
     private static string Empty(string? value)
     {

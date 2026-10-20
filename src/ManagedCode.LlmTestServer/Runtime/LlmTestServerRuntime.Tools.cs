@@ -38,10 +38,16 @@ public sealed partial class LlmTestServerRuntime
                 var supported = request.OutputDispositionSurface switch
                 {
                     LlmTestServerOutputDispositionSurface.OpenAiChatCompletions or LlmTestServerOutputDispositionSurface.OpenAiResponses
+                        or LlmTestServerOutputDispositionSurface.AzureOpenAiDeploymentChatCompletions
+                        or LlmTestServerOutputDispositionSurface.AzureOpenAiV1ChatCompletions or LlmTestServerOutputDispositionSurface.AzureOpenAiV1Responses
+                        or LlmTestServerOutputDispositionSurface.MicrosoftFoundryV1ChatCompletions or LlmTestServerOutputDispositionSurface.MicrosoftFoundryV1Responses
                         => disposition.Kind is LlmTestServerOutputDispositionKind.Filtered or LlmTestServerOutputDispositionKind.Refused,
                     LlmTestServerOutputDispositionSurface.AnthropicMessages => disposition.Kind == LlmTestServerOutputDispositionKind.Refused,
                     LlmTestServerOutputDispositionSurface.GeminiGenerateContent => disposition.Kind == LlmTestServerOutputDispositionKind.Filtered,
-                    LlmTestServerOutputDispositionSurface.DeepSeekChatCompletions => disposition.Kind == LlmTestServerOutputDispositionKind.Filtered,
+                    LlmTestServerOutputDispositionSurface.DeepSeekChatCompletions
+                        or LlmTestServerOutputDispositionSurface.MicrosoftFoundryChatCompletions
+                        or LlmTestServerOutputDispositionSurface.MicrosoftFoundryModelsChatCompletions
+                        => disposition.Kind == LlmTestServerOutputDispositionKind.Filtered,
                     _ => false,
                 };
                 if (!supported || request.Tools is not { Count: 0 } || request.NativeTools is not { Count: 0 }

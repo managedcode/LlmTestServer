@@ -345,6 +345,66 @@ def main():
         assert payload["choices"][0]["finish_reason"] == "stop"
         assert json.loads(request("/admin-api/assertions")[1])["matched"] == 3
         results.append("DeepSeek native filtered JSON/SSE, mandatory final usage, invalid options without fixture consumption and recovery")
+        azure_routes = [
+            ("/azure-openai/openai/deployments/gpt-4.1-mini/chat/completions?api-version=2025-04-01-preview", False, "Refused"),
+            ("/microsoft-foundry/chat/completions?api-version=2024-05-01-preview", False, "Filtered"),
+            ("/microsoft-foundry/models/chat/completions?api-version=2024-05-01-preview", False, "Filtered"),
+            ("/azure-openai/openai/v1/chat/completions", False, "Refused"),
+            ("/microsoft-foundry/openai/v1/chat/completions", False, "Refused"),
+            ("/azure-openai/openai/v1/responses", True, "Filtered"),
+            ("/microsoft-foundry/openai/v1/responses", True, "Refused"),
+        ]
+        for path, responses_api, kind in azure_routes:
+            policy = {"content": "Azure policy text", "streamChunks": ["Azure policy ", "text"],
+                      "outputDisposition": {"kind": kind}}
+            configuration = {"requiredBearerToken": token,
+                "models": [{"id": "gpt-4.1-mini", "kind": "chat"}],
+                "chatScenarios": [{"id": "container-azure-policy", "modelId": "gpt-4.1-mini",
+                    "responses": [policy, policy, {"content": "Azure recovered"}]}]}
+            status, configured, _ = request("/admin-api/configure", body=configuration)
+            assert status == 200, (path, status, configured)
+            body = {"model": "gpt-4.1-mini"}
+            body.update({"input": "policy", "store": False} if responses_api else
+                        {"messages": [{"role": "user", "content": "policy"}]})
+            status, response, _ = request(path, body=body)
+            payload = json.loads(response)
+            assert status == 200, (path, status, payload)
+            if responses_api:
+                assert payload["status"] == ("incomplete" if kind == "Filtered" else "completed")
+                if kind == "Filtered":
+                    assert payload["incomplete_details"]["reason"] == "content_filter"
+                else:
+                    assert payload["output"][0]["content"][0]["type"] == "refusal"
+            else:
+                choice = payload["choices"][0]
+                assert choice["finish_reason"] == ("content_filter" if kind == "Filtered" else "stop")
+                assert choice["message"]["refusal" if kind == "Refused" else "content"] == "Azure policy text"
+            streamed = body | {"stream": True}
+            native_inference = path.split("?")[0] in (
+                "/microsoft-foundry/chat/completions", "/microsoft-foundry/models/chat/completions")
+            if not responses_api and not native_inference:
+                streamed["stream_options"] = {"include_usage": True}
+            status, response, _ = request(path, body=streamed)
+            wire = response.decode()
+            assert status == 200, (path, status, wire)
+            frames = [json.loads(line[6:]) for line in wire.splitlines()
+                      if line.startswith("data: ") and line != "data: [DONE]"]
+            if responses_api:
+                assert frames[-1]["type"] == ("response.incomplete" if kind == "Filtered" else "response.completed")
+            else:
+                assert wire.endswith("data: [DONE]\n\n")
+                choices = [choice for frame in frames for choice in frame["choices"]]
+                assert next(choice["finish_reason"] for choice in choices if choice.get("finish_reason")) == (
+                    "content_filter" if kind == "Filtered" else "stop")
+                field = "refusal" if kind == "Refused" else "content"
+                assert "".join(choice["delta"].get(field) or "" for choice in choices) == "Azure policy text"
+                if native_inference:
+                    assert all(len(frame["choices"]) == 1 for frame in frames)
+                    assert isinstance(frames[-1]["usage"], dict)
+            status, response, _ = request(path, body=body)
+            assert status == 200 and "Azure recovered" in response.decode(), (path, status, response)
+            assert json.loads(request("/admin-api/assertions")[1])["matched"] == 3
+        results.append("seven Azure/Foundry text routes: native policy JSON/SSE, valid endings and explicit recovery")
         assert request("/admin-api/reset", method="POST")[0] == 200
         assert json.loads(request("/admin-api/assertions")[1])["totalEvents"] == 0
         results.append("management reset")

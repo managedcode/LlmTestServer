@@ -13,4 +13,6 @@ public sealed record LlmTestServerTokenUsage
     public int ReasoningTokens { get; init; }
 
     public int TotalTokens { get; init; }
+
+    public LlmTestServerInputTokenComposition? InputComposition { get; init; }
 }

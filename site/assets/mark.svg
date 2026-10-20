@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="LLM Test Server">
+  <rect width="240" height="240" rx="56" fill="#161616"/>
+  <g transform="rotate(-45 120 120)">
+    <path d="M120 76H86a44 44 0 0 0 0 88h34z" fill="#f4efe6"/>
+    <path d="M120 76h34a44 44 0 0 1 0 88h-34z" fill="#a4f258"/>
+  </g>
+</svg>

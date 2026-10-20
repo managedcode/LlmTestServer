@@ -41,12 +41,25 @@ shared query/export DTOs, and core `Verification` evaluates serializable count/o
 expectations. Retention loss and incomplete pages prevent successful complete verification. Runtime-owned,
 provider-local seeded metadata controls generated wire IDs/time while real event/trace and monotonic timing
 remain observational. See [Request verification and determinism](Features/RequestVerificationAndDeterminism.md)
-and [ADR-0005](ADR/ADR-0005-request-evidence-and-wire-determinism.md). E4 is locally qualified; branch CI and
-public delivery remain pending.
+and [ADR-0005](ADR/ADR-0005-request-evidence-and-wire-determinism.md). E4 branch CI is green;
+public delivery remains pending.
+
+The [dashboard analytics](Features/DashboardAnalytics.md) derives token/cache/function observations from one
+atomic bounded journal snapshot. Explicit conversation labels group requests only within the selected session
+and provider namespace. Cache and reasoning are subsets of input/output usage; missing measurements and
+retention loss remain visible rather than becoming zero or complete totals.
+
+## Native output plans
+
+Typed ordered message/function/native output plans reuse the same queue/conversation engine, snapshots and
+capacity limits. Provider adapters own declarations, native wire items, citations and progress events; validation
+occurs before fixture consumption. See [ADR-0006](ADR/ADR-0006-ordered-native-tool-output.md) for the ownership,
+history and qualification contract. Native implementation is in progress; the support inventory remains the
+capability boundary.
 
 ## Stored response continuation
 
-The runtime owns bounded provider/model/credential-isolated chat-response snapshots. Provider adapters map
+The runtime owns bounded provider/credential-isolated chat-response snapshots. Provider adapters map
 Responses storage/parent fields into this neutral state and reuse its response identity for streaming and normal
 output. See [Responses continuation](Features/ResponsesContinuation.md) for limits, reset semantics and regressions.
 

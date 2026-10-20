@@ -16,6 +16,13 @@ public enum LlmTestServerOutputDispositionSurface
     AnthropicMessages = 3,
     GeminiGenerateContent = 4,
     DeepSeekChatCompletions = 5,
+    AzureOpenAiDeploymentChatCompletions = 6,
+    MicrosoftFoundryChatCompletions = 7,
+    MicrosoftFoundryModelsChatCompletions = 8,
+    AzureOpenAiV1ChatCompletions = 9,
+    AzureOpenAiV1Responses = 10,
+    MicrosoftFoundryV1ChatCompletions = 11,
+    MicrosoftFoundryV1Responses = 12,
 }
 
 /// <summary>A provider policy outcome; fixture Content supplies generated text or refusal text for its native mapping.</summary>

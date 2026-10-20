@@ -231,13 +231,14 @@ Validation skills під час реалізації: `mcaf-testing`, `run-tests
 | E1 | Product identity локально реалізовано; public delivery pending | 19 package surfaces/22 проєкти; Release build, format, local pack та installed consumer пройшли. GitHub `managedcode/LlmTestServer`, origin і default branch `main` перевірені. Branded IDs/config повністю очищено; 19 nupkg metadata/entries перевірено без старих назв |
 | E2 | Реалізовано й локально кваліфіковано | Незалежні runtime/journals, session ID/key, typed client, bounded admission, atomic configure/reset/dispose та retirement pending work. 655/655 integration tests, coverage 91,17%; installed consumer/Aspire/Chromium 1/1. [Контракт](TestSessions.md), [ADR-0003](../ADR/ADR-0003-isolated-test-sessions.md) |
 | E3 | Реалізовано й локально кваліфіковано | [Conversation DSL](ConversationDSL.md), [ADR-0004](../ADR/ADR-0004-conversation-step-graphs.md); 722/722 integration tests, coverage 91,34%; format/Release build 0 warnings/errors; all 19 packages packed, independent installed Aspire/SDK/Chromium consumer 1/1 |
-| E4 | Реалізовано й локально кваліфіковано | [Request evidence/verification/determinism](RequestVerificationAndDeterminism.md), [ADR-0005](../ADR/ADR-0005-request-evidence-and-wire-determinism.md); full suite 812/812, production line coverage 91,66%; final Release build 0 warnings/errors; 19 packages packed; independent clean installed NuGet/Aspire/official SDK/Chromium consumer 1/1. E4 branch CI ще не запущений |
+| E4 | Реалізовано й локально кваліфіковано | [Request evidence/verification/determinism](RequestVerificationAndDeterminism.md), [ADR-0005](../ADR/ADR-0005-request-evidence-and-wire-determinism.md); full suite 812/812, production line coverage 91,66%; final Release build 0 warnings/errors; 19 packages packed; independent clean installed NuGet/Aspire/official SDK/Chromium consumer 1/1. E4 branch CI [39455691575](https://github.com/managedcode/LlmTestServer/actions/runs/39455691575) успішний для `894d844` |
 | E5 | Частково реалізовано | [12 typed function-tool presets](WellKnownFunctionTools.md), явні success-root/error-envelope schemas, existing queue/graph lifecycle; 40/40 focused HTTP cases, combined suite 852/852, coverage 91,79%, Release build 0 warnings/errors, 19 packages packed (`artifacts/delivery/presets-coverage.log`). Clean installed NuGet/Aspire/official SDK/Chromium consumer 1/1 (`artifacts/delivery/presets-consumer.log`), включно з Calculator tool round; native built-ins, dashboard discovery і provider qualification не завершено |
 | E6–E13 | Не завершено | Увесь погоджений функціональний обсяг активний; support claims не розширюються наперед |
 
 Гілка `codex/llm-test-server`, [PR1](https://github.com/managedcode/LlmTestServer/pull/1).
 E3 CI [39446187097](https://github.com/managedcode/LlmTestServer/actions/runs/39446187097) успішний для
-head `3aae4db`. E4 зміни ще не pushed до CI; локальна кваліфікація не підміняє цей майбутній gate.
+head `3aae4db`. E4/presets CI [39455691575](https://github.com/managedcode/LlmTestServer/actions/runs/39455691575)
+та website validation [39455691773](https://github.com/managedcode/LlmTestServer/actions/runs/39455691773) успішні для `894d844`.
 Локальні E4 evidence logs: `artifacts/delivery/e4-build-final.log`, `e4-coverage-final.log`, `e4-pack.log` та
 `e4-consumer.log`. Consumer встановив local NuGet artifacts у незалежний clean project/cache і реально
 запустив packaged Aspire service, official SDK та Chromium; це не public-feed publication acceptance.
@@ -253,6 +254,14 @@ count/byte/config boundaries, cancellation та in-flight reset/configure/delete
 The release target is v1.0.0, delivered as one complete batch on the current branch. The owner will merge when ready; do not merge or publish intermediate releases. The launch includes a GitHub Pages landing page in the dashboard visual language with shared styles/components, real screenshots and demo videos, a detailed mc-compact guide, the supplied launch content plan, and a public prebuilt Docker image configurable through the management API. Marketing production materials live in ignored marketing/ until the owner authorizes their publication.
 
 Launch content reference: https://claude.ai/artifact/HHRF9Y8dzTbN8TJnaTKxnj
+
+## Request analytics checkpoint
+
+[Dashboard analytics](DashboardAnalytics.md) adds request/conversation token, cache-read/write and function observations with explicit label/session/provider grouping and bounded-evidence warnings. The genuine installed NuGet/Aspire/SDK/Chromium consumer passed 1/1 (`artifacts/delivery/analytics-consumer-final.log`), including cache miss → hit, function-result continuation, repeated context accounting and unlabeled-request isolation. Running-server analytics tests passed 3/3; query/export tests passed 14/14 after replacing a timing window with a gated real HTTP request and startup readiness. Combined suite passed 855/855 with 91.84% production line coverage (12170/13251) and a clean final Release build (`artifacts/delivery/query-readiness-coverage.log`, `query-readiness-final-build.log`). This is local qualification; the additional cache-admission regression batch is still in progress.
+
+## Cache correctness batch
+
+Code-only checkpoint `d990e06` fixes stored-response admission before cache mutation, provider-namespace isolation, and lookup of all retained prefixes before FIFO insertion/eviction. Ten new running-server HTTP regressions passed, together with the full current analytics/cache snapshot: 865/865, line coverage 91.86%, branch coverage 77.11% (`artifacts/delivery/cache-batch-coverage.log`). The final canonical Release build passed with 0 warnings/errors. Later parallel visual/token-composition changes were included only in that final build, not in the preceding coverage snapshot; their behavior qualification remains separate. The commit deliberately excludes the owner's in-progress visual and token-composition changes.
 
 ## First native-tool code checkpoint
 

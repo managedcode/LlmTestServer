@@ -7,29 +7,39 @@
     <title>LLM Mock Server for .NET and Aspire | LLM Test Server</title>
     <meta
       name="description"
-      content="Script LLM API responses, streaming and tool calls locally. Use .NET and Aspire, then inspect requests and conversations in the built-in dashboard."
+      content="A deterministic LLM API mock server for .NET and Aspire. Script responses, streaming, tool calls and failures, then inspect every request and where its tokens went."
     />
     <link rel="canonical" href="https://managedcode.github.io/LlmTestServer/" />
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="LLM Test Server" />
     <meta property="og:title" content="LLM Test Server · Your tests. Your responses." />
     <meta
       property="og:description"
-      content="A local LLM API mock server for .NET and Aspire. Script the response. Inspect the request."
+      content="Deterministic LLM API tests for .NET and Aspire. Script the response, inspect the request and see where every token goes."
     />
     <meta property="og:url" content="https://managedcode.github.io/LlmTestServer/" />
-    <meta
-      property="og:image"
-      content="https://managedcode.github.io/LlmTestServer/assets/admin-dashboard-overview.jpg"
-    />
+    <meta property="og:image" content="https://managedcode.github.io/LlmTestServer/assets/og.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta
       property="og:image:alt"
-      content="LLM Test Server request inbox with a selected provider request and its response."
+      content="LLM Test Server: deterministic LLM API tests for .NET and Aspire, with the request dashboard and a token flow chart."
     />
     <meta name="twitter:card" content="summary_large_image" />
-    <link
-      rel="icon"
-      href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22tile%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20stop-color%3D%22%232a2a2a%22%2F%3E%3Cstop%20offset%3D%22.72%22%20stop-color%3D%22%23121212%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2216%22%20fill%3D%22url%28%23tile%29%22%2F%3E%3Ctext%20x%3D%2232%22%20y%3D%2244%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2Csans-serif%22%20font-size%3D%2235%22%20font-weight%3D%22700%22%20fill%3D%22%23fff%22%3ET%3C%2Ftext%3E%3Crect%20x%3D%2245%22%20y%3D%229%22%20width%3D%2211%22%20height%3D%2211%22%20rx%3D%223%22%20fill%3D%22%23a4f258%22%2F%3E%3C%2Fsvg%3E"
+    <meta name="twitter:title" content="LLM Test Server · Your tests. Your responses." />
+    <meta
+      name="twitter:description"
+      content="Deterministic LLM API tests for .NET and Aspire. Script the response, inspect the request and see where every token goes."
     />
+    <meta name="twitter:image" content="https://managedcode.github.io/LlmTestServer/assets/og.png" />
+    <meta
+      name="twitter:image:alt"
+      content="LLM Test Server: deterministic LLM API tests for .NET and Aspire, with the request dashboard and a token flow chart."
+    />
+    <link rel="icon" href="assets/mark.svg" type="image/svg+xml" />
+    <link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="stylesheet" href="tokens.css" />
     <link rel="stylesheet" href="styles.css" />
     <script src="site.js" defer></script>
@@ -38,80 +48,124 @@
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="topbar">
       <a class="brand" href="#top" aria-label="LLM Test Server home"
-        ><span class="brand-symbol" aria-hidden="true">T</span><span>LLM Test Server</span></a
+        ><img class="brand-mark" src="assets/mark.svg" width="32" height="32" alt="" /><span>LLM Test Server</span></a
       >
       <nav aria-label="Primary navigation">
-        <a href="#workflow">How it works</a>
-        <a href="#coverage">Coverage</a>
+        <a href="#features">Features</a>
+        <a href="#analytics">Token analytics</a>
+        <a href="#providers">Providers</a>
         <a href="https://github.com/managedcode/LlmTestServer">GitHub <span aria-hidden="true">↗</span></a>
       </nav>
-      <a class="button button-small" href="#get-started">Get started <span aria-hidden="true">↗</span></a>
+      <a class="button button-small" href="#get-started">Get started <span aria-hidden="true">→</span></a>
     </header>
 
     <main id="main">
       <section class="hero section-wrap" id="top" aria-labelledby="hero-title">
         <div class="hero-copy">
-          <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span> Built for .NET. At home in Aspire.</p>
+          <p class="hero-pill"><span class="status-dot" aria-hidden="true"></span> .NET 10 · Aspire · Docker</p>
           <h1 id="hero-title">Your tests.<br />Your <span class="accent-text">responses.</span></h1>
-          <p class="hero-definition">An LLM mock server for .NET and Aspire.</p>
+          <p class="hero-definition">A deterministic LLM API server for .NET tests.</p>
           <p class="hero-lede">
-            Script provider responses, streaming and tool calls locally. Use your regular SDK, then see exactly what
-            your application sent.
+            Script responses, streaming, tool calls and failures. Call it with your regular provider SDK, then see
+            exactly what your application sent and where every token went.
           </p>
           <div class="actions">
-            <a class="button" href="#get-started">Get started <span aria-hidden="true">↗</span></a
+            <a class="button" href="#get-started">Get started <span aria-hidden="true">→</span></a
             ><a class="text-link" href="#dashboard">Explore the dashboard <span aria-hidden="true">↓</span></a>
           </div>
-          <p class="hero-note">
-            <code>ManagedCode.LlmTestServer</code><span>Local fixtures. Real HTTP and SDK calls.</span>
-          </p>
-        </div>
-        <figure class="hero-product">
-          <div class="window-bar" aria-hidden="true">
-            <span class="window-dots"><i></i><i></i><i></i></span><span>LLM Test Server · Request dashboard</span
-            ><span class="window-label">LOCAL</span>
+          <div class="install-chip">
+            <span class="install-prompt" aria-hidden="true">$</span>
+            <code id="hero-install">dotnet add package ManagedCode.LlmTestServer.Aspire</code>
+            <button type="button" class="copy-button" data-copy="hero-install" hidden>Copy</button>
           </div>
-          <a
-            href="assets/admin-dashboard-overview.jpg"
-            class="screenshot-link"
-            aria-label="Open full request dashboard screenshot"
-            ><img
-              src="assets/admin-dashboard-overview.jpg"
-              width="1440"
-              height="1000"
-              alt="Request inbox showing provider calls and a selected request with its response and token usage."
-              fetchpriority="high"
-          /></a>
+        </div>
+        <figure class="hero-stage">
+          <div class="hero-window">
+            <div class="window-bar" aria-hidden="true">
+              <span class="window-dots"><i></i><i></i><i></i></span><span>localhost · Request dashboard</span
+              ><span class="window-label">LOCAL</span>
+            </div>
+            <a
+              href="assets/showcase-token-flow.jpg"
+              class="screenshot-link"
+              aria-label="Open full token analytics screenshot"
+              ><img
+                src="assets/showcase-token-flow.jpg"
+                width="1440"
+                height="1040"
+                alt="Tokens tab for a five-request conversation: token flow from system prompt, tool schemas, user, assistant and tool messages into cache read, cache write, uncached input, response and reasoning."
+                fetchpriority="high"
+            /></a>
+          </div>
+          <div class="float-card float-request" aria-hidden="true">
+            <span class="float-method">POST</span>
+            <code>/openai/v1/chat/completions</code>
+            <span class="float-status">200 OK</span>
+          </div>
+          <div class="float-card float-cache" aria-hidden="true">
+            <div class="ring" style="width:88px;height:88px"><svg viewBox="0 0 160 160" aria-hidden="true" focusable="false"><circle class="ring-track" cx="80" cy="80" r="62" stroke-width="16"/><circle class="ring-arc" cx="80" cy="80" r="62" stroke-width="16" style="stroke:#5aa02c" stroke-dasharray="370.079 19.478" stroke-dashoffset="-0"/></svg><span class="ring-center"><strong>95%</strong><span>cache read</span></span></div>
+            <span class="float-copy"><span class="float-kicker">Prompt cache</span><span class="float-note">Selected request in the capture: input served from the prompt cache.</span></span>
+          </div>
           <figcaption>
-            <span class="caption-dot" aria-hidden="true"></span> The request, the response, and the context. Together.
+            <span class="caption-dot" aria-hidden="true"></span> A real capture of the dashboard served by the
+            package.
           </figcaption>
         </figure>
       </section>
 
+      <section class="provider-strip" aria-labelledby="strip-title">
+        <div class="section-wrap">
+          <p id="strip-title">13 provider API families, each under its own local namespace</p>
+          <ul>
+            <li>OpenAI</li>
+            <li>Azure OpenAI</li>
+            <li>Microsoft Foundry</li>
+            <li>Anthropic</li>
+            <li>Gemini</li>
+            <li>Amazon Bedrock</li>
+            <li>Groq</li>
+            <li>Mistral</li>
+            <li>Ollama</li>
+            <li>Cohere</li>
+            <li>OpenRouter</li>
+            <li>DeepSeek</li>
+            <li>Perplexity</li>
+          </ul>
+        </div>
+      </section>
+
       <section class="workflow section-wrap" id="workflow" aria-labelledby="workflow-title">
         <div class="section-intro">
-          <p class="eyebrow">A smaller loop</p>
+          <p class="eyebrow">How it works</p>
           <h2 id="workflow-title">From fixture to a<br />request you can inspect.</h2>
-          <p>Keep your provider integration in the test. Choose the behavior on the other side.</p>
+          <p>Keep your real provider integration in the test. Choose the behavior on the other side.</p>
         </div>
-        <ol class="workflow-steps">
-          <li>
-            <span class="step-number">01</span>
+        <ol class="workflow-flow">
+          <li class="flow-node">
+            <span class="flow-glyph" aria-hidden="true"><svg viewBox="0 0 20 20" focusable="false"><path d="M3.5 6.5h13M3.5 13.5h13"/><circle cx="8" cy="6.5" r="2.2"/><circle cx="12.5" cy="13.5" r="2.2"/></svg></span>
             <h3>Set the scene.</h3>
-            <p>Configure a model, a response or a tool call. Make the expected behavior explicit.</p>
-            <code>UseChatScenario(…)</code>
+            <p>Script a model, a reply, a tool call or a failure.</p>
+            <pre class="step-code"><code>.UseChatScenario(<span class="code-string">"greeting"</span>, s =&gt; s
+  .WhenUserContains(<span class="code-string">"hello"</span>)
+  .Responds(<span class="code-string">"Hello from your test!"</span>))</code></pre>
+            <span class="flow-link" aria-hidden="true"><i></i></span>
           </li>
-          <li>
-            <span class="step-number">02</span>
+          <li class="flow-node">
+            <span class="flow-glyph" aria-hidden="true"><svg viewBox="0 0 20 20" focusable="false"><path d="M3.5 10h11.5M11 6l4 4-4 4"/></svg></span>
             <h3>Make the call.</h3>
-            <p>Point a supported provider SDK or HTTP client at the local, namespaced API.</p>
-            <code>/openai/v1/chat/completions</code>
+            <p>Point your provider SDK or <code>IChatClient</code> at the namespaced route.</p>
+            <pre class="step-code"><code><span class="code-keyword">POST</span> /openai/v1/chat/completions
+<span class="code-comment">→ 200 OK</span>
+<span class="code-comment">→ "Hello from your test!"</span></code></pre>
+            <span class="flow-link" aria-hidden="true"><i></i></span>
           </li>
-          <li>
-            <span class="step-number">03</span>
+          <li class="flow-node">
+            <span class="flow-glyph" aria-hidden="true"><svg viewBox="0 0 20 20" focusable="false"><path d="M4.5 10.5l3.6 3.4L15.5 6.5"/></svg></span>
             <h3>Check what happened.</h3>
-            <p>Verify the response and recorded requests. Open the dashboard when you need the full story.</p>
-            <code>GetAssertionsAsync()</code>
+            <p>Assert on the reply and the recorded requests.</p>
+            <pre class="step-code"><code><span class="code-keyword">var</span> state = <span class="code-keyword">await</span> control
+  .GetAssertionsAsync();
+<span class="code-comment">// state.Matched == 1</span></code></pre>
           </li>
         </ol>
       </section>
@@ -124,39 +178,40 @@
               <h2 id="dashboard-title">Less reconstruction.<br />More context.</h2>
             </div>
             <p>
-              Provider, model, status, timing and token usage stay with the request. Select a call to inspect the
-              response and conversation behind it.
+              Provider, model, status, latency and token usage stay with each request. Select a call to read the
+              response, the conversation behind it and the wire payloads. Hover any chart for exact values; JSON
+              payloads and tool-call arguments are highlighted.
             </p>
           </div>
           <figure class="dashboard-figure">
-            <a href="assets/admin-dashboard-overview.jpg" aria-label="Open full dashboard overview"
+            <a href="assets/showcase-overview.jpg" aria-label="Open full dashboard overview"
               ><img
-                src="assets/admin-dashboard-overview.jpg"
+                src="assets/showcase-overview.jpg"
                 width="1440"
-                height="1000"
+                height="1040"
                 loading="lazy"
-                alt="LLM Test Server dashboard with a request list, filters and selected response details."
+                alt="Request overview with the conversation strip, per-message token bars, a tool-call card with highlighted arguments and a tooltip."
             /></a>
-            <figcaption>A real dashboard capture from the packaged server.</figcaption>
+            <figcaption>One entry per provider request, with the selected response in the reading pane.</figcaption>
           </figure>
           <div class="detail-grid">
             <article>
-              <p class="eyebrow">Conversation context</p>
-              <h3>The whole turn of events.</h3>
+              <p class="eyebrow">Traffic insights</p>
+              <h3>All traffic at a glance.</h3>
               <p>
-                Read user messages, assistant replies and tool results in order. Expand the payload when the details
-                matter.
+                Providers, models, outcomes, latency, cache and context mix as charts. Click a slice to filter the
+                request inbox.
               </p>
               <a
                 class="detail-image"
-                href="assets/admin-dashboard-conversation.jpg"
-                aria-label="Open full conversation screenshot"
+                href="assets/showcase-insights.jpg"
+                aria-label="Open full traffic insights screenshot"
                 ><img
-                  src="assets/admin-dashboard-conversation.jpg"
+                  src="assets/showcase-insights.jpg"
                   width="1440"
-                  height="1000"
+                  height="1040"
                   loading="lazy"
-                  alt="Conversation view showing messages and the scripted provider response."
+                  alt="Traffic insights view with donut, ring, capsule-bar and dot-matrix charts across providers, models, outcomes and latency."
               /></a>
             </article>
             <article>
@@ -179,198 +234,359 @@
               /></a>
             </article>
           </div>
-          <p class="retention-note">
-            The request journal is bounded. Oversized diagnostic payloads are marked when truncated.
+          <figure class="lifecycle" aria-labelledby="lifecycle-title">
+            <div class="lifecycle-heading">
+              <p class="eyebrow">Request lifecycle</p>
+              <h3 id="lifecycle-title">Every call, end to end.</h3>
+              <p>
+                Your test calls through its usual client. The server answers from your fixtures and records the
+                exchange for the dashboard and your assertions.
+              </p>
+            </div>
+            <div class="lifecycle-canvas">
+              <svg class="lifecycle-svg lifecycle-wide" viewBox="0 0 1120 490" aria-hidden="true" focusable="false"><defs><marker id="m-lc" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1.5 8 5 1 8.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker></defs><path class="lc-link" d="M210 156 H262" marker-end="url(#m-lc)"/><path class="lc-link" d="M470 156 H522" marker-end="url(#m-lc)"/><path class="lc-link" d="M720 156 H772" marker-end="url(#m-lc)"/><path class="lc-link lc-link-return" d="M940 97 C940 30 115 34 115 104" marker-end="url(#m-lc)"/><path class="lc-link" d="M940 215 V262" marker-end="url(#m-lc)"/><path class="lc-link" d="M940 334 C940 362 950 360 950 382" marker-end="url(#m-lc)"/><path class="lc-link" d="M830 302 C640 302 570 330 570 382" marker-end="url(#m-lc)"/><path class="lc-link lc-link-return" d="M420 432 C115 432 115 330 115 210" marker-end="url(#m-lc)"/><path class="lc-packet lc-packet-1" pathLength="100" d="M210 156 H780"/><path class="lc-packet lc-packet-2" pathLength="100" d="M940 97 C940 30 115 34 115 110"/><path class="lc-packet lc-packet-3" pathLength="100" d="M940 215 V334 C940 362 950 360 950 390"/><g class="lc-node"><rect x="20" y="110" width="190" height="92" rx="14"/><text class="lc-title" x="38" y="140">Your test</text><text class="lc-sub" x="38" y="162">arrange · act · assert</text></g><g class="lc-node"><rect x="270" y="110" width="200" height="92" rx="14"/><text class="lc-title" x="288" y="140">Provider SDK</text><text class="lc-sub" x="288" y="162">official client, HttpClient</text><text class="lc-sub" x="288" y="180">or IChatClient</text></g><g class="lc-node"><rect x="530" y="110" width="190" height="92" rx="14"/><text class="lc-title" x="548" y="140">Namespaced route</text><text class="lc-mono" x="548" y="162">/openai/v1</text><text class="lc-mono" x="548" y="180">/anthropic/v1 …</text></g><g class="lc-node lc-node-core"><rect x="780" y="97" width="320" height="118" rx="14"/><text class="lc-title" x="798" y="127">LLM Test Server</text><rect class="lc-chip" x="798" y="137" width="66.8" height="22" rx="11"/><text class="lc-chip-text" x="831.4" y="152" text-anchor="middle">scenario</text><rect class="lc-chip" x="870.8" y="137" width="132.8" height="22" rx="11"/><text class="lc-chip-text" x="937.2" y="152" text-anchor="middle">conversation graph</text><rect class="lc-chip" x="798" y="165" width="119.6" height="22" rx="11"/><text class="lc-chip-text" x="857.8" y="180" text-anchor="middle">fault simulation</text></g><g class="lc-node"><rect x="830" y="270" width="220" height="64" rx="14"/><text class="lc-title" x="848" y="300">Request journal</text><text class="lc-sub" x="848" y="322">bounded · per session</text></g><g class="lc-node"><rect x="420" y="390" width="300" height="84" rx="14"/><text class="lc-title" x="438" y="420">Verification API</text><text class="lc-mono" x="438" y="442">/admin-api/requests</text></g><g class="lc-node"><rect x="800" y="390" width="300" height="84" rx="14"/><text class="lc-title" x="818" y="420">Dashboard</text><rect class="lc-chip" x="818" y="430" width="47" height="22" rx="11"/><text class="lc-chip-text" x="841.5" y="445" text-anchor="middle">inbox</text><rect class="lc-chip" x="871" y="430" width="53.6" height="22" rx="11"/><text class="lc-chip-text" x="897.8" y="445" text-anchor="middle">tokens</text><rect class="lc-chip" x="930.6" y="430" width="66.8" height="22" rx="11"/><text class="lc-chip-text" x="964" y="445" text-anchor="middle">insights</text></g><g class="lc-pill"><rect x="219.6" y="121" width="40.8" height="22" rx="11"/><text x="240" y="136" text-anchor="middle">call</text></g><g class="lc-pill"><rect x="475.6" y="121" width="40.8" height="22" rx="11"/><text x="496" y="136" text-anchor="middle">HTTP</text></g><g class="lc-pill"><rect x="722.5" y="121" width="47" height="22" rx="11"/><text x="746" y="136" text-anchor="middle">route</text></g><g class="lc-pill"><rect x="451.8" y="39" width="152.4" height="22" rx="11"/><text x="528" y="54" text-anchor="middle">deterministic response</text></g><g class="lc-pill"><rect x="143.4" y="373" width="53.2" height="22" rx="11"/><text x="170" y="388" text-anchor="middle">assert</text></g><g class="lc-pill"><rect x="913.4" y="227" width="53.2" height="22" rx="11"/><text x="940" y="242" text-anchor="middle">record</text></g></svg>
+              <svg class="lifecycle-svg lifecycle-tall" viewBox="0 0 360 790" aria-hidden="true" focusable="false"><defs><marker id="m-lct" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1.5 8 5 1 8.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker></defs><path class="lc-link" d="M180 90 V122" marker-end="url(#m-lct)"/><path class="lc-link" d="M180 200 V232" marker-end="url(#m-lct)"/><path class="lc-link" d="M180 324 V356" marker-end="url(#m-lct)"/><path class="lc-link" d="M180 494 V536" marker-end="url(#m-lct)"/><path class="lc-link" d="M150 606 C150 640 94 646 94 672" marker-end="url(#m-lct)"/><path class="lc-link" d="M210 606 C210 640 266 646 266 672" marker-end="url(#m-lct)"/><path class="lc-link lc-link-return" d="M310 429 C350 429 350 55 318 55" marker-end="url(#m-lct)"/><path class="lc-link lc-link-return" d="M40 680 C8 600 8 90 42 58" marker-end="url(#m-lct)"/><path class="lc-packet lc-packet-1" pathLength="100" d="M180 90 V364"/><path class="lc-packet lc-packet-2" pathLength="100" d="M310 429 C350 429 350 55 310 55"/><path class="lc-packet lc-packet-3" pathLength="100" d="M180 494 V606 C210 640 266 646 266 680"/><g class="lc-node"><rect x="50" y="20" width="260" height="70" rx="14"/><text class="lc-title" x="68" y="50">Your test</text><text class="lc-sub" x="68" y="72">arrange · act · assert</text></g><g class="lc-node"><rect x="50" y="130" width="260" height="70" rx="14"/><text class="lc-title" x="68" y="160">Provider SDK</text><text class="lc-sub" x="68" y="182">official client or HttpClient</text></g><g class="lc-node"><rect x="50" y="240" width="260" height="84" rx="14"/><text class="lc-title" x="68" y="270">Namespaced route</text><text class="lc-mono" x="68" y="292">/openai/v1</text><text class="lc-mono" x="68" y="310">/anthropic/v1 …</text></g><g class="lc-node lc-node-core"><rect x="50" y="364" width="260" height="130" rx="14"/><text class="lc-title" x="68" y="394">LLM Test Server</text><rect class="lc-chip" x="68" y="404" width="66.8" height="22" rx="11"/><text class="lc-chip-text" x="101.4" y="419" text-anchor="middle">scenario</text><rect class="lc-chip" x="140.8" y="404" width="132.8" height="22" rx="11"/><text class="lc-chip-text" x="207.2" y="419" text-anchor="middle">conversation graph</text><rect class="lc-chip" x="68" y="432" width="119.6" height="22" rx="11"/><text class="lc-chip-text" x="127.8" y="447" text-anchor="middle">fault simulation</text></g><g class="lc-node"><rect x="50" y="544" width="260" height="62" rx="14"/><text class="lc-title" x="68" y="574">Request journal</text><text class="lc-sub" x="68" y="596">bounded · per session</text></g><g class="lc-node"><rect x="12" y="680" width="164" height="96" rx="14"/><text class="lc-title" x="30" y="710">Verification</text><text class="lc-mono" x="30" y="732">/admin-api/requests</text></g><g class="lc-node"><rect x="184" y="680" width="164" height="96" rx="14"/><text class="lc-title" x="202" y="710">Dashboard</text><rect class="lc-chip" x="202" y="720" width="47" height="22" rx="11"/><text class="lc-chip-text" x="225.5" y="735" text-anchor="middle">inbox</text><rect class="lc-chip" x="255" y="720" width="53.6" height="22" rx="11"/><text class="lc-chip-text" x="281.8" y="735" text-anchor="middle">tokens</text><rect class="lc-chip" x="202" y="748" width="66.8" height="22" rx="11"/><text class="lc-chip-text" x="235.4" y="763" text-anchor="middle">insights</text></g><text class="lc-side" transform="translate(347 250) rotate(90)" text-anchor="middle">deterministic response</text><text class="lc-side" transform="translate(14 380) rotate(-90)" text-anchor="middle">assert</text></svg>
+            </div>
+            <ol class="visually-hidden">
+              <li>Your test calls an official provider SDK, HttpClient or IChatClient.</li>
+              <li>The client sends HTTP to a provider-namespaced route such as /openai/v1 or /anthropic/v1.</li>
+              <li>LLM Test Server answers from the scenario, conversation graph or fault simulation you configured.</li>
+              <li>The deterministic response returns to your test.</li>
+              <li>The server records the exchange in a bounded request journal for each session.</li>
+              <li>The journal feeds the dashboard (inbox, tokens, insights) and the verification API your test asserts on.</li>
+            </ol>
+          </figure>
+        </div>
+      </section>
+
+      <section class="analytics-section" id="analytics" aria-labelledby="analytics-title">
+        <div class="section-wrap">
+          <div class="section-heading section-heading-dark">
+            <div>
+              <p class="eyebrow">Token analytics</p>
+              <h2 id="analytics-title">See where every<br />token goes.</h2>
+            </div>
+            <div>
+              <p>
+                The Tokens tab splits each request's input by source: system prompt, tool schemas, user,
+                assistant, tool calls and tool results. The parts add up to the reported input. Then it shows what the
+                prompt cache read, what it wrote and what stayed fresh.
+              </p>
+              <p>
+                Your tests read the same numbers from <code>GET /admin-api/requests</code>: each request's usage
+                carries the per-role split as <code>InputComposition</code>.
+              </p>
+              <a
+                class="inline-link"
+                href="https://github.com/managedcode/LlmTestServer/blob/main/docs/Features/DashboardAnalytics.md"
+                >Read the analytics guide <span aria-hidden="true">↗</span></a
+              >
+            </div>
+          </div>
+
+          <figure class="chart-card flow-card">
+            <header class="chart-card-header">
+              <div>
+                <h3 id="flow-title">Input token flow</h3>
+                <p id="flow-desc">
+                  Where 3,140 input tokens came from, and how the prompt cache handled them. Example request.
+                </p>
+              </div>
+              <span class="example-chip example-chip-light">Example request</span>
+            </header>
+            <div class="sankey" role="img" aria-labelledby="flow-title flow-desc">
+  <ul class="sankey-labels sankey-labels-left"><li style="top:22.96%"><span>System prompt</span><strong>1,860</strong></li><li style="top:51.79%"><span>Tool schemas</span><strong>420</strong></li><li style="top:63.85%"><span>User</span><strong>214</strong></li><li style="top:75.12%"><span>Assistant</span><strong>342</strong></li><li style="top:85.10%"><span>Tool calls</span><strong>88</strong></li><li style="top:93.80%"><span>Tool results</span><strong>216</strong></li></ul>
+  <div class="sankey-plot" aria-hidden="true">
+    <svg viewBox="0 0 200 100" preserveAspectRatio="none" focusable="false"><path d="M0 4.00C50.0 4.00 50.0 18.00 100 18.00L100 55.91C50.0 55.91 50.0 41.91 0 41.91Z" fill="#6250d6" fill-opacity=".30"/><path d="M0 47.51C50.0 47.51 50.0 55.91 100 55.91L100 64.47C50.0 64.47 50.0 56.07 0 56.07Z" fill="#eb6834" fill-opacity=".30"/><path d="M0 61.67C50.0 61.67 50.0 64.47 100 64.47L100 68.83C50.0 68.83 50.0 66.03 0 66.03Z" fill="#2a78d6" fill-opacity=".30"/><path d="M0 71.63C50.0 71.63 50.0 68.83 100 68.83L100 75.80C50.0 75.80 50.0 78.60 0 78.60Z" fill="#1baf7a" fill-opacity=".30"/><path d="M0 84.20C50.0 84.20 50.0 75.80 100 75.80L100 77.60C50.0 77.60 50.0 86.00 0 86.00Z" fill="#e34948" fill-opacity=".30"/><path d="M0 91.60C50.0 91.60 50.0 77.60 100 77.60L100 82.00C50.0 82.00 50.0 96.00 0 96.00Z" fill="#eda100" fill-opacity=".30"/><path d="M100 18.00C150.0 18.00 150.0 4.00 200 4.00L200 56.18C150.0 56.18 150.0 70.18 100 70.18Z" fill="#5aa02c" fill-opacity=".55"/><path d="M100 70.18C150.0 70.18 150.0 70.18 200 70.18L200 75.40C150.0 75.40 150.0 75.40 100 75.40Z" fill="#c9e8a4" fill-opacity=".55"/><path d="M100 75.40C150.0 75.40 150.0 89.40 200 89.40L200 96.00C150.0 96.00 150.0 82.00 100 82.00Z" fill="#d6d1cb" fill-opacity=".55"/></svg>
+    <span class="sankey-node sankey-node-left" style="top:4.00%;height:37.91%;background:#6250d6"></span><span class="sankey-node sankey-node-left" style="top:47.51%;height:8.56%;background:#eb6834"></span><span class="sankey-node sankey-node-left" style="top:61.67%;height:4.36%;background:#2a78d6"></span><span class="sankey-node sankey-node-left" style="top:71.63%;height:6.97%;background:#1baf7a"></span><span class="sankey-node sankey-node-left" style="top:84.20%;height:1.79%;background:#e34948"></span><span class="sankey-node sankey-node-left" style="top:91.60%;height:4.40%;background:#eda100"></span><span class="sankey-node sankey-node-center" style="top:18.00%;height:64.00%"></span><span class="sankey-node sankey-node-right" style="top:4.00%;height:52.18%;background:#5aa02c"></span><span class="sankey-node sankey-node-right" style="top:70.18%;height:5.22%;background:#c9e8a4"></span><span class="sankey-node sankey-node-right" style="top:89.40%;height:6.60%;background:#d6d1cb"></span>
+    <span class="sankey-center-label" style="top:18.00%"><span>Input</span><strong>3,140</strong></span>
+  </div>
+  <ul class="sankey-labels sankey-labels-right"><li style="top:30.09%"><span>Cache read</span><strong>2,560</strong></li><li style="top:72.79%"><span>Cache write</span><strong>256</strong></li><li style="top:92.70%"><span>Uncached</span><strong>324</strong></li></ul>
+</div>
+          </figure>
+
+          <div class="chart-grid">
+            <figure class="chart-card">
+              <header class="chart-card-header">
+                <div>
+                  <h3>Context mix</h3>
+                  <p>What the prompt is made of.</p>
+                </div>
+              </header>
+              <div class="donut-wrap"><div class="donut" aria-hidden="true"><svg viewBox="0 0 42 42"><circle r="15.915" cx="21" cy="21" fill="none" stroke="#6250d6" stroke-width="5.2" stroke-dasharray="58.336 41.664" stroke-dashoffset="25.000"/><circle r="15.915" cx="21" cy="21" fill="none" stroke="#eb6834" stroke-width="5.2" stroke-dasharray="12.476 87.524" stroke-dashoffset="-34.236"/><circle r="15.915" cx="21" cy="21" fill="none" stroke="#2a78d6" stroke-width="5.2" stroke-dasharray="5.915 94.085" stroke-dashoffset="-47.611"/><circle r="15.915" cx="21" cy="21" fill="none" stroke="#1baf7a" stroke-width="5.2" stroke-dasharray="9.992 90.008" stroke-dashoffset="-54.427"/><circle r="15.915" cx="21" cy="21" fill="none" stroke="#e34948" stroke-width="5.2" stroke-dasharray="1.903 98.097" stroke-dashoffset="-65.318"/><circle r="15.915" cx="21" cy="21" fill="none" stroke="#eda100" stroke-width="5.2" stroke-dasharray="5.979 94.021" stroke-dashoffset="-68.121"/></svg><span class="donut-center"><strong>3,140</strong><span>input tokens</span></span></div>
+<ul class="legend" aria-label="Input tokens by source"><li><span class="swatch" style="background:#6250d6"></span><span>System prompt</span><strong>1,860</strong><em>59.2%</em></li><li><span class="swatch" style="background:#eb6834"></span><span>Tool schemas</span><strong>420</strong><em>13.4%</em></li><li><span class="swatch" style="background:#2a78d6"></span><span>User</span><strong>214</strong><em>6.8%</em></li><li><span class="swatch" style="background:#1baf7a"></span><span>Assistant</span><strong>342</strong><em>10.9%</em></li><li><span class="swatch" style="background:#e34948"></span><span>Tool calls</span><strong>88</strong><em>2.8%</em></li><li><span class="swatch" style="background:#eda100"></span><span>Tool results</span><strong>216</strong><em>6.9%</em></li></ul></div>
+            </figure>
+            <figure class="chart-card">
+              <header class="chart-card-header">
+                <div>
+                  <h3>Prompt cache</h3>
+                  <p>How the input was served.</p>
+                </div>
+              </header>
+              <div class="donut-wrap"><div class="ring" style="width:168px;height:168px"><svg viewBox="0 0 160 160" aria-hidden="true" focusable="false"><circle class="ring-track" cx="80" cy="80" r="62" stroke-width="14"/><circle class="ring-arc" cx="80" cy="80" r="62" stroke-width="14" style="stroke:#5aa02c" stroke-dasharray="314.601 74.956" stroke-dashoffset="-0"/><circle class="ring-arc" cx="80" cy="80" r="62" stroke-width="14" style="stroke:#c9e8a4" stroke-dasharray="28.76 360.797" stroke-dashoffset="-317.601"/></svg><span class="ring-center"><strong>81.5%</strong><span>from cache</span></span></div>
+<ul class="legend" aria-label="Input tokens by cache state"><li><span class="swatch" style="background:#5aa02c"></span><span>Cache read</span><strong>2,560</strong><em>81.5%</em></li><li><span class="swatch" style="background:#c9e8a4"></span><span>Cache write</span><strong>256</strong><em>8.2%</em></li><li><span class="swatch" style="background:#d6d1cb"></span><span>Uncached</span><strong>324</strong><em>10.3%</em></li></ul></div>
+            </figure>
+            <figure class="chart-card">
+              <header class="chart-card-header">
+                <div>
+                  <h3>Context growth</h3>
+                  <p>Input per request in one labeled conversation.</p>
+                </div>
+              </header>
+              <ol class="growth" aria-label="Input tokens per request; the lower part of each bar came from cache">
+                <li><span class="growth-total">1,204</span><span class="growth-bar" style="height:38.3%"><span class="growth-cached" style="height:0.0%"></span></span><span class="growth-index">#1</span></li><li><span class="growth-total">2,150</span><span class="growth-bar" style="height:68.5%"><span class="growth-cached" style="height:47.6%"></span></span><span class="growth-index">#2</span></li><li><span class="growth-total">2,736</span><span class="growth-bar" style="height:87.1%"><span class="growth-cached" style="height:74.9%"></span></span><span class="growth-index">#3</span></li><li><span class="growth-total">3,140</span><span class="growth-bar" style="height:100.0%"><span class="growth-cached" style="height:81.5%"></span></span><span class="growth-index">#4</span></li>
+              </ol>
+              <ul class="legend legend-inline">
+                <li><span class="swatch" style="background: #5aa02c"></span><span>From cache</span></li>
+                <li><span class="swatch" style="background: #d6d1cb"></span><span>Fresh input</span></li>
+              </ul>
+              <div class="output-split">
+                <p><span>Output</span><strong>55 tokens</strong></p>
+                <span class="output-bar" aria-hidden="true"
+                  ><span class="output-visible" style="width: 58.2%"></span
+                  ><span class="output-reasoning" style="width: 41.8%"></span
+                ></span>
+                <ul class="legend legend-inline">
+                  <li><span class="swatch swatch-ink"></span><span>Visible text</span><strong>32</strong></li>
+                  <li><span class="swatch swatch-reasoning"></span><span>Reasoning</span><strong>23</strong></li>
+                </ul>
+              </div>
+            </figure>
+          </div>
+          <p class="chart-note">
+            Example values. Reasoning is part of output and cache reads/writes are part of input, so they are never
+            added twice. Requests without reported usage show as missing, not as zero.
+          </p>
+
+          <div class="insights-block">
+            <header class="insights-heading">
+              <div>
+                <h3>Traffic insights</h3>
+                <p>
+                  The same journal, sliced by provider, model, outcome, latency, operation and delivery. Open it with
+                  <code>/?view=insights</code>; clicking a slice filters the request inbox.
+                </p>
+              </div>
+              <span class="example-chip">Example values</span>
+            </header>
+            <div class="insight-grid">
+            <figure class="chart-card insight-card insight-capsules">
+              <header class="chart-card-header"><div><h3>Providers</h3><p>Requests per provider surface.</p></div></header>
+              <div class="insight-visual"><ul class="capsules" aria-label="Example requests by provider"><li class="capsule capsule-accent"><span class="capsule-fill" style="width:100.0%"></span><span class="capsule-label">OpenAI</span><strong>22</strong></li><li class="capsule"><span class="capsule-fill" style="width:50.0%"></span><span class="capsule-label">Anthropic</span><strong>11</strong></li><li class="capsule"><span class="capsule-fill" style="width:31.8%"></span><span class="capsule-label">Gemini</span><strong>7</strong></li><li class="capsule"><span class="capsule-fill" style="width:22.7%"></span><span class="capsule-label">Azure OpenAI</span><strong>5</strong></li><li class="capsule"><span class="capsule-fill" style="width:13.6%"></span><span class="capsule-label">Other</span><strong>3</strong></li></ul></div>
+            </figure>
+            <figure class="chart-card insight-card insight-dots">
+              <header class="chart-card-header"><div><h3>Models</h3><p>One dot per request.</p></div></header>
+              <div class="insight-visual"><svg class="dots" viewBox="0 0 264 88" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="33" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="55" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="77" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="99" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="121" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="143" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="165" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="187" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="209" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="231" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="253" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="11" cy="33" r="7.5" style="fill:var(--accent)"/><circle cx="33" cy="33" r="7.5" style="fill:var(--accent)"/><circle cx="55" cy="33" r="7.5" style="fill:#161616"/><circle cx="77" cy="33" r="7.5" style="fill:#161616"/><circle cx="99" cy="33" r="7.5" style="fill:#161616"/><circle cx="121" cy="33" r="7.5" style="fill:#161616"/><circle cx="143" cy="33" r="7.5" style="fill:#161616"/><circle cx="165" cy="33" r="7.5" style="fill:#161616"/><circle cx="187" cy="33" r="7.5" style="fill:#161616"/><circle cx="209" cy="33" r="7.5" style="fill:#161616"/><circle cx="231" cy="33" r="7.5" style="fill:#161616"/><circle cx="253" cy="33" r="7.5" style="fill:#161616"/><circle cx="11" cy="55" r="7.5" style="fill:#161616"/><circle cx="33" cy="55" r="7.5" style="fill:#5b5753"/><circle cx="55" cy="55" r="7.5" style="fill:#5b5753"/><circle cx="77" cy="55" r="7.5" style="fill:#5b5753"/><circle cx="99" cy="55" r="7.5" style="fill:#5b5753"/><circle cx="121" cy="55" r="7.5" style="fill:#5b5753"/><circle cx="143" cy="55" r="7.5" style="fill:#5b5753"/><circle cx="165" cy="55" r="7.5" style="fill:#5b5753"/><circle cx="187" cy="55" r="7.5" style="fill:#5b5753"/><circle cx="209" cy="55" r="7.5" style="fill:#5b5753"/><circle cx="231" cy="55" r="7.5" style="fill:#a39d96"/><circle cx="253" cy="55" r="7.5" style="fill:#a39d96"/><circle cx="11" cy="77" r="7.5" style="fill:#a39d96"/><circle cx="33" cy="77" r="7.5" style="fill:#a39d96"/><circle cx="55" cy="77" r="7.5" style="fill:#a39d96"/><circle cx="77" cy="77" r="7.5" style="fill:#a39d96"/><circle cx="99" cy="77" r="7.5" style="fill:#a39d96"/><circle cx="121" cy="77" r="7.5" style="fill:#d4cbbf"/><circle cx="143" cy="77" r="7.5" style="fill:#d4cbbf"/><circle cx="165" cy="77" r="7.5" style="fill:#d4cbbf"/><circle cx="187" cy="77" r="7.5" style="fill:#d4cbbf"/><circle cx="209" cy="77" r="7.5" style="fill:#ece6de"/><circle cx="231" cy="77" r="7.5" style="fill:#ece6de"/><circle cx="253" cy="77" r="7.5" style="fill:#ece6de"/></svg></div>
+              <ul class="legend legend-compact legend-single" aria-label="Example requests by model"><li><span class="swatch swatch-round" style="background:var(--accent)"></span><span>gpt-4.1-mini</span><strong>14</strong></li><li><span class="swatch swatch-round" style="background:#161616"></span><span>claude-sonnet-4-5</span><strong>11</strong></li><li><span class="swatch swatch-round" style="background:#5b5753"></span><span>gpt-5-mini</span><strong>9</strong></li><li><span class="swatch swatch-round" style="background:#a39d96"></span><span>gemini-2.5-flash</span><strong>7</strong></li><li><span class="swatch swatch-round" style="background:#d4cbbf"></span><span>text-embedding-3-small</span><strong>4</strong></li><li><span class="swatch swatch-round" style="background:#ece6de"></span><span>Other</span><strong>3</strong></li></ul>
+            </figure>
+            <figure class="chart-card insight-card insight-ring">
+              <header class="chart-card-header"><div><h3>Outcomes</h3><p>Share of requests that returned 2xx.</p></div></header>
+              <div class="insight-visual"><div class="ring" style="width:150px;height:150px"><svg viewBox="0 0 160 160" aria-hidden="true" focusable="false"><circle class="ring-track" cx="80" cy="80" r="62" stroke-width="13"/><circle class="ring-arc" cx="80" cy="80" r="62" stroke-width="13" style="stroke:var(--accent)" stroke-dasharray="329.747 59.81" stroke-dashoffset="-0"/></svg><span class="ring-center"><strong>85%</strong><span>success</span></span></div><ul class="status-chips" aria-label="Example non-success outcomes"><li><span class="status-dot-sm" style="background:#e8b445"></span>4xx <strong>4</strong></li><li><span class="status-dot-sm" style="background:#c94f3d"></span>5xx <strong>1</strong></li><li><span class="status-dot-sm" style="background:#ed732e"></span>transport <strong>1</strong></li><li><span class="status-dot-sm" style="background:#a8a29e"></span>in flight <strong>1</strong></li></ul></div>
+            </figure>
+            <figure class="chart-card insight-card insight-columns">
+              <header class="chart-card-header"><div><h3>Latency</h3><p>Requests per latency band.</p></div></header>
+              <div class="insight-visual"><ol class="pillcols" aria-label="Example requests by latency band"><li class="pillcol pillcol-accent"><strong>30</strong><span class="pillcol-track"><span class="pillcol-fill" style="height:100.0%"></span></span><span class="pillcol-label">&lt;10 ms</span></li><li class="pillcol"><strong>12</strong><span class="pillcol-track"><span class="pillcol-fill" style="height:40.0%"></span></span><span class="pillcol-label">10–100 ms</span></li><li class="pillcol"><strong>5</strong><span class="pillcol-track"><span class="pillcol-fill" style="height:16.7%"></span></span><span class="pillcol-label">0.1–1 s</span></li><li class="pillcol"><strong>1</strong><span class="pillcol-track"><span class="pillcol-fill" style="height:8.0%"></span></span><span class="pillcol-label">≥1 s</span></li></ol></div>
+            </figure>
+            <figure class="chart-card insight-card insight-segments">
+              <header class="chart-card-header"><div><h3>Operations</h3><p>Routed provider operations.</p></div></header>
+              <div class="insight-visual"><span class="segbar" aria-hidden="true"><span style="flex-grow:21;background:#161616"></span><span style="flex-grow:11;background:#5b5753"></span><span style="flex-grow:7;background:#a39d96"></span><span style="flex-grow:5;background:#d4cbbf"></span><span style="flex-grow:4;background:var(--accent)"></span></span><ul class="legend legend-ops" aria-label="Example requests by operation"><li><span class="swatch" style="background:#161616"></span><code>chat.completions.create</code><strong>44%</strong></li><li><span class="swatch" style="background:#5b5753"></span><code>messages.create</code><strong>23%</strong></li><li><span class="swatch" style="background:#a39d96"></span><code>models.generateContent</code><strong>15%</strong></li><li><span class="swatch" style="background:#d4cbbf"></span><code>responses.create</code><strong>10%</strong></li><li><span class="swatch" style="background:var(--accent)"></span><code>embeddings.create</code><strong>8.3%</strong></li></ul></div>
+            </figure>
+            <figure class="chart-card insight-card insight-bubbles">
+              <header class="chart-card-header"><div><h3>Delivery</h3><p>Streamed chunks or one body.</p></div></header>
+              <div class="insight-visual"><svg class="bubbles" viewBox="0 0 220 120" aria-hidden="true" focusable="false"><circle cx="72" cy="60" r="50" class="bubble-sand"/><circle cx="153.0" cy="70" r="37.0" class="bubble-ink"/><text x="72" y="66" text-anchor="middle" class="bubble-text">65%</text><text x="153.0" y="76" text-anchor="middle" class="bubble-text bubble-text-light">35%</text></svg><ul class="legend legend-inline legend-center" aria-label="Example requests by delivery mode"><li><span class="swatch swatch-round" style="background:#e3dbd0"></span><span>Single response</span><strong>31</strong></li><li><span class="swatch swatch-round" style="background:#161616"></span><span>Streaming</span><strong>17</strong></li></ul></div>
+            </figure>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="capabilities section-wrap" id="features" aria-labelledby="capabilities-title">
+        <div class="section-intro">
+          <p class="eyebrow">Beyond a single reply</p>
+          <h2 id="capabilities-title">Test the conversation.<br />And the unexpected.</h2>
+          <p>Every behavior is a fixture you choose. Nothing is hidden behind retries or randomness.</p>
+        </div>
+        <div class="capability-grid">
+          <article class="capability">
+            <div class="capability-visual" aria-hidden="true"><svg class="cap-svg" viewBox="0 0 320 180" role="presentation" focusable="false"><defs><marker id="m-loop" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1.5 8 5 1 8.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker></defs><path class="cap-link" d="M95 76 A72 50 0 0 1 146 41" marker-end="url(#m-loop)"/><path class="cap-link" d="M174 41 A72 50 0 0 1 225 76" marker-end="url(#m-loop)"/><path class="cap-link" d="M225 104 A72 50 0 0 1 174 139" marker-end="url(#m-loop)"/><path class="cap-link" d="M146 139 A72 50 0 0 1 95 104" marker-end="url(#m-loop)"/><circle class="cap-node" cx="88" cy="90" r="10"/><text class="cap-text" x="72" y="94" text-anchor="end">user</text><circle class="cap-node cap-node-accent" cx="160" cy="40" r="10"/><text class="cap-text" x="160" y="20" text-anchor="middle">tool call</text><circle class="cap-node" cx="232" cy="90" r="10"/><text class="cap-text" x="248" y="94" text-anchor="start">tool result</text><circle class="cap-node" cx="160" cy="140" r="10"/><text class="cap-text" x="160" y="168" text-anchor="middle">reply</text><text class="cap-mono cap-muted" x="160" y="94" text-anchor="middle">next step</text></svg></div>
+            <h3>Tool loops, step by step.</h3>
+            <p>Conversation graphs match each call and result, then choose the next reply.</p>
+            <a class="inline-link" href="https://github.com/managedcode/LlmTestServer/blob/main/docs/Features/ConversationDSL.md">Conversation DSL <span aria-hidden="true">↗</span></a>
+          </article>
+          <article class="capability">
+            <div class="capability-visual" aria-hidden="true"><svg class="cap-svg" viewBox="0 0 320 180" role="presentation" focusable="false"><path class="cap-axis" d="M24 128 H296"/><path class="cap-bracket" d="M28 58 V50 H246 V58"/><text class="cap-text" x="137" y="40" text-anchor="middle">one response id</text><rect class="cap-chunk" x="28" y="70" width="58" height="30" rx="15"/><text class="cap-mono" x="57" y="89" text-anchor="middle">Paris</text><circle class="cap-tickdot" cx="57" cy="128" r="3.5"/><rect class="cap-chunk" x="92" y="70" width="76" height="30" rx="15"/><text class="cap-mono" x="130" y="89" text-anchor="middle">is 18 °C</text><circle class="cap-tickdot" cx="130" cy="128" r="3.5"/><rect class="cap-chunk" x="174" y="70" width="72" height="30" rx="15"/><text class="cap-mono" x="210" y="89" text-anchor="middle">and sunny</text><circle class="cap-tickdot" cx="210" cy="128" r="3.5"/><rect class="cap-done" x="252" y="70" width="44" height="30" rx="15"/><text class="cap-mono cap-on-ink" x="274" y="89" text-anchor="middle">DONE</text><circle class="cap-tickdot cap-tickdot-accent" cx="274" cy="128" r="3.5"/><text class="cap-small cap-muted" x="24" y="152">first byte</text><text class="cap-small cap-muted" x="296" y="152" text-anchor="end">end of stream</text></svg></div>
+            <h3>Streaming, chunk by chunk.</h3>
+            <p>Script exact chunks: one response id, then the terminal marker.</p>
+            <a class="inline-link" href="https://github.com/managedcode/LlmTestServer#streaming-chunks">Streaming chunks <span aria-hidden="true">↗</span></a>
+          </article>
+          <article class="capability">
+            <div class="capability-visual" aria-hidden="true"><svg class="cap-svg" viewBox="0 0 320 180" role="presentation" focusable="false"><defs><marker id="m-fault" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1.5 8 5 1 8.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker></defs><path class="cap-link" d="M70 84 H96" marker-end="url(#m-fault)"/><path class="cap-link" d="M146 84 H172" marker-end="url(#m-fault)"/><path class="cap-link" d="M222 84 H248" marker-end="url(#m-fault)"/><circle class="cap-status cap-status-ok" cx="46" cy="84" r="22"/><text class="cap-code cap-code-ok" x="46" y="89" text-anchor="middle">200</text><text class="cap-text" x="46" y="134" text-anchor="middle">ok</text><circle class="cap-status cap-status-fault" cx="122" cy="84" r="22"/><text class="cap-code cap-code-fault" x="122" y="89" text-anchor="middle">429</text><text class="cap-text" x="122" y="134" text-anchor="middle">rate limit</text><circle class="cap-status cap-status-retry" cx="198" cy="84" r="22"/><path class="cap-retry" d="M206 76 A11 11 0 1 0 209 88" marker-end="url(#m-fault)"/><text class="cap-text" x="198" y="134" text-anchor="middle">retry</text><circle class="cap-status cap-status-done" cx="274" cy="84" r="22"/><text class="cap-code cap-code-done" x="274" y="89" text-anchor="middle">200</text><text class="cap-text" x="274" y="134" text-anchor="middle">recovered</text></svg></div>
+            <h3>Failures on demand.</h3>
+            <p>Rate limits and content filters on every provider family.</p>
+            <a class="inline-link" href="https://github.com/managedcode/LlmTestServer#fault-simulation">Fault simulation <span aria-hidden="true">↗</span></a>
+          </article>
+          <article class="capability">
+            <div class="capability-visual" aria-hidden="true"><svg class="cap-svg" viewBox="0 0 320 180" role="presentation" focusable="false"><rect class="cap-cell" x="16" y="26" width="140" height="56" rx="14"/><rect class="cap-glyph-fill" x="30" y="56" width="3.2" height="12" rx="1.6"/><rect class="cap-glyph-fill" x="35.2" y="44" width="3.2" height="24" rx="1.6"/><rect class="cap-glyph-fill" x="40.4" y="60" width="3.2" height="8" rx="1.6"/><rect class="cap-glyph-fill" x="45.6" y="48" width="3.2" height="20" rx="1.6"/><rect class="cap-glyph-fill" x="50.8" y="40" width="3.2" height="28" rx="1.6"/><rect class="cap-glyph-fill" x="56" y="52" width="3.2" height="16" rx="1.6"/><text class="cap-text" x="72" y="58">Embeddings</text><rect class="cap-cell" x="164" y="26" width="140" height="56" rx="14"/><rect class="cap-glyph" x="178" y="40" width="30" height="26" rx="6"/><circle class="cap-glyph-accent" cx="187" cy="48" r="3.2"/><path class="cap-glyph-fill" d="M181 63 L190 54 L196 59 L200 56 L205 63 Z"/><text class="cap-text" x="220" y="58">Images</text><rect class="cap-cell" x="16" y="98" width="140" height="56" rx="14"/><rect class="cap-glyph-fill" x="30" y="121" width="3.2" height="8" rx="1.6"/><rect class="cap-glyph-fill" x="35.2" y="117" width="3.2" height="16" rx="1.6"/><rect class="cap-glyph-fill" x="40.4" y="112" width="3.2" height="26" rx="1.6"/><rect class="cap-glyph-fill" x="45.6" y="119" width="3.2" height="12" rx="1.6"/><rect class="cap-glyph-fill" x="50.8" y="114" width="3.2" height="22" rx="1.6"/><rect class="cap-glyph-fill" x="56" y="120.5" width="3.2" height="9" rx="1.6"/><text class="cap-text" x="72" y="130">Audio</text><rect class="cap-cell" x="164" y="98" width="140" height="56" rx="14"/><rect class="cap-glyph" x="178" y="113" width="30" height="24" rx="6"/><path class="cap-glyph-fill" d="M190 119.5 L198 125 L190 130.5 Z"/><text class="cap-text" x="220" y="130">Video</text></svg></div>
+            <h3>More than text.</h3>
+            <p>Explicit embeddings, images, audio and video jobs where supported.</p>
+            <a class="inline-link" href="https://github.com/managedcode/LlmTestServer#modalities">Modalities <span aria-hidden="true">↗</span></a>
+          </article>
+          <article class="capability">
+            <div class="capability-visual" aria-hidden="true"><svg class="cap-svg" viewBox="0 0 320 180" role="presentation" focusable="false"><text class="cap-small cap-muted" x="132" y="30" text-anchor="middle">config</text><text class="cap-small cap-muted" x="204" y="30" text-anchor="middle">queue</text><text class="cap-small cap-muted" x="276" y="30" text-anchor="middle">journal</text><path class="cap-divider" d="M36 104 H296"/><path class="cap-lane cap-lane-accent" d="M70 70 H290"/><circle class="cap-badge cap-badge-accent" cx="52" cy="70" r="16"/><text class="cap-badge-text cap-badge-text-accent" x="52" y="74.5" text-anchor="middle">A</text><circle class="cap-station cap-station-accent" cx="132" cy="70" r="7"/><circle class="cap-station cap-station-accent" cx="204" cy="70" r="7"/><circle class="cap-station cap-station-accent" cx="276" cy="70" r="7"/><path class="cap-lane cap-lane-ink" d="M70 138 H290"/><circle class="cap-badge cap-badge-ink" cx="52" cy="138" r="16"/><text class="cap-badge-text cap-badge-text-ink" x="52" y="142.5" text-anchor="middle">B</text><circle class="cap-station cap-station-ink" cx="132" cy="138" r="7"/><circle class="cap-station cap-station-ink" cx="204" cy="138" r="7"/><circle class="cap-station cap-station-ink" cx="276" cy="138" r="7"/></svg></div>
+            <h3>Parallel tests, separate state.</h3>
+            <p>Each session owns its configuration, queue and journal.</p>
+            <a class="inline-link" href="https://github.com/managedcode/LlmTestServer/blob/main/docs/Features/TestSessions.md">Test sessions <span aria-hidden="true">↗</span></a>
+          </article>
+          <article class="capability">
+            <div class="capability-visual" aria-hidden="true"><svg class="cap-svg" viewBox="0 0 320 180" role="presentation" focusable="false"><path class="cap-link" d="M140 52 C186 52 190 90 212 90"/><path class="cap-link" d="M140 90 C186 90 190 90 212 90"/><path class="cap-link" d="M140 128 C186 128 190 90 212 90"/><rect class="cap-row" x="24" y="37" width="116" height="30" rx="15"/><path class="cap-check-ink" d="M37 52.5 L40.6 56 L47 48.5"/><text class="cap-text" x="58" y="56">order</text><rect class="cap-row" x="24" y="75" width="116" height="30" rx="15"/><path class="cap-check-ink" d="M37 90.5 L40.6 94 L47 86.5"/><text class="cap-text" x="58" y="94">counts</text><rect class="cap-row" x="24" y="113" width="116" height="30" rx="15"/><path class="cap-check-ink" d="M37 128.5 L40.6 132 L47 124.5"/><text class="cap-text" x="58" y="132">tool args</text><circle class="cap-seal" cx="252" cy="90" r="38"/><circle class="cap-seal-ring" cx="252" cy="90" r="30"/><path class="cap-seal-check" d="M240 90 L249 99 L266 81"/><text class="cap-text" x="252" y="152" text-anchor="middle">verified</text></svg></div>
+            <h3>Verify, then reproduce.</h3>
+            <p>Check order, counts and tool arguments; fix ids with a seed.</p>
+            <a class="inline-link" href="https://github.com/managedcode/LlmTestServer/blob/main/docs/Features/RequestVerificationAndDeterminism.md">Verification <span aria-hidden="true">↗</span></a>
+          </article>
+        </div>
+      </section>
+
+      <section class="coverage-section" id="providers" aria-labelledby="coverage-title">
+        <div class="section-wrap">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Provider-aware, by design</p>
+              <h2 id="coverage-title">Your provider.<br />A local endpoint.</h2>
+            </div>
+            <div>
+              <p>
+                Every provider family has its own namespace and wire format. Operation coverage varies by provider and
+                grows incrementally.
+              </p>
+              <a
+                class="inline-link"
+                href="https://github.com/managedcode/LlmTestServer/blob/main/docs/Features/ProviderApiContractCoverage.md"
+                >Read the operation matrix <span aria-hidden="true">↗</span></a
+              >
+            </div>
+          </div>
+          <ul class="provider-grid">
+            <li><strong>OpenAI</strong><code>/openai/v1</code><span class="sdk-tag">Official SDK checked</span></li>
+            <li>
+              <strong>Azure OpenAI</strong><code>/azure-openai/openai/deployments/…</code
+              ><span class="sdk-tag">Official SDK checked</span>
+            </li>
+            <li>
+              <strong>Microsoft Foundry</strong><code>/microsoft-foundry/models</code
+              ><span class="sdk-tag">Official SDK checked</span>
+            </li>
+            <li><strong>Anthropic</strong><code>/anthropic/v1/messages</code></li>
+            <li><strong>Gemini</strong><code>/gemini/v1beta/models/…</code></li>
+            <li>
+              <strong>Amazon Bedrock</strong><code>/bedrock/model/…/converse</code
+              ><span class="sdk-tag">Official SDK checked</span>
+            </li>
+            <li><strong>Groq</strong><code>/groq/openai/v1</code></li>
+            <li><strong>Mistral</strong><code>/mistral/v1</code></li>
+            <li><strong>Ollama</strong><code>/ollama/api/chat</code></li>
+            <li><strong>Cohere</strong><code>/cohere/v2/chat</code></li>
+            <li><strong>OpenRouter</strong><code>/openrouter/api/v1</code></li>
+            <li><strong>DeepSeek</strong><code>/deepseek/v1</code></li>
+            <li><strong>Perplexity</strong><code>/perplexity/v1/sonar</code></li>
+            <li class="provider-native">
+              <strong>Native decision APIs</strong><code>/systemone · /cloudflare</code
+              ><span class="sdk-tag sdk-tag-muted">SystemOne · Workers AI Clef</span>
+            </li>
+          </ul>
+          <p class="coverage-note">
+            Each hosted operation is listed in a provider contract with documentation links and behavior tests. A
+            provider profile does not imply every API of that provider is implemented: check the operation and client
+            version your application uses.
           </p>
         </div>
       </section>
 
-      <section class="capabilities section-wrap" aria-labelledby="capabilities-title">
-        <div class="section-intro">
-          <p class="eyebrow">Beyond a single reply</p>
-          <h2 id="capabilities-title">Test the conversation.<br />And the unexpected.</h2>
-        </div>
-        <div class="capability-grid">
-          <article>
-            <span class="feature-mark" aria-hidden="true">↳</span>
-            <h3>Tool calls with a next step.</h3>
-            <p>
-              Script a tool call, send its result and match the next conversation step. Use explicit branches and
-              terminal behavior.
-            </p>
-            <a
-              class="inline-link"
-              href="https://github.com/managedcode/LlmTestServer/blob/main/docs/Features/ConversationDSL.md"
-              >Conversation DSL <span aria-hidden="true">↗</span></a
-            >
-          </article>
-          <article>
-            <span class="feature-mark" aria-hidden="true">∥</span>
-            <h3>Parallel tests, separate state.</h3>
-            <p>
-              Give each test a session with its own configuration, history, queues and journal. Reset one without
-              resetting another.
-            </p>
-            <a
-              class="inline-link"
-              href="https://github.com/managedcode/LlmTestServer/blob/main/docs/Features/TestSessions.md"
-              >Test sessions <span aria-hidden="true">↗</span></a
-            >
-          </article>
-          <article>
-            <span class="feature-mark" aria-hidden="true">!</span>
-            <h3>Make the error path happen.</h3>
-            <p>
-              Return scripted failures, rate limits and content-filter errors. Exercise the path your happy-path fixture
-              never reaches.
-            </p>
-            <a class="inline-link" href="https://github.com/managedcode/LlmTestServer#current-functionality"
-              >Runtime capabilities <span aria-hidden="true">↗</span></a
-            >
-          </article>
-          <article>
-            <span class="feature-mark" aria-hidden="true">[ ]</span>
-            <h3>Fixtures for more than text.</h3>
-            <p>
-              Return explicit embeddings, image, audio and video fixtures on the operations supported by each provider
-              profile.
-            </p>
-            <a class="inline-link" href="#coverage">Check operation coverage <span aria-hidden="true">↓</span></a>
-          </article>
-        </div>
-      </section>
-
-      <section class="coverage-section section-wrap" id="coverage" aria-labelledby="coverage-title">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">Provider-aware, by design</p>
-            <h2 id="coverage-title">Your provider.<br />A local endpoint.</h2>
-          </div>
-          <div>
-            <p>Provider APIs use explicit namespaces. Operation coverage varies by provider and grows incrementally.</p>
-            <a
-              class="inline-link"
-              href="https://github.com/managedcode/LlmTestServer/blob/main/docs/Features/ProviderApiContractCoverage.md"
-              >Read the operation matrix <span aria-hidden="true">↗</span></a
-            >
-          </div>
-        </div>
-        <div class="provider-table-wrap">
-          <table>
-            <caption>
-              Provider namespaces. Check the linked operation matrix for exact methods, streaming modes and SDK
-              coverage.
-            </caption>
-            <thead>
-              <tr>
-                <th scope="col">Provider family</th>
-                <th scope="col">Local API namespace</th>
-                <th scope="col">Contract details</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <th scope="row">OpenAI</th>
-                <td><code>/openai</code></td>
-                <td>
-                  <a
-                    href="https://github.com/managedcode/LlmTestServer/blob/main/docs/Features/ProviderApiContractCoverage.md"
-                    >Operation matrix ↗</a
-                  >
-                </td>
-              </tr>
-              <tr>
-                <th scope="row">Azure OpenAI · Microsoft Foundry</th>
-                <td><code>/azure-openai</code><br /><code>/microsoft-foundry</code></td>
-                <td>Provider routes and SDK checks</td>
-              </tr>
-              <tr>
-                <th scope="row">Anthropic · Gemini · Amazon Bedrock</th>
-                <td><code>/anthropic</code> <code>/gemini</code> <code>/bedrock</code></td>
-                <td>Native provider contracts</td>
-              </tr>
-              <tr>
-                <th scope="row">Groq · Mistral · Ollama · Cohere</th>
-                <td><code>/groq</code> <code>/mistral</code> <code>/ollama</code> <code>/cohere</code></td>
-                <td>Provider-specific operations</td>
-              </tr>
-              <tr>
-                <th scope="row">OpenRouter · DeepSeek · Perplexity</th>
-                <td><code>/openrouter</code> <code>/deepseek</code> <code>/perplexity</code></td>
-                <td>Provider-specific operations</td>
-              </tr>
-              <tr>
-                <th scope="row">SystemOne · Cloudflare</th>
-                <td><code>/systemone</code> <code>/cloudflare</code></td>
-                <td>Native decision fixtures</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="coverage-note">
-          A provider profile does not imply every API is implemented. Verify the operation and client version your
-          application uses.
-        </p>
-      </section>
-
       <section class="start-section" id="get-started" aria-labelledby="start-title">
-        <div class="section-wrap start-layout">
-          <div class="start-copy">
-            <p class="eyebrow">Start in your AppHost</p>
+        <div class="section-wrap">
+          <div class="section-intro">
+            <p class="eyebrow">Get started</p>
             <h2 id="start-title">A local server.<br />A familiar workflow.</h2>
-            <p>
-              Add the Aspire package, register the resource and let Aspire allocate its endpoint. The default
-              integration runs without Docker.
-            </p>
-            <a class="inline-link" href="https://github.com/managedcode/LlmTestServer#first-passing-test"
-              >Open the complete integration test <span aria-hidden="true">↗</span></a
-            >
-            <p class="setup-note">.NET 10 · Aspire AppHost<br />Use a local fixture key in test code.</p>
+            <p>Run it from your Aspire AppHost without Docker, or start the standalone container.</p>
           </div>
-          <div class="code-stack">
-            <div class="code-panel">
-              <div class="code-heading">
-                <span>Install · AppHost project</span
-                ><button type="button" class="copy-button" data-copy="install-code" hidden>Copy</button>
+          <div class="start-grid">
+            <article class="start-card">
+              <header>
+                <span class="start-badge">Default</span>
+                <h3>Aspire AppHost</h3>
+                <p>Aspire starts the packaged .NET server and allocates its endpoint. No container runtime needed.</p>
+              </header>
+              <div class="code-panel">
+                <div class="code-heading">
+                  <span>Terminal</span
+                  ><button type="button" class="copy-button" data-copy="install-code" hidden>Copy</button>
+                </div>
+                <pre><code id="install-code">dotnet add package ManagedCode.LlmTestServer.Aspire</code></pre>
               </div>
-              <pre><code id="install-code">dotnet add package ManagedCode.LlmTestServer.Aspire</code></pre>
-            </div>
-            <div class="code-panel">
-              <div class="code-heading">
-                <span>AppHost.cs</span
-                ><button type="button" class="copy-button" data-copy="apphost-code" hidden>Copy</button>
-              </div>
-              <pre><code id="apphost-code"><span class="code-keyword">using</span> ManagedCode.LlmTestServer.Aspire;
+              <div class="code-panel">
+                <div class="code-heading">
+                  <span>AppHost.cs</span
+                  ><button type="button" class="copy-button" data-copy="apphost-code" hidden>Copy</button>
+                </div>
+                <pre><code id="apphost-code"><span class="code-keyword">using</span> ManagedCode.LlmTestServer.Aspire;
 
 <span class="code-keyword">var</span> builder = DistributedApplication.CreateBuilder(args);
 builder.AddLlmTestServer(<span class="code-string">"llm-test-server"</span>)
        .WithApiKey(<span class="code-string">"test-key"</span>);
 builder.Build().Run();</code></pre>
-            </div>
-            <p class="code-note">
-              Next: retrieve the Aspire resource endpoint, configure a scenario and make an SDK call. The full example
-              includes health, auth and assertions.
-            </p>
+              </div>
+              <a class="inline-link" href="https://github.com/managedcode/LlmTestServer#first-passing-test"
+                >Open the complete integration test <span aria-hidden="true">↗</span></a
+              >
+            </article>
+            <article class="start-card">
+              <header>
+                <span class="start-badge start-badge-muted">Standalone</span>
+                <h3>Docker + management API</h3>
+                <p>
+                  The v1.0.0 image serves provider routes, the dashboard and <code>/admin-api</code>. Load fixtures with
+                  one request.
+                </p>
+              </header>
+              <div class="code-panel">
+                <div class="code-heading">
+                  <span>Terminal</span
+                  ><button type="button" class="copy-button" data-copy="docker-code" hidden>Copy</button>
+                </div>
+                <pre><code id="docker-code">docker run --rm -p 8080:8080 \
+  -e LlmTestServer__RequiredBearerToken=local-test-key \
+  ghcr.io/managedcode/llm-test-server:1.0.0</code></pre>
+              </div>
+              <div class="code-panel">
+                <div class="code-heading">
+                  <span>Configure</span
+                  ><button type="button" class="copy-button" data-copy="configure-code" hidden>Copy</button>
+                </div>
+                <pre><code id="configure-code">curl http://localhost:8080/admin-api/configure \
+  -H <span class="code-string">'Authorization: Bearer local-test-key'</span> \
+  -H <span class="code-string">'Content-Type: application/json'</span> \
+  --data <span class="code-string">'{"requiredBearerToken":"local-test-key",
+    "models":[{"id":"gpt-4.1-mini","kind":"chat"}],
+    "chatScenarios":[{"id":"greeting","modelId":"gpt-4.1-mini",
+      "responses":[{"content":"Hello from LLM Test Server"}]}]}'</span></code></pre>
+              </div>
+              <a
+                class="inline-link"
+                href="https://github.com/managedcode/LlmTestServer/blob/main/docs/Features/DockerDistribution.md"
+                >Docker distribution guide <span aria-hidden="true">↗</span></a
+              >
+            </article>
           </div>
-        </div>
-        <div class="section-wrap standalone-layout">
-          <div>
-            <p class="eyebrow">Standalone alternative</p>
-            <h3>Prefer Docker?</h3>
-            <p class="standalone-copy">
-              Start the test server in a container. Open <code>http://localhost:8080</code> for the dashboard, then load
-              your models, scenarios and fixtures through <code>POST /admin-api/configure</code>.
-            </p>
-            <a class="inline-link" href="https://github.com/managedcode/LlmTestServer#runtime-reconfiguration"
-              >Management API configuration <span aria-hidden="true">↗</span></a
-            >
-          </div>
-          <div class="code-panel">
-            <div class="code-heading">
-              <span>Standalone · v1.0.0</span
-              ><button type="button" class="copy-button" data-copy="docker-code" hidden>Copy</button>
-            </div>
-            <pre><code id="docker-code">docker run --rm -p 8080:8080 ghcr.io/managedcode/llm-test-server:1.0.0</code></pre>
+          <div class="package-row">
+            <p>NuGet packages</p>
+            <ul>
+              <li><a href="https://www.nuget.org/packages/ManagedCode.LlmTestServer.Aspire">ManagedCode.LlmTestServer.Aspire</a></li>
+              <li><a href="https://www.nuget.org/packages/ManagedCode.LlmTestServer.Client">ManagedCode.LlmTestServer.Client</a></li>
+              <li><a href="https://www.nuget.org/packages/ManagedCode.LlmTestServer.Hosting">ManagedCode.LlmTestServer.Hosting</a></li>
+              <li><a href="https://www.nuget.org/packages/ManagedCode.LlmTestServer">ManagedCode.LlmTestServer</a></li>
+              <li>
+                <a href="https://github.com/managedcode/LlmTestServer#packages">+ 15 provider packages</a>
+              </li>
+            </ul>
           </div>
         </div>
       </section>
@@ -384,15 +600,15 @@ builder.Build().Run();</code></pre>
           <details>
             <summary>Does it call a live model?</summary>
             <p>
-              The server returns the fixtures configured for your test. It models API behavior so your application can
-              make real HTTP or SDK calls against a local server.
+              No. The server returns the fixtures configured for your test. It models API behavior so your application
+              can make real HTTP or SDK calls against a local server.
             </p>
           </details>
           <details>
             <summary>Do I need Docker?</summary>
             <p>
-              The default package-owned Aspire integration runs without Docker. Aspire starts the packaged .NET server
-              and exposes its allocated resource endpoint.
+              No. The default package-owned Aspire integration starts the packaged .NET server and exposes its allocated
+              resource endpoint. The container image is an explicit alternative.
             </p>
           </details>
           <details>
@@ -403,6 +619,13 @@ builder.Build().Run();</code></pre>
                 href="https://github.com/managedcode/LlmTestServer/blob/main/docs/Features/ProviderApiContractCoverage.md"
                 >operation coverage documentation</a
               >. Compatibility is verified per operation; check your client version and API requirements.
+            </p>
+          </details>
+          <details>
+            <summary>How are tokens counted?</summary>
+            <p>
+              Usage is deterministic. Text is counted with a tiktoken-compatible tokenizer, so the same request always
+              reports the same input, output, reasoning and cache values. It does not reproduce a provider's billing.
             </p>
           </details>
           <details>
@@ -422,27 +645,32 @@ builder.Build().Run();</code></pre>
           <details>
             <summary>Does this evaluate model quality?</summary>
             <p>
-              It verifies your application's behavior against scripted API fixtures. It does not measure the quality of
-              a live model's answers.
+              No. It verifies your application's behavior against scripted API fixtures. It does not measure the
+              quality of a live model's answers.
             </p>
           </details>
         </div>
       </section>
 
-      <section class="closing section-wrap" aria-labelledby="closing-title">
-        <p class="eyebrow">Make the next call predictable</p>
-        <h2 id="closing-title">Know what you send.<br />Choose what comes back.</h2>
-        <p>Start the server, script a response and inspect your first request.</p>
-        <div class="actions">
-          <a class="button" href="#get-started">Get started <span aria-hidden="true">↗</span></a
-          ><a class="text-link" href="https://github.com/managedcode/LlmTestServer"
-            >View on GitHub <span aria-hidden="true">↗</span></a
-          >
+      <section class="closing" aria-labelledby="closing-title">
+        <div class="section-wrap">
+          <img class="closing-mark" src="assets/mark.svg" width="88" height="88" alt="" />
+          <p class="eyebrow">Make the next call predictable</p>
+          <h2 id="closing-title">Know what you send.<br />Choose what comes back.</h2>
+          <p>Start the server, script a response and inspect your first request.</p>
+          <div class="actions">
+            <a class="button" href="#get-started">Get started <span aria-hidden="true">→</span></a
+            ><a class="text-link" href="https://github.com/managedcode/LlmTestServer"
+              >View on GitHub <span aria-hidden="true">↗</span></a
+            >
+          </div>
         </div>
       </section>
     </main>
     <footer class="footer section-wrap">
-      <a class="brand" href="#top"><span class="brand-symbol" aria-hidden="true">T</span>LLM Test Server</a>
+      <a class="brand" href="#top"
+        ><img class="brand-mark" src="assets/mark.svg" width="26" height="26" alt="" />LLM Test Server</a
+      >
       <p>Built by <a href="https://github.com/managedcode">ManagedCode</a>.</p>
       <div>
         <a href="https://github.com/managedcode/LlmTestServer#readme">Documentation</a
@@ -450,6 +678,43 @@ builder.Build().Run();</code></pre>
         ><a href="https://github.com/managedcode/LlmTestServer">Source code</a>
       </div>
     </footer>
+    <dialog class="image-viewer" aria-labelledby="image-viewer-title" aria-describedby="image-viewer-help">
+      <div class="image-viewer-content">
+        <header class="image-viewer-toolbar">
+          <h2 id="image-viewer-title">Dashboard preview</h2>
+          <div class="image-viewer-actions">
+            <button
+              type="button"
+              class="image-viewer-zoom"
+              aria-pressed="false"
+              aria-label="Show screenshot at 100 percent size"
+            >
+              100%
+            </button>
+            <button type="button" class="image-viewer-close" autofocus>Close <span aria-hidden="true">×</span></button>
+          </div>
+        </header>
+        <figure>
+          <div
+            class="image-viewer-stage"
+            tabindex="0"
+            role="region"
+            aria-label="Screenshot; scroll to pan at 100 percent size"
+          >
+            <img class="image-viewer-image" alt="" />
+          </div>
+          <figcaption class="image-viewer-caption" aria-live="polite"></figcaption>
+        </figure>
+        <nav class="image-viewer-navigation" aria-label="Screenshot navigation">
+          <button type="button" class="image-viewer-previous">← Previous</button>
+          <span class="image-viewer-position" aria-live="polite"></span>
+          <button type="button" class="image-viewer-next">Next →</button>
+        </nav>
+        <p id="image-viewer-help" class="visually-hidden">
+          Use the left and right arrow keys to browse screenshots. Press Escape to close.
+        </p>
+      </div>
+    </dialog>
     <p id="copy-status" class="visually-hidden" role="status" aria-live="polite"></p>
   </body>
 </html>

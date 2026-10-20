@@ -1815,11 +1815,16 @@ public sealed partial class LlmTestServerRuntime
         bool updatePromptCache = false
     )
     {
-        var inputTokens = request.Messages.Sum(message =>
-            LlmTestServerTokenCounter.CountTextTokens(MessageTokenText(message))
-        ) + request.Tools.Sum(tool =>
-            LlmTestServerTokenCounter.CountTextTokens(tool.Name + " " + tool.Description + " " + tool.ParametersJson)
-        ) + LlmTestServerTokenCounter.CountTextTokens(NativeDeclarationTokenText(request));
+        var composition = CreateInputComposition(request);
+        if (request.NativeTools.Count > 0)
+        {
+            composition = composition with
+            {
+                ToolDefinitionTokens = composition.ToolDefinitionTokens
+                    + LlmTestServerTokenCounter.CountTextTokens(NativeDeclarationTokenText(request)),
+            };
+        }
+        var inputTokens = composition.TotalTokens;
         var (cachedInputTokens, cacheCreationInputTokens) = CalculatePromptCacheUsage(
             request,
             updatePromptCache
@@ -1835,7 +1840,61 @@ public sealed partial class LlmTestServerRuntime
             OutputTokens = outputTokens,
             ReasoningTokens = reasoningTokens,
             TotalTokens = inputTokens + outputTokens,
+            InputComposition = composition,
         };
+    }
+
+    private static LlmTestServerInputTokenComposition CreateInputComposition(LlmTestServerChatRequest request)
+    {
+        int system = 0, user = 0, assistant = 0, toolCalls = 0, toolResults = 0, other = 0;
+        foreach (var message in request.Messages)
+        {
+            var tokens = LlmTestServerTokenCounter.CountTextTokens(MessageTokenText(message));
+            if (message.ToolCallId is not null || IsRole(message, "tool") || IsRole(message, "function"))
+            {
+                toolResults += tokens;
+                continue;
+            }
+
+            // Tool-call arguments are attributed separately; the remainder of the message stays with its role.
+            var roleTokens = message.ToolCalls.Count == 0
+                ? tokens
+                : Math.Min(tokens, LlmTestServerTokenCounter.CountTextTokens(message.Content));
+            toolCalls += tokens - roleTokens;
+            if (IsRole(message, "system") || IsRole(message, "developer"))
+            {
+                system += roleTokens;
+            }
+            else if (IsRole(message, "user"))
+            {
+                user += roleTokens;
+            }
+            else if (IsRole(message, "assistant") || IsRole(message, "model") || IsRole(message, "chatbot"))
+            {
+                assistant += roleTokens;
+            }
+            else
+            {
+                other += roleTokens;
+            }
+        }
+
+        return new LlmTestServerInputTokenComposition
+        {
+            SystemTokens = system,
+            UserTokens = user,
+            AssistantTokens = assistant,
+            ToolCallTokens = toolCalls,
+            ToolResultTokens = toolResults,
+            ToolDefinitionTokens = request.Tools.Sum(tool =>
+                LlmTestServerTokenCounter.CountTextTokens(tool.Name + " " + tool.Description + " " + tool.ParametersJson)),
+            OtherTokens = other,
+        };
+
+        static bool IsRole(LlmTestServerMessage message, string role)
+        {
+            return string.Equals(message.Role, role, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     private (int CachedInputTokens, int CacheCreationInputTokens) CalculatePromptCacheUsage(

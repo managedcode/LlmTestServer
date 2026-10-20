@@ -18,3 +18,4 @@ coverage.cobertura.xml
 
 # Launch production materials remain local until owner approval.
 /marketing/
+.playwright-cli

@@ -47,6 +47,12 @@ have been removed. This inventory is documentation; tests do not read it to asse
 | Native Clef image/scalar/error envelopes and typed client | `CloudflareDecisionContractTests`, `CloudflareDecisionErrorTests`, `CloudflareDecisionImageTests`, `CloudflareNativeClientTests` |
 | Native Kev formatting and required/optional request fields over HTTP | `SystemOneNativeContractTests` |
 | Dashboard root HTML and request/response presentation | `AdminPanelTests` |
+| Real cache miss/hit, reasoning subsets, explicit conversation correlation and unknown usage over HTTP | `DashboardAnalyticsIntegrationTests` |
+| Per-role input composition (system, user, assistant, tool calls, tool results, tool schemas) reconciles with OpenAI and Anthropic wire usage and drives the dashboard token flow and context mix | `DashboardAnalyticsIntegrationTests` |
+| Stored-response capacity rejection preserves queue/graph and does not warm or evict cache | `StoredResponseAdmissionIntegrationTests` |
+| Cache isolation across provider namespaces and independent sessions | `PromptCacheNamespaceIntegrationTests` |
+| Longest retained prefix is checked before FIFO eviction; cache-off mode stays inactive | `PromptCacheCapacityIntegrationTests` |
+| Request/conversation analytics totals, repeated tool-result context, unlabeled-request isolation and first-viewport readability | `scripts/package-consumer/PackageTests.cs` (genuine SDK and Chromium) |
 | Public request journal auth, all filter/paging parameters, validation, reset | `RequestJournalIntegrationTests` |
 | Bounded request/response diagnostics preserve full HTTP response bytes | `RequestJournalIntegrationTests.Journal_BoundsRetentionWithoutTruncatingActualProviderResponsesAsync` |
 | Request query filters, order, JSON/NDJSON export, retention/eviction/reset and active-request evidence | `RequestQueryExportIntegrationTests` |
