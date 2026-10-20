@@ -74,6 +74,15 @@ public static class GeminiCompatibility
                     },
                     new()
                     {
+                        Id = LlmTestServerProviderOperationIds.Gemini.ModelsBatchEmbedContents,
+                        Method = "POST",
+                        Path = "/gemini/v1beta/models/{model}:batchEmbedContents",
+                        DocumentationUrl = "https://ai.google.dev/api/embeddings#method:-models.batchembedcontents",
+                        ImplementedByHosting = true,
+                        Capabilities = [LlmTestServerProviderCapability.Embeddings],
+                    },
+                    new()
+                    {
                         Id = LlmTestServerProviderOperationIds.Gemini.ModelsPredictLongRunningVideo,
                         Method = "POST",
                         Path = "/gemini/v1beta/models/{model}:predictLongRunning",

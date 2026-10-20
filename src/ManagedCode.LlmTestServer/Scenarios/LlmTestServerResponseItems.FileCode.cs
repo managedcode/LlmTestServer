@@ -6,7 +6,13 @@ internal static partial class LlmTestServerResponseItems
 {
     internal static bool IsNative(LlmTestServerResponseItem item)
     {
-        return item is LlmTestServerResponseWebSearchItem or LlmTestServerResponseFileSearchItem or LlmTestServerResponseCodeInterpreterItem;
+        return item is LlmTestServerResponseWebSearchItem or LlmTestServerResponseFileSearchItem or LlmTestServerResponseCodeInterpreterItem
+            or LlmTestServerResponseServerToolUseItem or LlmTestServerResponseServerToolResultItem;
+    }
+
+    internal static bool IsNativeCall(LlmTestServerResponseItem item)
+    {
+        return IsNative(item) && item is not LlmTestServerResponseServerToolResultItem;
     }
 
     internal static LlmTestServerNativeToolContract? Contract(LlmTestServerResponseItem item)
@@ -16,6 +22,8 @@ internal static partial class LlmTestServerResponseItems
             LlmTestServerResponseWebSearchItem web => web.Contract,
             LlmTestServerResponseFileSearchItem file => file.Contract,
             LlmTestServerResponseCodeInterpreterItem code => code.Contract,
+            LlmTestServerResponseServerToolUseItem call => call.Contract,
+            LlmTestServerResponseServerToolResultItem result => result.Contract,
             _ => null,
         };
     }
@@ -23,6 +31,7 @@ internal static partial class LlmTestServerResponseItems
     private static LlmTestServerResponseCitation SnapshotCitation(LlmTestServerResponseCitation citation, string content)
     {
         ArgumentNullException.ThrowIfNull(citation);
+        if (citation is LlmTestServerAnthropicWebSearchCitation anthropic) { return SnapshotAnthropicCitation(anthropic); }
         if (content.Any(character => character > 127)) { throw new ArgumentException("Citation text must be ASCII.", nameof(citation)); }
         switch (citation)
         {
@@ -139,6 +148,7 @@ internal static partial class LlmTestServerResponseItems
                 Filters = file.Filters is { ValueKind: not JsonValueKind.Undefined } filter ? filter.Clone() : file.Filters,
             },
             CodeInterpreterOptions = code is null ? null : code with { FileIds = code.FileIds is null ? [] : [.. code.FileIds] },
+            AnthropicWebSearchOptions = CloneAnthropicOptions(declaration.AnthropicWebSearchOptions),
         };
     }
 
@@ -148,7 +158,8 @@ internal static partial class LlmTestServerResponseItems
         if (!Enum.IsDefined(declaration.Contract)) { throw new ArgumentException("Unknown native tool contract."); }
         if (declaration.WebSearchOptions is not null && declaration.Contract != LlmTestServerNativeToolContract.OpenAiResponsesWebSearch
             || declaration.FileSearchOptions is not null && declaration.Contract != LlmTestServerNativeToolContract.OpenAiResponsesFileSearch
-            || declaration.CodeInterpreterOptions is not null && declaration.Contract != LlmTestServerNativeToolContract.OpenAiResponsesCodeInterpreter)
+            || declaration.CodeInterpreterOptions is not null && declaration.Contract != LlmTestServerNativeToolContract.OpenAiResponsesCodeInterpreter
+            || declaration.AnthropicWebSearchOptions is not null && declaration.Contract != LlmTestServerNativeToolContract.AnthropicMessagesWebSearch20250305)
         { throw new ArgumentException("Native declaration options must match their contract."); }
         var web = declaration.WebSearchOptions;
         if (web is not null)
@@ -189,7 +200,13 @@ internal static partial class LlmTestServerResponseItems
             code = code with { FileIds = [.. code.FileIds] };
         }
         if (declaration.Contract == LlmTestServerNativeToolContract.OpenAiResponsesCodeInterpreter && code is null) { throw new ArgumentException("Code interpreter options are required."); }
-        return declaration with { WebSearchOptions = web, FileSearchOptions = file, CodeInterpreterOptions = code };
+        return declaration with
+        {
+            WebSearchOptions = web,
+            FileSearchOptions = file,
+            CodeInterpreterOptions = code,
+            AnthropicWebSearchOptions = SnapshotAnthropicOptions(declaration.AnthropicWebSearchOptions)
+        };
     }
 
     private static void Identifier(string value)

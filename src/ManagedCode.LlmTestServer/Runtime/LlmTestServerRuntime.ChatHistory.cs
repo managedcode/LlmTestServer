@@ -68,7 +68,7 @@ public sealed partial class LlmTestServerRuntime
         + Encoding.UTF8.GetByteCount(message.ToolCallId ?? string.Empty)
         + LlmTestServerResponseItems.Bytes(message.OutputItems)
         + message.ToolCalls.Sum(call => 128L + Encoding.UTF8.GetByteCount(call.Id)
-            + Encoding.UTF8.GetByteCount(call.Name) + Encoding.UTF8.GetByteCount(call.ArgumentsJson)));
+            + Encoding.UTF8.GetByteCount(call.Name) + Encoding.UTF8.GetByteCount(call.ArgumentsJson) + Encoding.UTF8.GetByteCount(call.ContinuationToken ?? string.Empty)));
     }
 
     private sealed record StoredChatResponse(string Namespace, string TokenHash, List<LlmTestServerMessage> Messages);

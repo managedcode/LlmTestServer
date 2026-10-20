@@ -70,6 +70,17 @@ public sealed class LlmTestServerWellKnownTool<TArguments, TResult>
         };
     }
 
+    /// <summary>Creates an explicit JSON null result, distinct from an omitted tool result.</summary>
+    public LlmTestServerMessage CreateNullResult(string? callId = null)
+    {
+        return new()
+        {
+            Role = "tool",
+            ToolCallId = ValidateCallId(callId ?? "call_" + Descriptor.Name),
+            Content = "null",
+        };
+    }
+
     /// <summary>Serializes the explicitly selected {"error":{"code","message","retryable"}} fixture envelope.</summary>
     public LlmTestServerMessage CreateError(LlmTestServerToolFixtureError error, string? callId = null)
     {
@@ -86,6 +97,13 @@ public sealed class LlmTestServerWellKnownTool<TArguments, TResult>
     {
         ArgumentOutOfRangeException.ThrowIfNegative(delayMilliseconds);
         return new() { Definition = Definition, Call = CreateCall(arguments, callId), Result = CreateResult(result, callId), DelayMilliseconds = delayMilliseconds };
+    }
+
+    /// <summary>Selects a literal JSON null outcome without weakening the typed success schema.</summary>
+    public LlmTestServerWellKnownToolFixture NullResult(TArguments arguments, string? callId = null, int delayMilliseconds = 0)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(delayMilliseconds);
+        return new() { Definition = Definition, Call = CreateCall(arguments, callId), Result = CreateNullResult(callId), DelayMilliseconds = delayMilliseconds };
     }
 
     public LlmTestServerWellKnownToolFixture Failure(TArguments arguments, LlmTestServerToolFixtureError error, string? callId = null, int delayMilliseconds = 0)

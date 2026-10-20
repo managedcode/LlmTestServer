@@ -481,7 +481,8 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
             var id = RetainRequiredText(call.Id, _maxMetadataBytes, ref remaining, ref truncated);
             var name = RetainRequiredText(call.Name, _maxMetadataBytes, ref remaining, ref truncated);
             var arguments = RetainRequiredText(call.ArgumentsJson, _maxPreviewBytes, ref remaining, ref truncated);
-            retained.Add(new() { Id = id, Name = name, ArgumentsJson = arguments });
+            var continuation = RetainText(call.ContinuationToken, _maxPreviewBytes, ref remaining, ref truncated);
+            retained.Add(new() { Id = id, Name = name, ArgumentsJson = arguments, ContinuationToken = continuation });
         }
         return Array.AsReadOnly(retained.ToArray());
     }
@@ -501,6 +502,11 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
             { nestedOverhead += (long)file.VectorStoreIds.Count * _chunkOverheadBytes + _messageOverheadBytes; }
             if (tool.CodeInterpreterOptions is { } code)
             { nestedOverhead += (long)code.FileIds.Count * _chunkOverheadBytes + _messageOverheadBytes; }
+            if (tool.AnthropicWebSearchOptions is { } anthropic)
+            {
+                nestedOverhead += (long)((anthropic.AllowedDomains?.Count ?? 0) + (anthropic.BlockedDomains?.Count ?? 0)) * _chunkOverheadBytes
+                + (anthropic.UserLocation is null ? 0 : _messageOverheadBytes);
+            }
             var cost = _messageOverheadBytes + payloadBytes + nestedOverhead;
             if (payloadBytes > _maxPreviewBytes || cost > remaining) { truncated = true; break; }
             remaining -= (int)cost;
@@ -526,6 +532,9 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
                     + file.Results.Sum(result => (long)_messageOverheadBytes + (long)(result.Attributes?.Count ?? 0) * _messageOverheadBytes),
                 LlmTestServerResponseCodeInterpreterItem code => (long)(code.InputFileIds.Count + code.GeneratedFileIds.Count + code.CodeChunks.Count) * _chunkOverheadBytes
                     + (long)(code.Outputs?.Count ?? 0) * _messageOverheadBytes,
+                LlmTestServerResponseServerToolUseItem => _messageOverheadBytes,
+                LlmTestServerResponseServerToolResultItem returned => _messageOverheadBytes
+                    + (returned.Result is LlmTestServerWebSearchResults found ? (long)found.Results.Count * _messageOverheadBytes : 0),
                 LlmTestServerResponseFunctionCallItem => _messageOverheadBytes,
                 _ => 0,
             };
@@ -550,6 +559,12 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
             { VectorStoreIds = [.. file.VectorStoreIds], Filters = file.Filters?.Clone() } : null,
             CodeInterpreterOptions = tool.CodeInterpreterOptions is { } code ? code with
             { FileIds = [.. code.FileIds] } : null,
+            AnthropicWebSearchOptions = tool.AnthropicWebSearchOptions is { } anthropic ? anthropic with
+            {
+                AllowedDomains = anthropic.AllowedDomains is { } allowed ? [.. allowed] : null,
+                BlockedDomains = anthropic.BlockedDomains is { } blocked ? [.. blocked] : null,
+                UserLocation = anthropic.UserLocation is { } anthropicLocation ? anthropicLocation with { } : null,
+            } : null,
         };
     }
 
@@ -575,6 +590,16 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
                 GeneratedFileIds = [.. code.GeneratedFileIds],
                 CodeChunks = [.. code.CodeChunks],
                 Outputs = code.Outputs?.Select(output => output with { }).ToList(),
+            },
+            LlmTestServerResponseServerToolUseItem call => call with { Input = call.Input with { } },
+            LlmTestServerResponseServerToolResultItem returned => returned with
+            {
+                Result = returned.Result switch
+                {
+                    LlmTestServerWebSearchResults found => found with { Results = found.Results.Select(result => result with { }).ToList() },
+                    LlmTestServerWebSearchErrorResult error => error with { },
+                    _ => throw new InvalidOperationException("Unsupported server tool result."),
+                },
             },
             _ => throw new InvalidOperationException("Unsupported structured response item."),
         };

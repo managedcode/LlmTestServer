@@ -9,6 +9,8 @@ namespace ManagedCode.LlmTestServer.Scenarios;
 [JsonDerivedType(typeof(LlmTestServerResponseWebSearchItem), "web_search")]
 [JsonDerivedType(typeof(LlmTestServerResponseFileSearchItem), "file_search")]
 [JsonDerivedType(typeof(LlmTestServerResponseCodeInterpreterItem), "code_interpreter")]
+[JsonDerivedType(typeof(LlmTestServerResponseServerToolUseItem), "server_tool_use")]
+[JsonDerivedType(typeof(LlmTestServerResponseServerToolResultItem), "server_tool_result")]
 public abstract record LlmTestServerResponseItem;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -43,11 +45,12 @@ public sealed record LlmTestServerWebSearchSource
     public string Url { get; init; } = string.Empty;
 }
 
-/// <summary>Explicit provider citation indexes; this initial fixture contract accepts ASCII text only.</summary>
+/// <summary>Typed provider citations; indexed citation variants use their explicit bounded fixture ranges.</summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(LlmTestServerUrlCitation), "url")]
 [JsonDerivedType(typeof(LlmTestServerFileCitation), "file")]
 [JsonDerivedType(typeof(LlmTestServerContainerFileCitation), "container_file")]
+[JsonDerivedType(typeof(LlmTestServerAnthropicWebSearchCitation), "anthropic_web_search")]
 public abstract record LlmTestServerResponseCitation;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -59,8 +62,8 @@ public sealed record LlmTestServerUrlCitation : LlmTestServerResponseCitation
     public string Title { get; init; } = string.Empty;
 }
 
-public enum LlmTestServerNativeToolContract { OpenAiResponsesWebSearch, OpenAiResponsesFileSearch, OpenAiResponsesCodeInterpreter }
-public enum LlmTestServerNativeToolSurface { OpenAiResponses }
+public enum LlmTestServerNativeToolContract { OpenAiResponsesWebSearch, OpenAiResponsesFileSearch, OpenAiResponsesCodeInterpreter, AnthropicMessagesWebSearch20250305 }
+public enum LlmTestServerNativeToolSurface { OpenAiResponses, AnthropicMessages }
 public enum LlmTestServerNativeToolInclude { WebSearchSources, FileSearchResults, CodeInterpreterOutputs }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -68,6 +71,7 @@ public sealed record LlmTestServerNativeToolDeclaration
 {
     public LlmTestServerNativeToolContract Contract { get; init; }
     public LlmTestServerWebSearchOptions? WebSearchOptions { get; init; }
+    public LlmTestServerAnthropicWebSearchOptions? AnthropicWebSearchOptions { get; init; }
     public LlmTestServerFileSearchOptions? FileSearchOptions { get; init; }
     public LlmTestServerCodeInterpreterOptions? CodeInterpreterOptions { get; init; }
 }

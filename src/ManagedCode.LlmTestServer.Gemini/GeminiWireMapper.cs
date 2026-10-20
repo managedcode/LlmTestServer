@@ -37,6 +37,7 @@ public static class GeminiWireMapper
             ToolChoice = request.ToolConfig?.FunctionCallingConfig?.Mode switch { "ANY" => LlmTestServerToolChoice.Required, "NONE" => LlmTestServerToolChoice.None, _ => LlmTestServerToolChoice.Auto },
             RequireJson = request.GenerationConfig?.ResponseMimeType == "application/json",
             ResponseSchemaJson = request.GenerationConfig?.ResponseJsonSchema?.GetRawText() ?? GeminiSchemaMapper.ToJsonSchema(request.GenerationConfig?.ResponseSchema),
+            RequireToolContinuationTokens = RequiresToolContinuationTokens(model),
             ModelId = model,
             Stream = stream,
             PromptCachePolicy = LlmTestServerPromptCachePolicy.Gemini,
@@ -63,7 +64,7 @@ public static class GeminiWireMapper
                     Content = new GeminiContent
                     {
                         Role = "model",
-                        Parts = result.ToolCalls.Count > 0 && finishReason is not null ? (content.Length > 0 ? new[] { new GeminiPart { Text = content } } : []).Concat(result.ToolCalls.Select(call => new GeminiPart { FunctionCall = new() { Id = call.Id, Name = call.Name, Args = JsonSerializer.Deserialize<JsonElement>(call.ArgumentsJson) } })).ToList() : [new GeminiPart { Text = content }],
+                        Parts = result.ToolCalls.Count > 0 && finishReason is not null ? (content.Length > 0 ? new[] { new GeminiPart { Text = content } } : []).Concat(result.ToolCalls.Select(call => new GeminiPart { ThoughtSignature = call.ContinuationToken, FunctionCall = new() { Id = call.Id, Name = call.Name, Args = JsonSerializer.Deserialize<JsonElement>(call.ArgumentsJson) } })).ToList() : [new GeminiPart { Text = content }],
                     },
                     FinishReason = finishReason,
                     Index = 0,
@@ -82,9 +83,14 @@ public static class GeminiWireMapper
         };
     }
 
+    public static bool RequiresToolContinuationTokens(string model)
+    {
+        return model == "gemini-3.8-flash";
+    }
+
     private static IEnumerable<LlmTestServerMessage> ReadMessages(GeminiContent content)
     {
-        var calls = content.Parts.Where(part => part.FunctionCall is not null).Select(part => new LlmTestServerToolCall { Id = part.FunctionCall!.Id ?? part.FunctionCall.Name, Name = part.FunctionCall.Name, ArgumentsJson = part.FunctionCall.Args.GetRawText() }).ToList();
+        var calls = content.Parts.Where(part => part.FunctionCall is not null).Select(part => new LlmTestServerToolCall { Id = part.FunctionCall!.Id ?? part.FunctionCall.Name, Name = part.FunctionCall.Name, ArgumentsJson = part.FunctionCall.Args.GetRawText(), ContinuationToken = part.ThoughtSignature }).ToList();
         if (calls.Count > 0 || content.Parts.Any(part => part.Text is not null || part.InlineData is not null || part.FileData is not null))
         {
             yield return new() { Role = NormalizeRole(content.Role), Content = ReadText(content), ToolCalls = calls };

@@ -214,42 +214,53 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
                 cancellationToken
             )
             .ConfigureAwait(false);
-        if (!cacheOnly && (result.ToolCalls.Count == 0 || result.Content.Length > 0))
+        if (!cacheOnly && result.OutputItems.Count > 0)
         {
-            await WriteAnthropicSseEventAsync(
-                    context,
-                    "content_block_start",
-                    AnthropicWireMapper.ToContentBlockStartEvent(),
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
-
-            foreach (var chunk in result.StreamChunks)
+            foreach (var streamEvent in AnthropicWireMapper.ToOrderedContentStreamEvents(result))
+            {
+                var element = JsonSerializer.SerializeToElement(streamEvent, _jsonOptions);
+                await WriteAnthropicSseEventAsync(context, element.GetProperty("type").GetString()!, streamEvent, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        else
+        {
+            if (!cacheOnly && (result.ToolCalls.Count == 0 || result.Content.Length > 0))
             {
                 await WriteAnthropicSseEventAsync(
                         context,
-                        "content_block_delta",
-                        AnthropicWireMapper.ToContentBlockDeltaEvent(chunk),
+                        "content_block_start",
+                        AnthropicWireMapper.ToContentBlockStartEvent(),
+                        cancellationToken
+                    )
+                    .ConfigureAwait(false);
+
+                foreach (var chunk in result.StreamChunks)
+                {
+                    await WriteAnthropicSseEventAsync(
+                            context,
+                            "content_block_delta",
+                            AnthropicWireMapper.ToContentBlockDeltaEvent(chunk),
+                            cancellationToken
+                        )
+                        .ConfigureAwait(false);
+                }
+
+                await WriteAnthropicSseEventAsync(
+                        context,
+                        "content_block_stop",
+                        AnthropicWireMapper.ToContentBlockStopEvent(),
                         cancellationToken
                     )
                     .ConfigureAwait(false);
             }
 
-            await WriteAnthropicSseEventAsync(
-                    context,
-                    "content_block_stop",
-                    AnthropicWireMapper.ToContentBlockStopEvent(),
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
-        }
-
-        if (!cacheOnly && result.ToolCalls.Count > 0)
-        {
-            foreach (var streamEvent in AnthropicWireMapper.ToToolStreamEvents(result, result.Content.Length > 0 ? 1 : 0))
+            if (!cacheOnly && result.ToolCalls.Count > 0)
             {
-                var element = JsonSerializer.SerializeToElement(streamEvent, _jsonOptions);
-                await WriteAnthropicSseEventAsync(context, element.GetProperty("type").GetString()!, streamEvent, cancellationToken).ConfigureAwait(false);
+                foreach (var streamEvent in AnthropicWireMapper.ToToolStreamEvents(result, result.Content.Length > 0 ? 1 : 0))
+                {
+                    var element = JsonSerializer.SerializeToElement(streamEvent, _jsonOptions);
+                    await WriteAnthropicSseEventAsync(context, element.GetProperty("type").GetString()!, streamEvent, cancellationToken).ConfigureAwait(false);
+                }
             }
         }
         await WriteAnthropicSseEventAsync(

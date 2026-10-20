@@ -18,7 +18,12 @@ public sealed partial class LlmTestServerRuntime
             response = LlmTestServerResponseItems.Project(response);
             var nativeError = ValidateNativeFixture(request, response);
             if (nativeError is not null) { return nativeError; }
-            var callCount = response.ToolCalls.Count + response.OutputItems.Count(LlmTestServerResponseItems.IsNative);
+            if (request.RequireToolContinuationTokens && response.ToolCalls.Count > 0
+                && !ValidToolContinuationToken(response.ToolCalls[0].ContinuationToken))
+            { return "The selected fixture requires valid continuation metadata on its first function call."; }
+            if (response.ToolCalls.Any(call => call.ContinuationToken is not null && !ValidToolContinuationToken(call.ContinuationToken)))
+            { return "Fixture tool continuation metadata must be bounded, nonempty base64."; }
+            var callCount = response.ToolCalls.Count + response.OutputItems.Count(LlmTestServerResponseItems.IsNativeCall);
             if (request.Tools is null || request.Tools.Any(tool => tool is null || string.IsNullOrWhiteSpace(tool.Name)))
             {
                 return "Tool declarations require names.";
@@ -92,4 +97,25 @@ public sealed partial class LlmTestServerRuntime
             return $"Invalid JSON or schema in request/fixture: {exception.Message}";
         }
     }
+    // A repository retention bound, not a provider-advertised signature limit.
+    private static bool ValidToolContinuationToken(string? value)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length > 16384 || value.Any(char.IsWhiteSpace)) { return false; }
+        return Convert.TryFromBase64String(value, new byte[value.Length], out var written) && written > 0;
+    }
+
+    private static string? ValidateToolContinuationHistory(LlmTestServerChatRequest request, LlmTestServerChatResult priorResult)
+    {
+        if (!request.RequireToolContinuationTokens) { return null; }
+        var start = request.Messages.FindLastIndex(message => message.Role == "user");
+        var currentCalls = request.Messages.Skip(start + 1).SelectMany(message => message.ToolCalls).ToList();
+        foreach (var prior in priorResult.ToolCalls.Where(call => call.ContinuationToken is not null))
+        {
+            var echoed = currentCalls.LastOrDefault(call => call.Id == prior.Id);
+            if (echoed is not null && !string.Equals(echoed.ContinuationToken, prior.ContinuationToken, StringComparison.Ordinal))
+            { return "Tool continuation metadata differs from the last response retained in this conversation."; }
+        }
+        return null;
+    }
+
 }

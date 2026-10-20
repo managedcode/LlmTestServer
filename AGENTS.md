@@ -108,15 +108,17 @@ Rule format:
 
 ## Design Rules
 
+- Tool fixtures must explicitly simulate distinct errors, timeouts, internal failures or connection crashes, literal null, empty/no result, and content-filter refusals. Keep tool-result failures distinct from provider/transport failures, expose the observed outcome in diagnostics, and verify recovery plus conversation/cache state through real server integrations; expected faults must not be rejected as invalid mock configuration.
+
 - Before claiming that all review findings are fixed, recheck every finding against final behavior and tests; report removed capability claims and temporary mitigations separately from implemented functionality.
 
 - Prefer official .NET packages and abstractions before writing custom protocol code.
-- Tests must call the running server through HTTP and real provider SDKs; do not substitute fake `IChatClient` implementations or direct runtime/builder calls for integration behavior.
+- Provider compatibility tests must use the official provider SDK clients against the running server wherever an official client exists. Raw HTTP supplements malformed-request, exact wire-format and unsupported-boundary checks; it is not sufficient proof for supported success, streaming, tool or conversation flows. Do not substitute fake `IChatClient` implementations or direct runtime/builder calls for integration behavior.
 - Keep provider wire formats in provider packages such as `ManagedCode.LlmTestServer.OpenAI`; keep deterministic scenario behavior in `ManagedCode.LlmTestServer`.
 - Keep the provider package matrix explicit. Do not ship the Test Server as only OpenAI-compatible; maintain package surfaces for OpenAI, Azure OpenAI, Microsoft Foundry, Anthropic, Gemini, Groq, Mistral, Ollama, Cohere, Amazon Bedrock, OpenRouter, DeepSeek, and Perplexity.
 - Azure OpenAI and Microsoft Foundry compatibility must be proven with official Azure SDK clients, not only raw HTTP requests.
 - Azure SDK clients must select their own API version. Do not pin a dated version in consumers or SDK compatibility tests to satisfy the emulator; deployment routes must enforce their documented supported Azure versions and reject unknown versions, including syntactically valid future dates. Do not weaken server validation to make client tests pass.
-- Built-in defaults, samples, and scenario examples must use official provider model IDs such as `gpt-4.1-mini`, `text-embedding-3-small`, `gpt-image-1`, and `gpt-4o-mini-tts`; do not use synthetic `llm-test-server-*` model IDs for normal fixtures.
+- Source current built-in model IDs and capability defaults from the original official provider SDK model definitions and current official model documentation. Prefer SDK model identifiers in SDK tests; do not invent models or treat stale hand-maintained string constants as an authoritative catalogue. Keep custom fixture models explicitly configurable.
 - Keep custom `AddModel(...)` support, but expose typed convenience APIs for common official fixture models so callers do not have to hand-type model IDs for standard chat, embedding, image, and audio setup.
 - Reasoning-capable models must carry deterministic reasoning-token usage through runtime summaries and provider response usage details; do not flatten reasoning usage into ordinary visible output tokens only.
 - Prompt-cache accounting is provider-specific: expose cache read/write usage for every provider surface that has a documented cache contract, and report no cache usage for providers or operations without one.

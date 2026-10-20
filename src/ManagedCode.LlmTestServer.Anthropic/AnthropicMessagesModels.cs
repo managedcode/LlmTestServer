@@ -73,6 +73,11 @@ public sealed record AnthropicContentBlock
     [JsonPropertyName("name")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Name { get; init; }
     [JsonPropertyName("input")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public JsonElement? Input { get; init; }
 
+    [JsonPropertyName("caller")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public AnthropicDirectCaller? Caller { get; init; }
+    [JsonPropertyName("tool_use_id")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ToolUseId { get; init; }
+    [JsonPropertyName("content")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public JsonElement? Content { get; init; }
+    [JsonPropertyName("citations")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<AnthropicWebSearchCitation>? Citations { get; init; }
+
     [JsonPropertyName("type")]
     public string Type { get; init; } = "text";
 
@@ -83,6 +88,10 @@ public sealed record AnthropicContentBlock
 
 public sealed record AnthropicUsage
 {
+    [JsonPropertyName("server_tool_use")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AnthropicServerToolUsage? ServerToolUse { get; init; }
+
     [JsonPropertyName("input_tokens")]
     public int InputTokens { get; init; }
 
@@ -166,9 +175,22 @@ internal static class AnthropicContentReader
 
 public sealed record AnthropicTool
 {
+    private static readonly JsonElement _defaultInputSchema = JsonSerializer.SerializeToElement(new { type = "object" });
+
     [JsonPropertyName("name")] public string Name { get; init; } = string.Empty;
-    [JsonPropertyName("description")] public string? Description { get; init; }
-    [JsonPropertyName("input_schema")] public JsonElement InputSchema { get; init; } = JsonSerializer.SerializeToElement(new { type = "object" });
+    [JsonPropertyName("description")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Description { get; init; }
+    [JsonPropertyName("input_schema")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement InputSchema
+    {
+        get => field.ValueKind == JsonValueKind.Undefined && Type is null or "custom" ? _defaultInputSchema : field;
+        init;
+    }
+    [JsonPropertyName("type")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Type { get; init; }
+    [JsonPropertyName("max_uses")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? MaxUses { get; init; }
+    [JsonPropertyName("allowed_domains")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string>? AllowedDomains { get; init; }
+    [JsonPropertyName("blocked_domains")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string>? BlockedDomains { get; init; }
+    [JsonPropertyName("user_location")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public AnthropicWebSearchLocation? UserLocation { get; init; }
 }
 public sealed record AnthropicToolChoice
 {

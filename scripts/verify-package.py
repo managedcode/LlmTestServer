@@ -29,7 +29,7 @@ consumer = Path(tempfile.mkdtemp(prefix="consumer-", dir=evidence)).resolve()
 package_cache = Path(tempfile.mkdtemp(prefix="cache-", dir=evidence)).resolve()
 print(f"Consumer: {consumer}", flush=True)
 project = (root / "scripts/package-consumer/Consumer.csproj.template").read_text()
-for key, value in {"__VERSION__": version, "__ASPIRE_VERSION__": versions["Aspire.Hosting.Testing"], "__TUNIT_VERSION__": versions["TUnit"], "__PLAYWRIGHT_VERSION__": versions["Microsoft.Playwright"], "__OPENAI_VERSION__": versions["OpenAI"]}.items():
+for key, value in {"__VERSION__": version, "__ASPIRE_VERSION__": versions["Aspire.Hosting.Testing"], "__TUNIT_VERSION__": versions["TUnit"], "__PLAYWRIGHT_VERSION__": versions["Microsoft.Playwright"], "__OPENAI_VERSION__": versions["OpenAI"], "__ANTHROPIC_VERSION__": versions["Anthropic"]}.items():
     project = project.replace(key, value)
 (consumer / "Consumer.csproj").write_text(project)
 for source in sorted((root / "scripts/package-consumer").glob("*.cs")):
@@ -64,6 +64,6 @@ finally:
     if (consumer / "TestResults").exists():
         shutil.copytree(consumer / "TestResults", evidence / "TestResults", dirs_exist_ok=True)
 if args.refresh_screenshots:
-    for name in ["overview.jpg", "conversation.jpg", "runtime.jpg", "mobile-request-detail.png", "token-usage.png"]:
+    for name in ["overview.jpg", "conversation.jpg", "runtime.jpg", "mobile-request-detail.png", "token-usage.png", "insights.jpg"]:
         shutil.copy2(evidence / f"package-dashboard-{name}", root / "docs/images" / f"admin-dashboard-{name}")
     shutil.copy2(evidence / "package-dashboard-overview.jpg", root / "site/assets/admin-dashboard-overview.jpg")

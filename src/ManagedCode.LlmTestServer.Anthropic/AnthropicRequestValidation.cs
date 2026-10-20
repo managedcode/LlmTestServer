@@ -17,7 +17,13 @@ public static class AnthropicRequestValidation
         {
             throw new JsonException("Legacy function fields are unsupported.");
         }
-        foreach (var tool in OptionalArray(body, "tools")) { Name(tool); Schema(tool.GetProperty("input_schema")); }
+        var hasNative = false;
+        foreach (var tool in OptionalArray(body, "tools"))
+        {
+            if (AnthropicNativeWebSearchValidation.ValidateTool(tool)) { hasNative = true; }
+            else { Name(tool); Schema(tool.GetProperty("input_schema")); }
+        }
+        AnthropicNativeWebSearchValidation.ValidateBody(body, hasNative);
         if (body.TryGetProperty("tool_choice", out var choice))
         {
             Choice(choice.GetProperty("type"), "auto", "none", "any", "tool");
@@ -34,7 +40,7 @@ public static class AnthropicRequestValidation
             foreach (var part in content.EnumerateArray())
             {
                 if (part.ValueKind != JsonValueKind.Object || !part.TryGetProperty("type", out var type)) { continue; }
-                if (type.GetString() == "tool_use") { Name(part); NonEmpty(part.GetProperty("id")); Object(part.GetProperty("input")); }
+                if (type.GetString() == "tool_use") { AnthropicNativeWebSearchValidation.ValidateCaller(part); Name(part); NonEmpty(part.GetProperty("id")); Object(part.GetProperty("input")); }
                 if (type.GetString() == "tool_result") { NonEmpty(part.GetProperty("tool_use_id")); _ = part.GetProperty("content"); }
             }
         }

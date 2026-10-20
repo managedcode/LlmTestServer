@@ -20,7 +20,7 @@ public sealed class NativeDeterminismIntegrationTests
     [Arguments(3, false)]
     public async Task NativeJsonResetAndGraphStreamingReplay_PreserveProviderIdentityAsync(int format, bool geminiArray)
     {
-        var model = format switch { 0 => "claude-sonnet-4-5", 1 => "gemini-2.5-flash", 2 => "command-r", _ => "llama3.2" };
+        var model = format switch { 0 => LlmTestServerKnownModelIds.ClaudeSonnet55, 1 => "gemini-2.5-flash", 2 => "command-r", _ => "llama3.2" };
         using var host = await LlmTestServerTestHost.StartAsync(config => config.WithDeterminism("native-seed", _fixedUtc)
             .AddModel(model, LlmTestServerModelKind.Chat)
             .AddConversation("native-clock", graph => graph.ForModel(model).Step("answer", step => step.Responds("stable reply", "stable ", "reply").Complete())));

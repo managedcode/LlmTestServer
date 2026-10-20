@@ -143,8 +143,8 @@ public sealed class ProviderApiDriftTests
     public async Task AnthropicZeroMaxTokens_WarmsCacheWithoutConsumingResponseAsync(bool stream)
     {
         using var host = await LlmTestServerTestHost.StartAsync(options => options
-            .AddModel("claude-sonnet-4-5", LlmTestServerModelKind.Chat)
-            .AddChatScenario("cache-only", scenario => scenario.ForModel("claude-sonnet-4-5")
+            .AddModel(LlmTestServerKnownModelIds.ClaudeSonnet55, LlmTestServerModelKind.Chat)
+            .AddChatScenario("cache-only", scenario => scenario.ForModel(LlmTestServerKnownModelIds.ClaudeSonnet55)
                 .WhenUserContains("whale").Responds("blue whale")));
         using var client = host.GetTestClient();
         client.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
@@ -152,7 +152,7 @@ public sealed class ProviderApiDriftTests
         var cacheControl = new { type = "ephemeral" };
         using var warm = await client.PostAsJsonAsync("/anthropic/v1/messages", new
         {
-            model = "claude-sonnet-4-5",
+            model = LlmTestServerKnownModelIds.ClaudeSonnet55,
             messages,
             max_tokens = 0,
             cache_control = cacheControl,
@@ -166,7 +166,7 @@ public sealed class ProviderApiDriftTests
         await Assert.That(warmBody).DoesNotContain("content_block_delta");
         using var response = await client.PostAsJsonAsync("/anthropic/v1/messages", new
         {
-            model = "claude-sonnet-4-5",
+            model = LlmTestServerKnownModelIds.ClaudeSonnet55,
             messages,
             max_tokens = 64,
             cache_control = cacheControl,

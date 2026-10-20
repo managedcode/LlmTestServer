@@ -328,22 +328,22 @@ public sealed partial class LlmTestServerConfigurationBuilder
 
     public LlmTestServerConfigurationBuilder AddJevLatest()
     {
-        return AddDecisionModel(LlmTestServerKnownModelIds.JevLatest, ManagedCode.LlmTestServer.Decisions.LlmTestServerDecisionProvider.TypeSafe);
+        return AddDecisionModel(ManagedCode.LlmTestServer.Decisions.LlmTestServerDecisionModelIds.TypeSafeJev, ManagedCode.LlmTestServer.Decisions.LlmTestServerDecisionProvider.TypeSafe);
     }
 
     public LlmTestServerConfigurationBuilder AddKevLatest()
     {
-        return AddDecisionModel(LlmTestServerKnownModelIds.KevLatest, ManagedCode.LlmTestServer.Decisions.LlmTestServerDecisionProvider.Kev);
+        return AddDecisionModel(ManagedCode.LlmTestServer.Decisions.LlmTestServerDecisionModelIds.Kev, ManagedCode.LlmTestServer.Decisions.LlmTestServerDecisionProvider.Kev);
     }
 
     public LlmTestServerConfigurationBuilder AddClef()
     {
-        return AddDecisionModel(LlmTestServerKnownModelIds.Clef, ManagedCode.LlmTestServer.Decisions.LlmTestServerDecisionProvider.Cloudflare);
+        return AddDecisionModel(ManagedCode.LlmTestServer.Decisions.LlmTestServerDecisionModelIds.CloudflareClef, ManagedCode.LlmTestServer.Decisions.LlmTestServerDecisionProvider.Cloudflare);
     }
 
     public LlmTestServerConfigurationBuilder AddClefFlash()
     {
-        return AddDecisionModel(LlmTestServerKnownModelIds.ClefFlash, ManagedCode.LlmTestServer.Decisions.LlmTestServerDecisionProvider.Cloudflare);
+        return AddDecisionModel(ManagedCode.LlmTestServer.Decisions.LlmTestServerDecisionModelIds.CloudflareClefFlash, ManagedCode.LlmTestServer.Decisions.LlmTestServerDecisionProvider.Cloudflare);
     }
 
     public LlmTestServerConfigurationBuilder AddOpenAiDecisionModel(string id)

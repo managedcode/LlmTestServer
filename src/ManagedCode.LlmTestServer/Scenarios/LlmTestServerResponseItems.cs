@@ -60,12 +60,21 @@ internal static partial class LlmTestServerResponseItems
                     result.Add(SnapshotCode(code));
                     id = code.Id;
                     break;
+                case LlmTestServerResponseServerToolUseItem serverCall:
+                    result.Add(SnapshotServerToolUse(serverCall));
+                    id = serverCall.Id;
+                    break;
+                case LlmTestServerResponseServerToolResultItem serverResult:
+                    result.Add(SnapshotServerToolResult(serverResult));
+                    id = string.Empty;
+                    break;
                 default:
                     throw new ArgumentException("Unknown response output item.", nameof(items));
             }
             var legacyFunctionId = item is LlmTestServerResponseFunctionCallItem { Id.Length: 0 };
             if (!legacyFunctionId && id.Length > 128 || id.Length > 0 && (string.IsNullOrWhiteSpace(id) || !ids.Add(id))) { throw new ArgumentException("Output item IDs must be distinct and bounded.", nameof(items)); }
         }
+        if (validateChunks) { ValidateCompletedServerTools(result); }
         return result;
     }
 
@@ -103,7 +112,12 @@ internal static partial class LlmTestServerResponseItems
 
     internal static string NativeTokenText(IEnumerable<LlmTestServerResponseItem> items)
     {
-        return string.Concat(items.Where(IsNative).Select(item => JsonSerializer.Serialize<LlmTestServerResponseItem>(item)));
+        return string.Concat(items.Where(IsNative).Select(item => item switch
+        {
+            LlmTestServerResponseServerToolUseItem call => ServerToolInputTokenText(call.Input),
+            LlmTestServerResponseServerToolResultItem => string.Empty,
+            _ => JsonSerializer.Serialize<LlmTestServerResponseItem>(item),
+        }));
     }
 
     internal static long Bytes(IEnumerable<LlmTestServerResponseItem> items)

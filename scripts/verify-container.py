@@ -61,8 +61,8 @@ def main():
         port = bindings[0]["HostPort"]
         base = "http://127.0.0.1:" + port
 
-        def request(path, *, body=None, authorized=True, method=None):
-            headers = {}
+        def request(path, *, body=None, authorized=True, method=None, extra_headers=None):
+            headers = dict(extra_headers or {})
             if authorized:
                 headers["Authorization"] = "Bearer " + token
             data = None if body is None else json.dumps(body).encode()
@@ -267,6 +267,53 @@ def main():
             assert trace["responseOutputItems"][0]["kind"] == native_kind
             assert trace["responseOutputItems"][1]["citations"][0]["kind"] == ("container_file" if code else "file")
             results.append(native_kind + " configuration, optional includes, typed citations, JSON/SSE and terminal evidence")
+        anthropic_model = "claude-sonnet-5-5"
+        anthropic_items = [
+            {"kind": "server_tool_use", "id": "srvtoolu_container", "input": {"kind": "web_search", "query": "container facts"}},
+            {"kind": "server_tool_result", "toolUseId": "srvtoolu_container", "result": {"kind": "web_search_results", "results": [
+                {"url": source_url, "title": "Container source", "encryptedContent": "opaque-container-result"}]}},
+            {"kind": "message", "content": "Verified source.", "streamChunks": ["Verified ", "source."], "citations": [
+                {"kind": "anthropic_web_search", "url": source_url, "title": "Container source",
+                 "encryptedIndex": "opaque-container-index", "citedText": "Verified source."}]},
+        ]
+        configuration = {
+            "requiredBearerToken": token,
+            "models": [{"id": anthropic_model, "kind": "chat"}],
+            "chatScenarios": [{"id": "container-anthropic-native", "modelId": anthropic_model,
+                               "responses": [{"outputItems": anthropic_items} for _ in range(2)]}],
+        }
+        assert request("/admin-api/configure", body=configuration)[0] == 200
+        anthropic_request = {"model": anthropic_model, "max_tokens": 256,
+            "messages": [{"role": "user", "content": "container native search"}],
+            "tools": [{"type": "web_search_20250305", "name": "web_search", "max_uses": 1,
+                       "allowed_domains": ["example.com"]}],
+            "tool_choice": {"type": "auto"}}
+        anthropic_headers = {"anthropic-version": "2023-06-01", "x-api-key": token}
+        status, response, _ = request("/anthropic/v1/messages", body=anthropic_request, authorized=False, extra_headers=anthropic_headers)
+        payload = json.loads(response)
+        assert status == 200, (status, payload)
+        assert [item["type"] for item in payload["content"]] == ["server_tool_use", "web_search_tool_result", "text"]
+        assert payload["content"][1]["content"][0]["encrypted_content"] == "opaque-container-result"
+        assert payload["content"][2]["citations"][0]["encrypted_index"] == "opaque-container-index"
+        assert payload["usage"]["server_tool_use"]["web_search_requests"] == 1
+        status, response, _ = request("/anthropic/v1/messages", body=anthropic_request | {"stream": True},
+                                      authorized=False, extra_headers=anthropic_headers)
+        assert status == 200, (status, response)
+        frames = [json.loads(line[6:]) for line in response.decode().splitlines() if line.startswith("data: ")]
+        starts = [frame for frame in frames if frame["type"] == "content_block_start"]
+        assert [frame["index"] for frame in starts] == [0, 1, 2]
+        assert [frame["content_block"]["type"] for frame in starts] == ["server_tool_use", "web_search_tool_result", "text"]
+        deltas = [frame["delta"] for frame in frames if frame["type"] == "content_block_delta"]
+        assert json.loads(next(delta["partial_json"] for delta in deltas if delta["type"] == "input_json_delta")) == {"query": "container facts"}
+        assert "".join(delta["text"] for delta in deltas if delta["type"] == "text_delta") == "Verified source."
+        assert next(delta["citation"] for delta in deltas if delta["type"] == "citations_delta")["encrypted_index"] == "opaque-container-index"
+        assert frames[-1]["type"] == "message_stop"
+        assert next(frame for frame in frames if frame["type"] == "message_delta")["usage"]["server_tool_use"]["web_search_requests"] == 1
+        trace = json.loads(request("/admin-api/requests?limit=1")[1])[0]
+        assert trace["terminalMarkerObserved"] is True and trace["responseToolCalls"] == []
+        assert trace["responseOutputItems"][0]["kind"] == "server_tool_use"
+        assert trace["responseOutputItems"][1]["kind"] == "server_tool_result"
+        results.append("Anthropic native search call/result, opaque citations, cumulative usage, JSON/SSE and terminal evidence")
         assert request("/admin-api/reset", method="POST")[0] == 200
         assert json.loads(request("/admin-api/assertions")[1])["totalEvents"] == 0
         results.append("management reset")

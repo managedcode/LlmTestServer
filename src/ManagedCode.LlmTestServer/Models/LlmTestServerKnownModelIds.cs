@@ -2,10 +2,7 @@ namespace ManagedCode.LlmTestServer.Models;
 
 public static class LlmTestServerKnownModelIds
 {
-    public const string JevLatest = "jev-latest";
-    public const string KevLatest = "kev-latest";
-    public const string Clef = "clef";
-    public const string ClefFlash = "clef-flash";
+    public const string ClaudeSonnet55 = "claude-sonnet-5-5";
     public const string Gpt55 = "gpt-5.5";
 
     public const string Gpt55Pro = "gpt-5.5-pro";

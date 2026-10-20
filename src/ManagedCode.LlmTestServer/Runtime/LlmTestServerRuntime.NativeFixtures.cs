@@ -13,16 +13,24 @@ public sealed partial class LlmTestServerRuntime
         foreach (var message in request.Messages)
         {
             ArgumentNullException.ThrowIfNull(message);
-            _ = LlmTestServerResponseItems.Snapshot(message.OutputItems);
+            var historyItems = LlmTestServerResponseItems.Snapshot(message.OutputItems);
+            LlmTestServerResponseItems.ValidateCompletedServerTools(historyItems);
         }
-        var calls = response.OutputItems.Where(LlmTestServerResponseItems.IsNative).ToList();
+        var calls = response.OutputItems.Where(LlmTestServerResponseItems.IsNativeCall).ToList();
         var citations = response.OutputItems.OfType<LlmTestServerResponseMessageItem>().SelectMany(message => message.Citations).ToList();
         var nativeHistory = request.Messages.Any(message => message.OutputItems.Any(LlmTestServerResponseItems.IsNative)
             || message.OutputItems.OfType<LlmTestServerResponseMessageItem>().Any(item => item.Citations.Count > 0));
         if (calls.Count == 0 && citations.Count == 0 && !nativeHistory && declarations.Count == 0 && request.RequiredNativeTool is null) { return null; }
+        if (request.NativeToolSurface == LlmTestServerNativeToolSurface.AnthropicMessages)
+        { return ValidateAnthropicNativeFixture(request, response, declarations, calls, citations); }
         if (request.NativeToolSurface != LlmTestServerNativeToolSurface.OpenAiResponses) { return "Native fixtures require the qualified OpenAI Responses surface."; }
         if (declarations.Select(tool => tool.Contract).Distinct().Count() != declarations.Count
             || request.NativeIncludes.Any(include => !Enum.IsDefined(include))) { return "Native declarations and includes must use supported contracts."; }
+        if (response.OutputItems.Concat(request.Messages.SelectMany(message => message.OutputItems)).Any(item =>
+            LlmTestServerResponseItems.Contract(item) == LlmTestServerNativeToolContract.AnthropicMessagesWebSearch20250305)
+            || request.Messages.SelectMany(message => message.OutputItems).OfType<LlmTestServerResponseMessageItem>()
+                .SelectMany(message => message.Citations).Any(citation => citation is LlmTestServerAnthropicWebSearchCitation))
+        { return "Anthropic native history and outputs require the Anthropic Messages surface."; }
         foreach (var declaration in declarations)
         {
             var model = declaration.Contract switch
@@ -86,6 +94,8 @@ public sealed partial class LlmTestServerRuntime
                             && (call.InputFileIds.Contains(container.FileId, StringComparer.Ordinal) || call.GeneratedFileIds.Contains(container.FileId, StringComparer.Ordinal))))
                     { return "Container citations must reference configured input or generated files in that container."; }
                     break;
+                default:
+                    return "The selected citation kind is unsupported on the OpenAI Responses surface.";
             }
         }
         return null;

@@ -30,6 +30,8 @@ public sealed record LlmTestServerChatRequest
     /// <summary>Whether a fixture may contain more than one tool call in a response.</summary>
     public bool AllowParallelToolCalls { get; init; } = true;
     public string? RequiredToolName { get; init; }
+    /// <summary>Whether the qualified provider requires continuation metadata on the first function call.</summary>
+    public bool RequireToolContinuationTokens { get; init; }
     public bool RequireJson { get; init; }
     public string? ResponseSchemaJson { get; init; }
 

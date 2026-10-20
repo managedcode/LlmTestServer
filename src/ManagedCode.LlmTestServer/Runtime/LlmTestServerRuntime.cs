@@ -292,6 +292,21 @@ public sealed partial class LlmTestServerRuntime
                 );
             }
 
+            if (request.PopulateCacheOnly)
+            {
+                var cacheUsage = CreateChatUsage(request, updatePromptCache: true);
+                var usage = cacheUsage with
+                {
+                    OutputTokens = 0,
+                    ReasoningTokens = 0,
+                    TotalTokens = cacheUsage.InputTokens,
+                };
+                AddEvent(LlmTestServerEventKind.Matched, scenario.Id, request.ModelId,
+                    "Prompt cache populated without generating a response.", FormatChatRequest(request),
+                    string.Empty, usage, chatRequest: request);
+                return LlmTestServerChatResult.Success(request.ModelId, scenario.Id, string.Empty, [], usage);
+            }
+
             if (scenario.Conversation is not null)
             {
                 var immediate = PrepareConversation(scenario, request, bearerToken, out conversationLease);
@@ -311,21 +326,6 @@ public sealed partial class LlmTestServerRuntime
                 {
                     responsePosition++;
                 }
-                if (request.PopulateCacheOnly)
-                {
-                    var cacheUsage = CreateChatUsage(request, updatePromptCache: true);
-                    var usage = cacheUsage with
-                    {
-                        OutputTokens = 0,
-                        ReasoningTokens = 0,
-                        TotalTokens = cacheUsage.InputTokens,
-                    };
-                    AddEvent(LlmTestServerEventKind.Matched, scenario.Id, request.ModelId,
-                        "Prompt cache populated without generating a response.", FormatChatRequest(request),
-                        string.Empty, usage, chatRequest: request);
-                    return LlmTestServerChatResult.Success(request.ModelId, scenario.Id, string.Empty, [], usage);
-                }
-
                 if (responsePosition >= scenario.Responses.Count)
                 {
                     var usage = CreateChatUsage(request);
@@ -458,6 +458,7 @@ public sealed partial class LlmTestServerRuntime
         string modelId,
         IReadOnlyList<string> inputs,
         string? bearerToken = null,
+        IReadOnlyList<int?>? outputDimensions = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -501,6 +502,9 @@ public sealed partial class LlmTestServerRuntime
                 return Task.FromResult(UnknownEmbeddingModel(modelId));
             }
 
+            var dimensionError = ValidateEmbeddingDimensions(modelId, inputs.Count, outputDimensions);
+            if (dimensionError is not null) { return Task.FromResult(dimensionError); }
+
             var fault = TryCreateFault(
                 modelId,
                 inputs,
@@ -532,7 +536,8 @@ public sealed partial class LlmTestServerRuntime
                 {
                     IsSuccess = true,
                     ModelId = modelId,
-                    Vectors = inputs.Select(_ => _configuration.DefaultEmbeddingVector.ToList()).ToList(),
+                    Vectors = inputs.Select((_, index) => _configuration.DefaultEmbeddingVector
+                        .Take(outputDimensions?[index] ?? _configuration.DefaultEmbeddingVector.Count).ToList()).ToList(),
                 }
             );
         }
@@ -1563,7 +1568,7 @@ public sealed partial class LlmTestServerRuntime
             {
                 if (remaining < _retainedMessageCost) { truncated = true; break; }
                 remaining -= _retainedMessageCost;
-                calls.Add(new() { Id = RetainRequiredText(call.Id, ref remaining, ref truncated), Name = RetainRequiredText(call.Name, ref remaining, ref truncated), ArgumentsJson = RetainRequiredText(call.ArgumentsJson, ref remaining, ref truncated) });
+                calls.Add(new() { Id = RetainRequiredText(call.Id, ref remaining, ref truncated), Name = RetainRequiredText(call.Name, ref remaining, ref truncated), ArgumentsJson = RetainRequiredText(call.ArgumentsJson, ref remaining, ref truncated), ContinuationToken = RetainText(call.ContinuationToken, ref remaining, ref truncated) });
             }
             var outputItems = RetainOutputItems(source.OutputItems, ref remaining, ref truncated);
             retained.Add(new LlmTestServerMessage { Role = role, Content = content, ToolCallId = callId, ToolCalls = calls, OutputItems = outputItems });
@@ -1615,7 +1620,7 @@ public sealed partial class LlmTestServerRuntime
         {
             if (remaining < _retainedMessageCost) { truncated = true; break; }
             remaining -= _retainedMessageCost;
-            retained.Add(new() { Id = RetainRequiredText(call.Id, ref remaining, ref truncated), Name = RetainRequiredText(call.Name, ref remaining, ref truncated), ArgumentsJson = RetainRequiredText(call.ArgumentsJson, ref remaining, ref truncated) });
+            retained.Add(new() { Id = RetainRequiredText(call.Id, ref remaining, ref truncated), Name = RetainRequiredText(call.Name, ref remaining, ref truncated), ArgumentsJson = RetainRequiredText(call.ArgumentsJson, ref remaining, ref truncated), ContinuationToken = RetainText(call.ContinuationToken, ref remaining, ref truncated) });
         }
         return retained.ToArray();
     }
@@ -1726,13 +1731,13 @@ public sealed partial class LlmTestServerRuntime
         foreach (var item in runtimeEvent.Messages)
         {
             total += _retainedMessageCost + item.Role.Length + item.Content.Length + CountCharacters(item.ToolCallId)
-                + item.ToolCalls.Sum(call => _retainedMessageCost + call.Id.Length + call.Name.Length + call.ArgumentsJson.Length)
+                + item.ToolCalls.Sum(call => _retainedMessageCost + call.Id.Length + call.Name.Length + call.ArgumentsJson.Length + (call.ContinuationToken?.Length ?? 0))
                 + item.OutputItems.Sum(OutputItemCharacters);
         }
 
         total += runtimeEvent.ResponseOutputItems.Sum(OutputItemCharacters) + runtimeEvent.NativeTools.Sum(NativeToolCharacters);
         foreach (var call in runtimeEvent.ResponseToolCalls)
-        { total += _retainedMessageCost + call.Id.Length + call.Name.Length + call.ArgumentsJson.Length; }
+        { total += _retainedMessageCost + call.Id.Length + call.Name.Length + call.ArgumentsJson.Length + (call.ContinuationToken?.Length ?? 0); }
         foreach (var item in runtimeEvent.Tools)
         {
             total += _retainedToolCost + item.Name.Length + CountCharacters(item.Description) + item.ParametersJson.Length;
@@ -1874,6 +1879,14 @@ public sealed partial class LlmTestServerRuntime
                 .Append("content:")
                 .Append(MessageTokenText(message))
                 .Append('\u001e');
+
+            if (message.ToolCalls.Any(call => call.ContinuationToken is not null))
+            {
+                cachePrefix.Append("continuations:")
+                    .Append(System.Text.Json.JsonSerializer.Serialize(message.ToolCalls
+                        .Where(call => call.ContinuationToken is not null).Select(call => new { call.Id, call.ContinuationToken })))
+                    .Append('\u001e');
+            }
 
             var cacheableTokens = RoundPromptCacheTokens(
                 request.PromptCachePolicy,

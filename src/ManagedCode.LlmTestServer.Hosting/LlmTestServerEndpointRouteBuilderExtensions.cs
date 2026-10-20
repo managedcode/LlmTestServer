@@ -557,6 +557,12 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
             .WithLlmTestServerProviderOperation(LlmTestServerProviderOperationIds.Gemini.ModelsEmbedContent);
         providerEndpoints
             .MapPost(
+                ProviderRoutes.ForProvider(ProviderRoutes.Gemini, "/v1beta/models/{model}:batchEmbedContents"),
+                CreateGeminiBatchEmbeddingsAsync
+            )
+            .WithLlmTestServerProviderOperation(LlmTestServerProviderOperationIds.Gemini.ModelsBatchEmbedContents);
+        providerEndpoints
+            .MapPost(
                 ProviderRoutes.ForProvider(
                     ProviderRoutes.Gemini,
                     "/v1beta/models/{model}:predictLongRunning"
@@ -1633,7 +1639,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         if (modelKind == LlmTestServerModelKind.Embedding)
         {
             var embedding = await runtime
-                .CreateEmbeddingAsync(modelId, [input], ReadAccessToken(context), cancellationToken)
+                .CreateEmbeddingAsync(modelId, [input], ReadAccessToken(context), cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
 
             return embedding.IsSuccess
@@ -1849,7 +1855,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
 
         var inputs = ReadEmbeddingInputs(request.Input);
         var result = await runtime
-            .CreateEmbeddingAsync(request.Model, inputs, ReadAccessToken(context), cancellationToken)
+            .CreateEmbeddingAsync(request.Model, inputs, ReadAccessToken(context), cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 
         return result.IsSuccess
@@ -1901,7 +1907,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
                 read.Value.Model,
                 inputs,
                 ReadAccessToken(context),
-                cancellationToken
+                cancellationToken: cancellationToken
             )
             .ConfigureAwait(false);
 
@@ -1947,7 +1953,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
                 read.Value.Model,
                 inputs,
                 ReadAccessToken(context),
-                cancellationToken
+                cancellationToken: cancellationToken
             )
             .ConfigureAwait(false);
 
@@ -1993,7 +1999,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
                 model,
                 [GeminiWireMapper.ReadText(read.Value.Content)],
                 ReadAccessToken(context),
-                cancellationToken
+                cancellationToken: cancellationToken
             )
             .ConfigureAwait(false);
 

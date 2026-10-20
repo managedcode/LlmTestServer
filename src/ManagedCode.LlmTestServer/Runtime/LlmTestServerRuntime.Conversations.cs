@@ -46,6 +46,8 @@ public sealed partial class LlmTestServerRuntime : ILlmTestServerConversationDia
                 usage, chatRequest: request, stepId: stepId, logicalTurnIndex: turn);
             return LlmTestServerChatResult.Failure(request.ModelId, 409, code, message, scenario.Id, usage);
         }
+        if (state?.LastResult is { } priorResult && ValidateToolContinuationHistory(request, priorResult) is { } continuationError)
+        { return Failure("llm_test_server_fixture_mismatch", continuationError); }
         LlmTestServerChatResult Replay()
         {
             var error = ValidateFixture(request, state!.LastStep!.Response);
@@ -148,7 +150,7 @@ public sealed partial class LlmTestServerRuntime : ILlmTestServerConversationDia
         response = LlmTestServerResponseItems.Project(response);
         return 1024L
             + Bytes(scenario.Id) + Bytes(scenario.ModelId) + Bytes(response.Content) + response.StreamChunks.Sum(chunk => Bytes(chunk))
-            + response.ToolCalls.Sum(call => Bytes(call.Id) + Bytes(call.Name) + Bytes(call.ArgumentsJson) + 128)
+            + response.ToolCalls.Sum(call => Bytes(call.Id) + Bytes(call.Name) + Bytes(call.ArgumentsJson) + Bytes(call.ContinuationToken ?? string.Empty) + 128)
             + LlmTestServerResponseItems.Bytes(response.OutputItems)
             + (response.Error is { } error ? Bytes(error.Code) + Bytes(error.Message) : 0);
     }

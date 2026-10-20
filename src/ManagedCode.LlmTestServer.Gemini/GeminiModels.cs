@@ -46,6 +46,8 @@ public sealed record GeminiContent
 
 public sealed record GeminiPart
 {
+    [JsonPropertyName("thoughtSignature")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ThoughtSignature { get; init; }
+
     [JsonPropertyName("functionCall")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public GeminiFunctionCall? FunctionCall { get; init; }
     [JsonPropertyName("functionResponse")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public GeminiFunctionResponse? FunctionResponse { get; init; }
 

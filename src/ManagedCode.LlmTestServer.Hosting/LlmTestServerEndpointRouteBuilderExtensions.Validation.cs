@@ -145,9 +145,26 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
             return GeminiInvalidRequest("System instruction requires valid parts.");
         }
 
-        return request.Contents.Any(content => content is null || content.Parts is null || content.Parts.Count == 0 || content.Parts.Any(part => part is null))
-            ? GeminiInvalidRequest("Every content item requires at least one part.")
-            : null;
+        if (request.Contents.Any(content => content is null || content.Parts is null || content.Parts.Count == 0 || content.Parts.Any(part => part is null)))
+        { return GeminiInvalidRequest("Every content item requires at least one part."); }
+        foreach (var part in request.Contents.SelectMany(content => content.Parts))
+        {
+            if (part.ThoughtSignature is { } signature && (signature.Length == 0 || signature.Length > 16384
+                || signature.Any(char.IsWhiteSpace) || !Convert.TryFromBase64String(signature, new byte[signature.Length], out var written) || written == 0))
+            { return GeminiInvalidRequest("Thought signatures require bounded, nonempty base64."); }
+        }
+        if (GeminiWireMapper.RequiresToolContinuationTokens(model))
+        {
+            var start = request.Contents.FindLastIndex(content => content.Role == "user" && content.Parts.Any(part =>
+                part.Text is not null || part.InlineData is not null || part.InlineDataSnakeCase is not null || part.FileData is not null || part.FileDataSnakeCase is not null));
+            foreach (var content in request.Contents.Skip(Math.Max(0, start + 1)).Where(content => content.Role == "model"))
+            {
+                var firstCall = content.Parts.FirstOrDefault(part => part.FunctionCall is not null);
+                if (firstCall is not null && firstCall.ThoughtSignature is null)
+                { return GeminiInvalidRequest("The first function call in each current-turn step requires its original thought signature."); }
+            }
+        }
+        return null;
     }
 
     private static IResult? ValidateGeminiEmbeddingRequest(

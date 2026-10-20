@@ -32,11 +32,11 @@ public sealed partial class LlmTestServerRuntime : ILlmTestServerWireMetadataSou
         return result with { WireMetadata = result.WireMetadata ?? metadata };
     }
 
-    public async Task<LlmTestServerEmbeddingResult> CreateEmbeddingAsync(string modelId, IReadOnlyList<string> inputs, string? bearerToken = null, CancellationToken cancellationToken = default)
+    public async Task<LlmTestServerEmbeddingResult> CreateEmbeddingAsync(string modelId, IReadOnlyList<string> inputs, string? bearerToken = null, IReadOnlyList<int?>? outputDimensions = null, CancellationToken cancellationToken = default)
     {
         using var operation = _activeRequest.Value is null ? BeginRequest("runtime-" + Guid.NewGuid().ToString("N")) : null;
         var metadata = GetResponseMetadata();
-        var result = await CreateEmbeddingCoreAsync(modelId, inputs, bearerToken, cancellationToken).ConfigureAwait(false);
+        var result = await CreateEmbeddingCoreAsync(modelId, inputs, bearerToken, outputDimensions, cancellationToken).ConfigureAwait(false);
         return result with { WireMetadata = result.WireMetadata ?? metadata };
     }
 

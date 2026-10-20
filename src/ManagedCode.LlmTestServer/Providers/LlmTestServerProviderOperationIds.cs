@@ -83,6 +83,7 @@ public static class LlmTestServerProviderOperationIds
         public const string ModelsGenerateContent = "models.generateContent";
         public const string ModelsStreamGenerateContent = "models.streamGenerateContent";
         public const string ModelsEmbedContent = "models.embedContent";
+        public const string ModelsBatchEmbedContents = "models.batchEmbedContents";
         public const string ModelsPredictLongRunningVideo = "models.predictLongRunning.video";
         public const string ModelsOperationsGetVideo = "models.operations.get.video";
         public const string FilesGetGeneratedVideo = "files.get.generatedVideo";

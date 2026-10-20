@@ -4,6 +4,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageVersion Include="Anthropic" Version="12.58.0" />
+    <PackageVersion Include="Google.GenAI" Version="1.26.1" />
     <PackageVersion Include="AWSSDK.BedrockRuntime" Version="4.0.101.11" />
     <PackageVersion Include="AWSSDK.Core" Version="4.0.102.11" />
     <PackageVersion Include="Azure.AI.Inference" Version="1.0.0-beta.5" />

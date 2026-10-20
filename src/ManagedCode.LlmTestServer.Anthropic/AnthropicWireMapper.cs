@@ -5,7 +5,7 @@ using ManagedCode.LlmTestServer.Scenarios;
 
 namespace ManagedCode.LlmTestServer.Anthropic;
 
-public static class AnthropicWireMapper
+public static partial class AnthropicWireMapper
 {
     public const string VersionHeaderName = "anthropic-version";
     public const string SupportedVersion = "2023-06-01";
@@ -23,9 +23,13 @@ public static class AnthropicWireMapper
 
         return new()
         {
-            Tools = request.Tools.Select(tool => new LlmTestServerToolDefinition { Name = tool.Name, Description = tool.Description, ParametersJson = tool.InputSchema.GetRawText() }).ToList(),
+            Tools = request.Tools.Where(tool => !IsNativeWebTool(tool)).Select(tool => new LlmTestServerToolDefinition
+            { Name = tool.Name, Description = tool.Description, ParametersJson = tool.InputSchema.ValueKind == JsonValueKind.Undefined ? "{}" : tool.InputSchema.GetRawText() }).ToList(),
+            NativeToolSurface = LlmTestServerNativeToolSurface.AnthropicMessages,
+            NativeTools = request.Tools.Where(IsNativeWebTool).Select(ToNativeDeclaration).ToList(),
+            RequiredNativeTool = IsNamedNativeChoice(request) ? LlmTestServerNativeToolContract.AnthropicMessagesWebSearch20250305 : null,
             ToolChoice = request.ToolChoice?.Type switch { "any" or "tool" => LlmTestServerToolChoice.Required, "none" => LlmTestServerToolChoice.None, _ => LlmTestServerToolChoice.Auto },
-            RequiredToolName = request.ToolChoice?.Name,
+            RequiredToolName = IsNamedNativeChoice(request) ? null : request.ToolChoice?.Name,
             AllowParallelToolCalls = request.ToolChoice?.DisableParallelToolUse != true,
             RequireJson = request.OutputConfig?.Format is not null,
             ResponseSchemaJson = request.OutputConfig?.Format?.Schema.GetRawText(),
@@ -45,9 +49,9 @@ public static class AnthropicWireMapper
         {
             Id = CreateMessageId(result.WireMetadata),
             Model = result.ModelId,
-            Content = cacheOnly ? [] : result.ToolCalls.Count > 0 ? (result.Content.Length > 0 ? new[] { new AnthropicContentBlock { Text = result.Content } } : []).Concat(result.ToolCalls.Select(ToToolBlock)).ToList() : [new AnthropicContentBlock { Text = result.Content }],
+            Content = cacheOnly ? [] : result.OutputItems.Count > 0 ? ToOrderedContent(result) : result.ToolCalls.Count > 0 ? (result.Content.Length > 0 ? new[] { new AnthropicContentBlock { Text = result.Content } } : []).Concat(result.ToolCalls.Select(ToToolBlock)).ToList() : [new AnthropicContentBlock { Text = result.Content }],
             StopReason = cacheOnly ? "max_tokens" : result.ToolCalls.Count > 0 ? "tool_use" : "end_turn",
-            Usage = CreateUsage(result.Usage),
+            Usage = CreateUsage(result.Usage) with { ServerToolUse = NativeServerToolUsage(result) },
         };
     }
 
@@ -78,7 +82,8 @@ public static class AnthropicWireMapper
                 Usage = CreateUsage(
                     result.Usage,
                     result.Usage.OutputTokens > 0 ? 1 : 0
-                ),
+                ) with
+                { ServerToolUse = NativeServerToolUsage(result) is null ? null : new AnthropicServerToolUsage() },
             },
         };
     }
@@ -118,6 +123,15 @@ public static class AnthropicWireMapper
 
     public static object ToMessageDeltaEvent(LlmTestServerChatResult result, bool cacheOnly = false)
     {
+        if (!cacheOnly && NativeServerToolUsage(result) is { } nativeUsage)
+        {
+            return new
+            {
+                type = "message_delta",
+                delta = new { stop_reason = result.ToolCalls.Count > 0 ? "tool_use" : "end_turn", stop_sequence = (string?)null },
+                usage = new { output_tokens = result.Usage.OutputTokens, server_tool_use = nativeUsage },
+            };
+        }
         return new
         {
             type = "message_delta",
@@ -141,7 +155,7 @@ public static class AnthropicWireMapper
     public static AnthropicContentBlock ToToolBlock(LlmTestServerToolCall call)
     {
         return new()
-        { Type = "tool_use", Id = call.Id, Name = call.Name, Input = JsonSerializer.Deserialize<JsonElement>(call.ArgumentsJson), Text = null };
+        { Type = "tool_use", Caller = new(), Id = call.Id, Name = call.Name, Input = JsonSerializer.Deserialize<JsonElement>(call.ArgumentsJson), Text = null };
     }
 
     public static IEnumerable<object> ToToolStreamEvents(LlmTestServerChatResult result, int offset = 0)
@@ -161,6 +175,11 @@ public static class AnthropicWireMapper
         if (message.Content.ValueKind != JsonValueKind.Array)
         { yield return new() { Role = message.Role, Content = message.TextContent }; yield break; }
         var blocks = message.Content.EnumerateArray().ToArray();
+        if (message.Role == "assistant" && HasNativeHistory(blocks))
+        {
+            yield return ReadNativeAssistant(blocks);
+            yield break;
+        }
         var calls = blocks.Where(block => block.TryGetProperty("type", out var type) && type.GetString() == "tool_use")
             .Select(block => new LlmTestServerToolCall { Id = block.GetProperty("id").GetString()!, Name = block.GetProperty("name").GetString()!, ArgumentsJson = block.GetProperty("input").GetRawText() }).ToList();
         var text = string.Concat(blocks.Where(block => block.TryGetProperty("type", out var type) && type.GetString() == "text").Select(block => block.GetProperty("text").GetString()));

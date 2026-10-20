@@ -24,6 +24,7 @@ public interface ILlmTestServerRuntime
         string modelId,
         IReadOnlyList<string> inputs,
         string? bearerToken = null,
+        IReadOnlyList<int?>? outputDimensions = null,
         CancellationToken cancellationToken = default
     );
 
