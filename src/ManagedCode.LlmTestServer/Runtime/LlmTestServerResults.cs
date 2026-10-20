@@ -6,6 +6,8 @@ namespace ManagedCode.LlmTestServer.Runtime;
 
 public sealed record LlmTestServerChatResult
 {
+    public LlmTestServerOutputDisposition? OutputDisposition { get; init; }
+
     public LlmTestServerStreamDelivery? StreamDelivery { get; init; }
 
     public List<LlmTestServerResponseItem> OutputItems { get; init; } = [];

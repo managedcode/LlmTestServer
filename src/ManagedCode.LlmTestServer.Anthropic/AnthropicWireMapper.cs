@@ -50,7 +50,9 @@ public static partial class AnthropicWireMapper
             Id = CreateMessageId(result.WireMetadata),
             Model = result.ModelId,
             Content = cacheOnly ? [] : result.OutputItems.Count > 0 ? ToOrderedContent(result) : result.ToolCalls.Count > 0 ? (result.Content.Length > 0 ? new[] { new AnthropicContentBlock { Text = result.Content } } : []).Concat(result.ToolCalls.Select(ToToolBlock)).ToList() : [new AnthropicContentBlock { Text = result.Content }],
-            StopReason = cacheOnly ? "max_tokens" : result.ToolCalls.Count > 0 ? "tool_use" : "end_turn",
+            StopReason = cacheOnly ? "max_tokens" : result.OutputDisposition?.Kind == LlmTestServerOutputDispositionKind.Refused ? "refusal" : result.ToolCalls.Count > 0 ? "tool_use" : "end_turn",
+            StopDetails = !cacheOnly && result.OutputDisposition?.Kind == LlmTestServerOutputDispositionKind.Refused
+                ? new() { Category = result.OutputDisposition.Category, Explanation = result.OutputDisposition.Explanation } : null,
             Usage = CreateUsage(result.Usage) with { ServerToolUse = NativeServerToolUsage(result) },
         };
     }
@@ -137,8 +139,10 @@ public static partial class AnthropicWireMapper
             type = "message_delta",
             delta = new
             {
-                stop_reason = cacheOnly ? "max_tokens" : result.ToolCalls.Count > 0 ? "tool_use" : "end_turn",
+                stop_reason = cacheOnly ? "max_tokens" : result.OutputDisposition?.Kind == LlmTestServerOutputDispositionKind.Refused ? "refusal" : result.ToolCalls.Count > 0 ? "tool_use" : "end_turn",
                 stop_sequence = (string?)null,
+                stop_details = !cacheOnly && result.OutputDisposition?.Kind == LlmTestServerOutputDispositionKind.Refused
+                    ? new AnthropicRefusalStopDetails { Category = result.OutputDisposition.Category, Explanation = result.OutputDisposition.Explanation } : null,
             },
             usage = new { output_tokens = result.Usage.OutputTokens },
         };

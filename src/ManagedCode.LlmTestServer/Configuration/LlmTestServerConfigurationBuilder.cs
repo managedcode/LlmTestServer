@@ -611,6 +611,7 @@ public sealed partial class LlmTestServerConfigurationBuilder
     {
         ArgumentNullException.ThrowIfNull(message);
         ArgumentNullException.ThrowIfNull(message.ToolCalls);
+        if (message.OutputDisposition is { } disposition) { LlmTestServerOutputDisposition.Validate(disposition); }
         foreach (var call in message.ToolCalls)
         {
             ArgumentNullException.ThrowIfNull(call);
@@ -618,7 +619,7 @@ public sealed partial class LlmTestServerConfigurationBuilder
             ArgumentException.ThrowIfNullOrWhiteSpace(call.Name);
             LlmTestServerJsonSchema.ValidateJson(call.ArgumentsJson);
         }
-        return message with { ToolCalls = [.. message.ToolCalls], OutputItems = LlmTestServerResponseItems.Snapshot(message.OutputItems) };
+        return message with { OutputDisposition = LlmTestServerOutputDisposition.ForHistory(message.OutputDisposition), ToolCalls = [.. message.ToolCalls], OutputItems = LlmTestServerResponseItems.Snapshot(message.OutputItems) };
     }
 
     private static LlmTestServerScenarioResponse SnapshotResponse(LlmTestServerScenarioResponse response)
@@ -649,7 +650,7 @@ public sealed partial class LlmTestServerConfigurationBuilder
         ArgumentNullException.ThrowIfNull(response.OutputItems);
         if (response.OutputItems.Count > 0 && (response.Content.Length > 0 || response.ToolCalls.Count > 0 || response.StreamChunks.Count > 0 || response.Error is not null))
         { throw new ArgumentException("An ordered output plan cannot also specify legacy output fields or an error.", nameof(response)); }
-        return response with { StreamDelivery = LlmTestServerStreamDelivery.Snapshot(response), StreamChunks = [.. response.StreamChunks], ToolCalls = [.. response.ToolCalls], OutputItems = LlmTestServerResponseItems.Snapshot(response.OutputItems, validateChunks: true) };
+        return response with { OutputDisposition = LlmTestServerOutputDisposition.Snapshot(response), StreamDelivery = LlmTestServerStreamDelivery.Snapshot(response), StreamChunks = [.. response.StreamChunks], ToolCalls = [.. response.ToolCalls], OutputItems = LlmTestServerResponseItems.Snapshot(response.OutputItems, validateChunks: true) };
     }
 
     private static LlmTestServerScenarioDataset SnapshotDataset(LlmTestServerScenarioDataset dataset)

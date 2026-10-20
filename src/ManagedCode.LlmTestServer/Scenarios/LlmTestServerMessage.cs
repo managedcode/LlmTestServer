@@ -4,6 +4,8 @@ public sealed record LlmTestServerMessage
 {
     public List<LlmTestServerResponseItem> OutputItems { get; init; } = [];
 
+    public LlmTestServerOutputDisposition? OutputDisposition { get; init; }
+
     public string? ToolCallId { get; init; }
 
     public string Role { get; init; } = "user";

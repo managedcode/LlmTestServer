@@ -54,6 +54,7 @@ public sealed record LlmTestServerProviderHttpTraceRequestCapture
 
 public sealed record LlmTestServerProviderHttpTraceEnrichment
 {
+    public LlmTestServerOutputDisposition? OutputDisposition { get; init; }
     public string? WireClockMode { get; init; }
     public DateTimeOffset? WireCreatedAt { get; init; }
     public long? WireSequence { get; init; }

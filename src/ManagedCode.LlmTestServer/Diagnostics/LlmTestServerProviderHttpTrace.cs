@@ -11,6 +11,7 @@ public sealed record LlmTestServerProviderHttpTrace
     public long Sequence { get; init; }
     public string? RetryGroupId { get; init; }
     public string? RetryAfter { get; init; }
+    public LlmTestServerOutputDisposition? OutputDisposition { get; init; }
     public LlmTestServerStreamDelivery? StreamDelivery { get; init; }
     public bool StreamDeliveryApplied { get; init; }
     public int EmittedContentFrames { get; init; }

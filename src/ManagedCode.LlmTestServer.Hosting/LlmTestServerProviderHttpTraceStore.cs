@@ -207,6 +207,7 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
                     StepId = enrichment.StepId ?? trace.StepId,
                     TurnIndex = enrichment.TurnIndex ?? trace.TurnIndex,
                     IsReplay = enrichment.IsReplay ?? trace.IsReplay,
+                    OutputDisposition = enrichment.OutputDisposition ?? trace.OutputDisposition,
                     RuntimeEventKind = enrichment.RuntimeEventKind ?? trace.RuntimeEventKind,
                     RuntimeMessage = enrichment.RuntimeMessage ?? trace.RuntimeMessage,
                     RuntimeResponse = enrichment.RuntimeResponse ?? trace.RuntimeResponse,
@@ -367,6 +368,7 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
             ref remaining,
             ref retentionTruncated
         );
+        var outputDisposition = RetainOutputDisposition(trace.OutputDisposition, ref remaining, ref retentionTruncated);
         var streamChunks = RetainChunks(
             trace.StreamChunks,
             ref remaining,
@@ -422,6 +424,7 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
             ResponseToolCalls = responseToolCalls,
             NativeTools = nativeTools,
             ResponseOutputItems = responseOutputItems,
+            OutputDisposition = outputDisposition,
             StreamDelivery = streamDelivery,
             RetryGroupId = retryGroupId,
             WireClockMode = wireClockMode,
@@ -470,7 +473,8 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
             var callId = RetainText(message.ToolCallId, _maxMetadataBytes, ref remaining, ref truncated);
             var calls = RetainToolCalls(message.ToolCalls, ref remaining, ref truncated);
             var outputItems = RetainOutputItems(message.OutputItems, ref remaining, ref truncated);
-            retained.Add(new LlmTestServerMessage { Role = role, Content = content, ToolCallId = callId, ToolCalls = [.. calls], OutputItems = [.. outputItems] });
+            var outputDisposition = RetainOutputDisposition(message.OutputDisposition, ref remaining, ref truncated);
+            retained.Add(new LlmTestServerMessage { Role = role, Content = content, OutputDisposition = outputDisposition, ToolCallId = callId, ToolCalls = [.. calls], OutputItems = [.. outputItems] });
         }
 
         if (retained.Count < source.Count)
@@ -479,6 +483,18 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
         }
 
         return retained.Count == 0 ? [] : Array.AsReadOnly(retained.ToArray());
+    }
+
+    private LlmTestServerOutputDisposition? RetainOutputDisposition(LlmTestServerOutputDisposition? disposition, ref int remaining, ref bool truncated)
+    {
+        if (disposition is null) { return null; }
+        if (remaining < _chunkOverheadBytes) { truncated = true; return null; }
+        remaining -= _chunkOverheadBytes;
+        return disposition with
+        {
+            Category = RetainText(disposition.Category, _maxMetadataBytes, ref remaining, ref truncated),
+            Explanation = RetainText(disposition.Explanation, _maxPreviewBytes, ref remaining, ref truncated),
+        };
     }
 
     private IReadOnlyList<LlmTestServerToolCall> RetainToolCalls(IReadOnlyList<LlmTestServerToolCall> source, ref int remaining, ref bool truncated)

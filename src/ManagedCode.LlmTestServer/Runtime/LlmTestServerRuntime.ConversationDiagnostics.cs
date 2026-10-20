@@ -135,6 +135,14 @@ public sealed partial class LlmTestServerRuntime
     private static string ConversationFingerprint(LlmTestServerChatRequest request)
     {
         return Convert.ToHexString(
-        SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(request with { RequestId = null, Stream = false, StreamDeliverySurface = null, PreviousResponseId = null })));
+        SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(request with
+        {
+            RequestId = null,
+            Stream = false,
+            StreamDeliverySurface = null,
+            OutputDispositionSurface = null,
+            PreviousResponseId = null,
+            Messages = request.Messages.Select(message => message with { OutputDisposition = LlmTestServerOutputDisposition.ForHistory(message.OutputDisposition) }).ToList(),
+        })));
     }
 }

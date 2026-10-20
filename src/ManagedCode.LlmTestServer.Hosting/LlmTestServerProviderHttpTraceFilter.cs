@@ -581,6 +581,7 @@ public sealed class LlmTestServerProviderHttpTraceFilter(
                         StepId = runtimeEvent.StepId,
                         TurnIndex = runtimeEvent.TurnIndex,
                         IsReplay = runtimeEvent.IsReplay,
+                        OutputDisposition = runtimeEvent.OutputDisposition,
                         RuntimeEventKind = runtimeEvent.Kind,
                         RuntimeMessage = runtimeEvent.Message,
                         RuntimeResponse = runtimeEvent.Response,

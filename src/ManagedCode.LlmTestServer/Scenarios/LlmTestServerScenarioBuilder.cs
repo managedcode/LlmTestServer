@@ -143,6 +143,14 @@ public sealed class LlmTestServerScenarioBuilder(string id)
         return this;
     }
 
+    public LlmTestServerScenarioBuilder WithOutputDisposition(LlmTestServerOutputDisposition disposition)
+    {
+        ArgumentNullException.ThrowIfNull(disposition);
+        if (_scenario.Responses.Count == 0) { throw new InvalidOperationException("Output disposition requires a preceding response."); }
+        _scenario.Responses[^1] = _scenario.Responses[^1] with { OutputDisposition = disposition with { } };
+        return this;
+    }
+
     public LlmTestServerScenario Build()
     {
         if (_scenario.Responses.Count == 0)

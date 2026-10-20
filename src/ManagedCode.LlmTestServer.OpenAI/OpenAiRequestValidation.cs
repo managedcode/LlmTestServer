@@ -67,10 +67,13 @@ public static class OpenAiRequestValidation
         }
         if (responses) { OpenAiNativeWebSearchValidation.ValidateResponseOptions(body, nativeTools); }
         var field = responses ? "input" : "messages";
-        if (!body.TryGetProperty(field, out var messages) || messages.ValueKind != JsonValueKind.Array) { return; }
+        if (!body.TryGetProperty(field, out var messages)) { return; }
+        if (messages.ValueKind == JsonValueKind.Object) { ValidateRefusalHistory(messages, responses); return; }
+        if (messages.ValueKind != JsonValueKind.Array) { return; }
         foreach (var message in messages.EnumerateArray())
         {
             if (message.ValueKind != JsonValueKind.Object) { continue; }
+            ValidateRefusalHistory(message, responses);
             if (!responses)
             {
                 if (message.TryGetProperty("type", out var nativeType)
@@ -94,6 +97,49 @@ public static class OpenAiRequestValidation
                 if (type.GetString() == "function_call_output") { NonEmpty(message.GetProperty("call_id")); _ = message.GetProperty("output"); }
             }
         }
+    }
+
+    private static void ValidateRefusalHistory(JsonElement message, bool responses)
+    {
+        var hasField = message.TryGetProperty("refusal", out var refusal) && refusal.ValueKind != JsonValueKind.Null;
+        var hasContent = message.TryGetProperty("content", out var content);
+        if (hasContent && content.ValueKind == JsonValueKind.Object
+            && content.TryGetProperty("type", out var objectType) && objectType.ValueKind == JsonValueKind.String
+            && objectType.GetString() == "refusal")
+        { throw new JsonException("Refusal content requires an array of typed refusal parts."); }
+        var hasParts = hasContent && content.ValueKind == JsonValueKind.Array
+            && content.EnumerateArray().Any(part => part.ValueKind == JsonValueKind.Object
+                && part.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String && type.GetString() == "refusal");
+        if (!hasField && !hasParts) { return; }
+        if (!message.TryGetProperty("role", out var role) || role.ValueKind != JsonValueKind.String || role.GetString() != "assistant")
+        { throw new JsonException("Refusal history requires an assistant message."); }
+        if (!responses)
+        {
+            if (hasParts)
+            {
+                if (hasField) { throw new JsonException("Refusal history cannot mix the refusal field and refusal content parts."); }
+                foreach (var part in content.EnumerateArray())
+                {
+                    if (part.ValueKind != JsonValueKind.Object
+                        || part.EnumerateObject().Any(property => property.Name is not ("type" or "refusal")))
+                    { throw new JsonException("This Chat history fixture requires pure refusal content parts."); }
+                    Choice(part.GetProperty("type"), "refusal");
+                    String(part.GetProperty("refusal"));
+                }
+                return;
+            }
+            String(refusal);
+            if (message.TryGetProperty("content", out content) && content.ValueKind != JsonValueKind.Null
+                && !string.IsNullOrEmpty(OpenAiWireMapper.ReadResponseInputContent(content)))
+            { throw new JsonException("This refusal history fixture cannot mix refusal with ordinary content."); }
+            return;
+        }
+        if (hasField || content.GetArrayLength() != 1)
+        { throw new JsonException("Responses refusal history requires one typed refusal content part."); }
+        var responsePart = content[0];
+        if (responsePart.EnumerateObject().Any(property => property.Name is not ("type" or "refusal")))
+        { throw new JsonException("Unsupported refusal history content fields."); }
+        String(responsePart.GetProperty("refusal"));
     }
 
     private static void ValidateFormat(JsonElement format, bool responses)

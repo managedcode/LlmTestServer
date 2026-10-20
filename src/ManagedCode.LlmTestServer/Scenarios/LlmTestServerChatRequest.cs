@@ -26,6 +26,8 @@ public sealed record LlmTestServerChatRequest
 
     public LlmTestServerStreamDeliverySurface? StreamDeliverySurface { get; init; }
 
+    public LlmTestServerOutputDispositionSurface? OutputDispositionSurface { get; init; }
+
     public bool Stream { get; init; }
     public List<LlmTestServerToolDefinition> Tools { get; init; } = [];
     public LlmTestServerToolChoice ToolChoice { get; init; }

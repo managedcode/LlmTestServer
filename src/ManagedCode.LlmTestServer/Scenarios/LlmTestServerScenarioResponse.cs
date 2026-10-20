@@ -14,5 +14,7 @@ public sealed record LlmTestServerScenarioResponse
 
     public LlmTestServerStreamDelivery? StreamDelivery { get; init; }
 
+    public LlmTestServerOutputDisposition? OutputDisposition { get; init; }
+
     public int DelayMilliseconds { get; init; }
 }

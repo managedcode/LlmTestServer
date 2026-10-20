@@ -263,7 +263,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         return request.Messages.Any(message =>
                 message is null
                 || string.IsNullOrWhiteSpace(message.Role)
-                || (message.Content.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null && message.ToolCalls is not { Count: > 0 })
+                || (message.Content.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null && message.ToolCalls is not { Count: > 0 } && message.RefusalTextContent is null)
             )
             ? InvalidRequest("Every chat message requires a role and content.")
             : null;

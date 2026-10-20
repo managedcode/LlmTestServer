@@ -55,7 +55,7 @@ public sealed partial class LlmTestServerRuntime : ILlmTestServerConversationDia
             var result = CopyConversationResult(state.LastResult!);
             AddEvent(LlmTestServerEventKind.Matched, scenario.Id, request.ModelId, "Conversation response replayed.",
                 FormatChatRequest(request), result.Content, result.Usage, request, request.Stream ? result.StreamChunks : null,
-                state.LastStep.Id, turn, true, result.ToolCalls, wireMetadata: result.WireMetadata, responseOutputItems: result.OutputItems, streamDelivery: result.StreamDelivery);
+                state.LastStep.Id, turn, true, result.ToolCalls, wireMetadata: result.WireMetadata, responseOutputItems: result.OutputItems, streamDelivery: result.StreamDelivery, outputDisposition: result.OutputDisposition);
             return result;
         }
         if (state?.Busy == true) { return Failure("conversation_busy", "A conversation step is already in flight."); }
@@ -149,10 +149,17 @@ public sealed partial class LlmTestServerRuntime : ILlmTestServerConversationDia
     {
         response = LlmTestServerResponseItems.Project(response);
         return 1024L + (response.StreamDelivery is null ? 0 : 64)
+            + OutputDispositionBytes(response.OutputDisposition)
             + Bytes(scenario.Id) + Bytes(scenario.ModelId) + Bytes(response.Content) + response.StreamChunks.Sum(chunk => Bytes(chunk))
             + response.ToolCalls.Sum(call => Bytes(call.Id) + Bytes(call.Name) + Bytes(call.ArgumentsJson) + Bytes(call.ContinuationToken ?? string.Empty) + 128)
             + LlmTestServerResponseItems.Bytes(response.OutputItems)
             + (response.Error is { } error ? Bytes(error.Code) + Bytes(error.Message) : 0);
+    }
+
+    private static long OutputDispositionBytes(LlmTestServerOutputDisposition? disposition)
+    {
+        return disposition is null ? 0
+        : 64L + Bytes(disposition.Category ?? string.Empty) + Bytes(disposition.Explanation ?? string.Empty);
     }
 
     private static LlmTestServerChatResult CopyConversationResult(LlmTestServerChatResult result)

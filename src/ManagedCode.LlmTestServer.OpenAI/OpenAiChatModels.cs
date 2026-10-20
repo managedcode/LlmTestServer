@@ -57,6 +57,23 @@ public sealed record OpenAiChatMessage
     [JsonPropertyName("content")]
     public JsonElement Content { get; init; } = JsonSerializer.SerializeToElement(string.Empty);
 
+    [JsonPropertyName("refusal")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Refusal { get; init; }
+
+    [JsonIgnore]
+    public string? RefusalTextContent
+    {
+        get
+        {
+            if (Refusal is not null) { return Refusal; }
+            if (Content.ValueKind != JsonValueKind.Array) { return null; }
+            var parts = Content.EnumerateArray().Where(part => part.ValueKind == JsonValueKind.Object
+                && part.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String && type.GetString() == "refusal").ToArray();
+            return parts.Length == 0 ? null : string.Concat(parts.Select(part => part.GetProperty("refusal").GetString()));
+        }
+    }
+
     [JsonIgnore]
     public string TextContent => ReadTextContent(Content);
 
@@ -75,6 +92,7 @@ public sealed record OpenAiChatMessage
         {
             JsonValueKind.String => content.GetString() ?? string.Empty,
             JsonValueKind.Array => string.Concat(content.EnumerateArray().Select(ReadTextContent)),
+            JsonValueKind.Object when content.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String && type.GetString() == "refusal" => string.Empty,
             JsonValueKind.Object when content.TryGetProperty("text", out var text) => ReadTextContent(text),
             JsonValueKind.Object when content.TryGetProperty("content", out var nested) => ReadTextContent(nested),
             JsonValueKind.Undefined or JsonValueKind.Null => string.Empty,

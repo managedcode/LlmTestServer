@@ -61,12 +61,12 @@ public static class GeminiWireMapper
             [
                 new GeminiCandidate
                 {
-                    Content = new GeminiContent
+                    Content = finishReason is not null && result.OutputDisposition?.Kind == LlmTestServerOutputDispositionKind.Filtered ? null : new GeminiContent
                     {
                         Role = "model",
                         Parts = result.ToolCalls.Count > 0 && finishReason is not null ? (content.Length > 0 ? new[] { new GeminiPart { Text = content } } : []).Concat(result.ToolCalls.Select(call => new GeminiPart { ThoughtSignature = call.ContinuationToken, FunctionCall = new() { Id = call.Id, Name = call.Name, Args = JsonSerializer.Deserialize<JsonElement>(call.ArgumentsJson) } })).ToList() : [new GeminiPart { Text = content }],
                     },
-                    FinishReason = finishReason,
+                    FinishReason = finishReason is not null && result.OutputDisposition?.Kind == LlmTestServerOutputDispositionKind.Filtered ? "SAFETY" : finishReason,
                     Index = 0,
                 },
             ],

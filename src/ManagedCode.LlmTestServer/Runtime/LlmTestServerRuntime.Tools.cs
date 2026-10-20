@@ -26,6 +26,31 @@ public sealed partial class LlmTestServerRuntime
         try
         {
             response = LlmTestServerResponseItems.Project(response);
+            _ = LlmTestServerOutputDisposition.Snapshot(response);
+            foreach (var message in request.Messages)
+            {
+                if (message.OutputDisposition is not { } historyDisposition) { continue; }
+                LlmTestServerOutputDisposition.Validate(historyDisposition);
+                if (!string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase)) { return "Output disposition history belongs to assistant messages."; }
+            }
+            if (response.OutputDisposition is { } disposition)
+            {
+                var supported = request.OutputDispositionSurface switch
+                {
+                    LlmTestServerOutputDispositionSurface.OpenAiChatCompletions or LlmTestServerOutputDispositionSurface.OpenAiResponses => true,
+                    LlmTestServerOutputDispositionSurface.AnthropicMessages => disposition.Kind == LlmTestServerOutputDispositionKind.Refused,
+                    LlmTestServerOutputDispositionSurface.GeminiGenerateContent => disposition.Kind == LlmTestServerOutputDispositionKind.Filtered,
+                    _ => false,
+                };
+                if (!supported || request.Tools is not { Count: 0 } || request.NativeTools is not { Count: 0 }
+                    || request.NativeIncludes is not { Count: 0 } || request.RequiredNativeTool is not null
+                    || request.RequireJson || request.ResponseSchemaJson is not null
+                    || request.Messages.Any(message => message.Role == "tool" || message.ToolCalls is not { Count: 0 } || message.OutputItems is not { Count: 0 }))
+                { return "This output disposition requires a qualified provider text route and supported policy kind without tools, native items or structured output."; }
+                if (request.OutputDispositionSurface == LlmTestServerOutputDispositionSurface.AnthropicMessages
+                    && disposition.Category is not (null or "cyber" or "bio" or "frontier_llm" or "reasoning_extraction" or "general_harms"))
+                { return "The configured category is not a supported Anthropic refusal category."; }
+            }
             var nativeError = ValidateNativeFixture(request, response);
             if (nativeError is not null) { return nativeError; }
             if (request.RequireToolContinuationTokens && response.ToolCalls.Count > 0

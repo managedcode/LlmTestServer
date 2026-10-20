@@ -48,7 +48,12 @@ public static partial class OpenAiWireMapper
         }
         if (result.Content.Length > 0 || result.ToolCalls.Count == 0)
         {
-            output.Add(CreateOutputMessage(result.Content, completed: true, result.WireMetadata));
+            var message = CreateOutputMessage(result.Content, completed: true, result.WireMetadata);
+            if (result.OutputDisposition?.Kind == LlmTestServerOutputDispositionKind.Refused)
+            { message = message with { Content = [new OpenAiResponseRefusal { Refusal = result.Content }] }; }
+            if (result.OutputDisposition?.Kind == LlmTestServerOutputDispositionKind.Filtered)
+            { message = message with { Status = "incomplete" }; }
+            output.Add(message);
         }
         output.AddRange(result.ToolCalls.Select(call => new OpenAiResponseFunctionCall
         { Id = "fc_" + call.Id, CallId = call.Id, Name = call.Name, Arguments = call.ArgumentsJson }));
@@ -99,8 +104,8 @@ public static partial class OpenAiWireMapper
     {
         var response = ToResponse(result, responseId, created, cacheUsageShape, includedProperties);
         var sequence = 0;
-        yield return new { type = "response.created", sequence_number = sequence++, response = response with { Status = "in_progress", Output = [] } };
-        yield return new { type = "response.in_progress", sequence_number = sequence++, response = response with { Status = "in_progress", Output = [] } };
+        yield return new { type = "response.created", sequence_number = sequence++, response = response with { Status = "in_progress", IncompleteDetails = null, Output = [] } };
+        yield return new { type = "response.in_progress", sequence_number = sequence++, response = response with { Status = "in_progress", IncompleteDetails = null, Output = [] } };
         for (var index = 0; index < response.Output.Count; index++)
         {
             var item = response.Output[index];
@@ -150,25 +155,38 @@ public static partial class OpenAiWireMapper
             }
             else if (item is OpenAiResponseOutputMessage messageItem)
             {
-                var part = messageItem.Content[0];
-                yield return new { type = "response.content_part.added", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, part = new OpenAiResponseOutputText() };
-                IReadOnlyList<string> chunks = result.OutputItems.Count > index && result.OutputItems[index] is LlmTestServerResponseMessageItem messagePlan
-                    ? messagePlan.StreamChunks.Count > 0 ? messagePlan.StreamChunks : [messagePlan.Content]
-                    : result.StreamChunks.Count > 0 ? result.StreamChunks : [part.Text];
-                foreach (var chunk in chunks)
+                if (messageItem.Content[0] is OpenAiResponseRefusal refusal)
                 {
-                    yield return new { type = "response.output_text.delta", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, delta = chunk, logprobs = Array.Empty<object>() };
+                    yield return new { type = "response.content_part.added", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, part = (OpenAiResponseContentPart)new OpenAiResponseRefusal() };
+                    foreach (var chunk in result.StreamChunks.Count > 0 ? result.StreamChunks : [refusal.Refusal])
+                    {
+                        yield return new { type = "response.refusal.delta", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, delta = chunk };
+                    }
+                    yield return new { type = "response.refusal.done", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, refusal = refusal.Refusal };
+                    yield return new { type = "response.content_part.done", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, part = (OpenAiResponseContentPart)refusal };
                 }
-                for (var annotationIndex = 0; annotationIndex < part.Annotations.Count; annotationIndex++)
+                else
                 {
-                    yield return new { type = "response.output_text.annotation.added", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, annotation_index = annotationIndex, annotation = part.Annotations[annotationIndex] };
+                    var part = (OpenAiResponseOutputText)messageItem.Content[0];
+                    yield return new { type = "response.content_part.added", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, part = (OpenAiResponseContentPart)new OpenAiResponseOutputText() };
+                    IReadOnlyList<string> chunks = result.OutputItems.Count > index && result.OutputItems[index] is LlmTestServerResponseMessageItem messagePlan
+                        ? messagePlan.StreamChunks.Count > 0 ? messagePlan.StreamChunks : [messagePlan.Content]
+                        : result.StreamChunks.Count > 0 ? result.StreamChunks : [part.Text];
+                    foreach (var chunk in chunks)
+                    {
+                        yield return new { type = "response.output_text.delta", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, delta = chunk, logprobs = Array.Empty<object>() };
+                    }
+                    for (var annotationIndex = 0; annotationIndex < part.Annotations.Count; annotationIndex++)
+                    {
+                        yield return new { type = "response.output_text.annotation.added", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, annotation_index = annotationIndex, annotation = part.Annotations[annotationIndex] };
+                    }
+                    yield return new { type = "response.output_text.done", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, text = part.Text, logprobs = Array.Empty<object>() };
+                    yield return new { type = "response.content_part.done", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, part = (OpenAiResponseContentPart)part };
                 }
-                yield return new { type = "response.output_text.done", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, text = part.Text, logprobs = Array.Empty<object>() };
-                yield return new { type = "response.content_part.done", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, part };
             }
             yield return new { type = "response.output_item.done", sequence_number = sequence++, output_index = index, item };
         }
-        yield return new { type = "response.completed", sequence_number = sequence, response };
+        yield return new { type = response.Status == "incomplete" ? "response.incomplete" : "response.completed", sequence_number = sequence, response };
     }
 
     private static LlmTestServerResponseWebSearchItem ReadNativeWebSearchItem(JsonElement item)
@@ -186,6 +204,7 @@ public static partial class OpenAiWireMapper
 
     private static List<LlmTestServerResponseItem> ReadNativeMessageItems(JsonElement item, JsonElement content)
     {
+        if (HasRefusalPart(content)) { return []; }
         var citations = new List<LlmTestServerResponseCitation>();
         var parts = content.ValueKind == JsonValueKind.Array ? content.EnumerateArray().ToArray() : [];
         foreach (var part in parts)
@@ -231,6 +250,7 @@ public static partial class OpenAiWireMapper
             result.Add(new LlmTestServerMessage
             {
                 Role = "assistant",
+                OutputDisposition = group.Select(message => message.OutputDisposition).FirstOrDefault(disposition => disposition is not null),
                 Content = string.Concat(group.Select(message => message.Content)),
                 ToolCalls = group.SelectMany(message => message.ToolCalls).ToList(),
                 OutputItems = items

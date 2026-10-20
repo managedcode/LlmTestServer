@@ -40,7 +40,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         }
 
         var finalPayload = JsonSerializer.Serialize(
-            OpenAiWireMapper.ToChatChunk(result, string.Empty, responseId, created, result.ToolCalls.Count > 0 ? "tool_calls" : "stop"),
+            OpenAiWireMapper.ToChatChunk(result, string.Empty, responseId, created, result.OutputDisposition?.Kind == LlmTestServerOutputDispositionKind.Filtered ? "content_filter" : result.ToolCalls.Count > 0 ? "tool_calls" : "stop"),
             _jsonOptions
         );
         await context.Response.WriteAsync($"data: {finalPayload}\n\n", cancellationToken)
@@ -544,6 +544,22 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         {
             RequestId = context.GetLlmTestServerProviderHttpTraceId() ?? context.TraceIdentifier,
             StreamDeliverySurface = ResolveStreamDeliverySurface(context),
+            OutputDispositionSurface = ResolveOutputDispositionSurface(context),
+        };
+    }
+
+    private static LlmTestServerOutputDispositionSurface? ResolveOutputDispositionSurface(HttpContext context)
+    {
+        return context.Request.Path.Value switch
+        {
+            "/openai/v1/chat/completions" => LlmTestServerOutputDispositionSurface.OpenAiChatCompletions,
+            "/openai/v1/responses" => LlmTestServerOutputDispositionSurface.OpenAiResponses,
+            "/anthropic/v1/messages" => LlmTestServerOutputDispositionSurface.AnthropicMessages,
+            var path when context.Request.RouteValues["model"] is string model
+                && (path == "/gemini/v1beta/models/" + model + ":generateContent"
+                    || path == "/gemini/v1beta/models/" + model + ":streamGenerateContent")
+                => LlmTestServerOutputDispositionSurface.GeminiGenerateContent,
+            _ => null,
         };
     }
 

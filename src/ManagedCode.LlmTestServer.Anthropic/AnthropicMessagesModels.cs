@@ -60,6 +60,9 @@ public sealed record AnthropicMessageResponse
     [JsonPropertyName("stop_reason")]
     public string? StopReason { get; init; } = "end_turn";
 
+    [JsonPropertyName("stop_details")]
+    public AnthropicRefusalStopDetails? StopDetails { get; init; }
+
     [JsonPropertyName("stop_sequence")]
     public string? StopSequence { get; init; }
 
@@ -206,4 +209,11 @@ public sealed record AnthropicOutputFormat
 {
     [JsonPropertyName("type")] public string Type { get; init; } = "json_schema";
     [JsonPropertyName("schema")] public JsonElement Schema { get; init; }
+}
+
+public sealed record AnthropicRefusalStopDetails
+{
+    [JsonPropertyName("type")] public string Type { get; init; } = "refusal";
+    [JsonPropertyName("category")] public string? Category { get; init; }
+    [JsonPropertyName("explanation")] public string? Explanation { get; init; }
 }

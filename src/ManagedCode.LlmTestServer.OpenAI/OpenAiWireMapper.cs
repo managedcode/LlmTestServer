@@ -37,7 +37,8 @@ public static partial class OpenAiWireMapper
                 .Select(message => new LlmTestServerMessage
                 {
                     Role = message.Role,
-                    Content = message.TextContent,
+                    Content = message.RefusalTextContent ?? message.TextContent,
+                    OutputDisposition = message.RefusalTextContent is null ? null : new() { Kind = LlmTestServerOutputDispositionKind.Refused },
                     ToolCallId = message.ToolCallId,
                     ToolCalls = message.ToolCalls?.Select(OpenAiToolMapper.ToRuntime).ToList() ?? [],
                 })
@@ -99,8 +100,10 @@ public static partial class OpenAiWireMapper
                 new OpenAiChatChoice
                 {
                     Index = 0,
-                    Message = OpenAiChatMessage.FromText("assistant", result.Content) with { ToolCalls = result.ToolCalls.Count > 0 ? result.ToolCalls.Select(call => OpenAiToolMapper.ToWire(call)).ToList() : null },
-                    FinishReason = result.ToolCalls.Count > 0 ? "tool_calls" : "stop",
+                    Message = result.OutputDisposition?.Kind == LlmTestServerOutputDispositionKind.Refused
+                        ? new OpenAiChatMessage { Role = "assistant", Content = JsonSerializer.SerializeToElement<object?>(null), Refusal = result.Content }
+                        : OpenAiChatMessage.FromText("assistant", result.Content) with { ToolCalls = result.ToolCalls.Count > 0 ? result.ToolCalls.Select(call => OpenAiToolMapper.ToWire(call)).ToList() : null },
+                    FinishReason = result.OutputDisposition?.Kind == LlmTestServerOutputDispositionKind.Filtered ? "content_filter" : result.ToolCalls.Count > 0 ? "tool_calls" : "stop",
                 },
             ],
             Usage = CreateUsage(result.Usage, cacheUsageShape),
@@ -127,10 +130,13 @@ public static partial class OpenAiWireMapper
                     Index = 0,
                     Delta = OpenAiChatMessage.FromText("assistant", content) with
                     {
+                        Content = result.OutputDisposition?.Kind == LlmTestServerOutputDispositionKind.Refused
+                            ? JsonSerializer.SerializeToElement<object?>(null) : JsonSerializer.SerializeToElement(content),
+                        Refusal = result.OutputDisposition?.Kind == LlmTestServerOutputDispositionKind.Refused && finishReason is null ? content : null,
                         ToolCalls = finishReason is null && result.ToolCalls.Count > 0
                             ? result.ToolCalls.Select((call, index) => OpenAiToolMapper.ToWire(call, index)).ToList() : null,
                     },
-                    FinishReason = finishReason,
+                    FinishReason = finishReason is not null && result.OutputDisposition?.Kind == LlmTestServerOutputDispositionKind.Filtered ? "content_filter" : finishReason,
                 },
             ],
         };
@@ -150,6 +156,8 @@ public static partial class OpenAiWireMapper
             CreatedAt = created,
             Model = result.ModelId,
             Output = CreateResponseOutput(result, includedProperties),
+            Status = result.OutputDisposition?.Kind == LlmTestServerOutputDispositionKind.Filtered ? "incomplete" : "completed",
+            IncompleteDetails = result.OutputDisposition?.Kind == LlmTestServerOutputDispositionKind.Filtered ? new() : null,
             Usage = new OpenAiResponseUsage
             {
                 InputTokens = result.Usage.InputTokens,
@@ -208,7 +216,7 @@ public static partial class OpenAiWireMapper
             response_id = responseId,
             output_index = 0,
             content_index = 0,
-            part = new OpenAiResponseOutputText(),
+            part = (OpenAiResponseContentPart)new OpenAiResponseOutputText(),
         };
     }
 
@@ -244,7 +252,7 @@ public static partial class OpenAiWireMapper
     {
         return new
         {
-            type = "response.completed",
+            type = result.OutputDisposition?.Kind == LlmTestServerOutputDispositionKind.Filtered ? "response.incomplete" : "response.completed",
             response = ToResponse(result, responseId, created, cacheUsageShape),
         };
     }
@@ -665,7 +673,7 @@ public static partial class OpenAiWireMapper
             JsonValueKind.Array => input
                 .EnumerateArray()
                 .Select(ReadResponseInputMessage)
-                .Where(message => !string.IsNullOrWhiteSpace(message.Content) || message.ToolCalls.Count > 0 || message.ToolCallId is not null || message.OutputItems.Count > 0)
+                .Where(message => !string.IsNullOrWhiteSpace(message.Content) || message.ToolCalls.Count > 0 || message.ToolCallId is not null || message.OutputItems.Count > 0 || message.OutputDisposition is not null)
                 .ToList(),
             JsonValueKind.Object =>
             [
@@ -729,6 +737,7 @@ public static partial class OpenAiWireMapper
             {
                 Role = role,
                 Content = ReadResponseInputContent(content),
+                OutputDisposition = HasRefusalPart(content) ? new() { Kind = LlmTestServerOutputDispositionKind.Refused } : null,
                 OutputItems = role == "assistant" ? ReadNativeMessageItems(item, content) : [],
             };
         }
@@ -749,12 +758,20 @@ public static partial class OpenAiWireMapper
         };
     }
 
+    private static bool HasRefusalPart(JsonElement content)
+    {
+        return content.ValueKind == JsonValueKind.Array && content.EnumerateArray().Any(part => part.ValueKind == JsonValueKind.Object
+            && part.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String && type.GetString() == "refusal");
+    }
+
     internal static string ReadResponseInputContent(JsonElement content)
     {
         return content.ValueKind switch
         {
             JsonValueKind.String => content.GetString() ?? string.Empty,
             JsonValueKind.Array => string.Concat(content.EnumerateArray().Select(ReadResponseInputContent)),
+            JsonValueKind.Object when content.TryGetProperty("type", out var partType) && partType.ValueKind == JsonValueKind.String && partType.GetString() == "refusal"
+                && content.TryGetProperty("refusal", out var refusal) => refusal.GetString() ?? string.Empty,
             JsonValueKind.Object when content.TryGetProperty("text", out var text) =>
                 ReadResponseInputContent(text),
             JsonValueKind.Object when content.TryGetProperty("content", out var nested) =>

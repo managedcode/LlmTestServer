@@ -29,6 +29,7 @@ public sealed partial class LlmTestServerRuntime
     private const int _retainedMessageCost = 256;
     private const int _retainedToolCost = 256;
     private const int _retainedChunkCost = 128;
+    private const int _retainedOutputDispositionCost = 32;
 
     private readonly object _gate = new();
     private readonly AsyncLocal<RuntimeRequestContext?> _activeRequest = new();
@@ -403,7 +404,7 @@ public sealed partial class LlmTestServerRuntime
             {
                 completed = RetainChatResponse(request, LlmTestServerChatResult.Success(request.ModelId, scenario.Id,
                     response.Content, successfulStreamChunks) with
-                { StreamDelivery = response.StreamDelivery, ToolCalls = [.. response.ToolCalls], OutputItems = LlmTestServerResponseItems.Snapshot(response.OutputItems), WireMetadata = GetResponseMetadata() }, bearerToken);
+                { OutputDisposition = response.OutputDisposition, StreamDelivery = response.StreamDelivery, ToolCalls = [.. response.ToolCalls], OutputItems = LlmTestServerResponseItems.Snapshot(response.OutputItems), WireMetadata = GetResponseMetadata() }, bearerToken);
                 if (!completed.IsSuccess)
                 {
                     RollBackResponse(scenario, responsePosition, generation, conversationLease);
@@ -435,7 +436,7 @@ public sealed partial class LlmTestServerRuntime
                 responseToolCalls: response.Error is null ? response.ToolCalls : null,
                 retryAfterSeconds: response.Error?.RetryAfterSeconds,
                 wireMetadata: finalResult.WireMetadata,
-                responseOutputItems: finalResult.OutputItems, streamDelivery: finalResult.StreamDelivery
+                responseOutputItems: finalResult.OutputItems, streamDelivery: finalResult.StreamDelivery, outputDisposition: finalResult.OutputDisposition
             );
 
             if (response.Error is not null)
@@ -1381,7 +1382,10 @@ public sealed partial class LlmTestServerRuntime
             ? string.Equals(expected.Content, actual.Content, StringComparison.Ordinal)
             : actual.Content.Contains(expected.Content, StringComparison.OrdinalIgnoreCase);
 
+        var expectedDisposition = LlmTestServerOutputDisposition.ForHistory(expected.OutputDisposition);
+        var actualDisposition = LlmTestServerOutputDisposition.ForHistory(actual.OutputDisposition);
         return roleMatches && contentMatches
+            && ((mode != LlmTestServerMatchMode.Exact && expectedDisposition is null) || expectedDisposition == actualDisposition)
             && ((mode != LlmTestServerMatchMode.Exact && expected.ToolCallId is null) || expected.ToolCallId == actual.ToolCallId)
             && ((mode != LlmTestServerMatchMode.Exact && expected.ToolCalls.Count == 0) || expected.ToolCalls.SequenceEqual(actual.ToolCalls))
             && (expected.OutputItems.Count == 0 || System.Text.Json.JsonSerializer.Serialize(expected.OutputItems) == System.Text.Json.JsonSerializer.Serialize(actual.OutputItems));
@@ -1404,7 +1408,8 @@ public sealed partial class LlmTestServerRuntime
         int? retryAfterSeconds = null,
         ManagedCode.LlmTestServer.Determinism.LlmTestServerResponseMetadata? wireMetadata = null,
         IReadOnlyList<LlmTestServerResponseItem>? responseOutputItems = null,
-        LlmTestServerStreamDelivery? streamDelivery = null
+        LlmTestServerStreamDelivery? streamDelivery = null,
+        LlmTestServerOutputDisposition? outputDisposition = null
     )
     {
         var activeRequest = _activeRequest.Value;
@@ -1426,6 +1431,7 @@ public sealed partial class LlmTestServerRuntime
             ResponseToolCalls = responseToolCalls ?? [],
             ResponseOutputItems = responseOutputItems ?? [],
             StreamDelivery = streamDelivery,
+            OutputDisposition = outputDisposition,
             RetryAfterSeconds = retryAfterSeconds,
             WireMetadata = wireMetadata ?? activeRequest?.WireMetadata,
             ModelId = modelId,
@@ -1511,6 +1517,7 @@ public sealed partial class LlmTestServerRuntime
                 - CountCharacters(runtimeEvent.WireMetadata?.ClockMode)
         );
         var response = RetainText(runtimeEvent.Response, ref remaining, ref truncated);
+        var disposition = RetainOutputDisposition(runtimeEvent.OutputDisposition, ref remaining, ref truncated);
         var streamChunks = RetainChunks(runtimeEvent.StreamChunks, ref remaining, ref truncated);
         var messages = RetainMessages(runtimeEvent.Messages, ref remaining, ref truncated);
         var tools = RetainTools(runtimeEvent.Tools, ref remaining, ref truncated);
@@ -1534,6 +1541,7 @@ public sealed partial class LlmTestServerRuntime
             ResponseToolCalls = responseCalls,
             ResponseOutputItems = responseItems,
             Response = response,
+            OutputDisposition = disposition,
             StreamChunks = streamChunks,
             Request = request,
             PayloadTruncated = truncated,
@@ -1573,7 +1581,8 @@ public sealed partial class LlmTestServerRuntime
                 calls.Add(new() { Id = RetainRequiredText(call.Id, ref remaining, ref truncated), Name = RetainRequiredText(call.Name, ref remaining, ref truncated), ArgumentsJson = RetainRequiredText(call.ArgumentsJson, ref remaining, ref truncated), ContinuationToken = RetainText(call.ContinuationToken, ref remaining, ref truncated) });
             }
             var outputItems = RetainOutputItems(source.OutputItems, ref remaining, ref truncated);
-            retained.Add(new LlmTestServerMessage { Role = role, Content = content, ToolCallId = callId, ToolCalls = calls, OutputItems = outputItems });
+            var disposition = RetainOutputDisposition(source.OutputDisposition, ref remaining, ref truncated);
+            retained.Add(new LlmTestServerMessage { Role = role, Content = content, ToolCallId = callId, ToolCalls = calls, OutputItems = outputItems, OutputDisposition = disposition });
         }
 
         return retained.Count == 0 ? [] : Array.AsReadOnly(retained.ToArray());
@@ -1717,6 +1726,23 @@ public sealed partial class LlmTestServerRuntime
         return retained;
     }
 
+    private static LlmTestServerOutputDisposition? RetainOutputDisposition(LlmTestServerOutputDisposition? disposition, ref int remaining, ref bool truncated)
+    {
+        if (disposition is null) { return null; }
+        if (remaining < _retainedOutputDispositionCost) { truncated = true; return null; }
+        remaining -= _retainedOutputDispositionCost;
+        return disposition with
+        {
+            Category = RetainText(disposition.Category, ref remaining, ref truncated),
+            Explanation = RetainText(disposition.Explanation, ref remaining, ref truncated),
+        };
+    }
+
+    private static int OutputDispositionCharacters(LlmTestServerOutputDisposition? disposition)
+    {
+        return disposition is null ? 0 : _retainedOutputDispositionCost + CountCharacters(disposition.Category) + CountCharacters(disposition.Explanation);
+    }
+
     private static int CountRetainedCharacters(LlmTestServerRuntimeEvent runtimeEvent)
     {
         var total = CountCharacters(runtimeEvent.RequestId)
@@ -1729,10 +1755,12 @@ public sealed partial class LlmTestServerRuntime
             + CountCharacters(runtimeEvent.Response)
             + CountCharacters(runtimeEvent.PromptCacheKey)
             + CountCharacters(runtimeEvent.WireMetadata?.Identity)
-            + CountCharacters(runtimeEvent.WireMetadata?.ClockMode);
+            + CountCharacters(runtimeEvent.WireMetadata?.ClockMode)
+            + OutputDispositionCharacters(runtimeEvent.OutputDisposition);
         foreach (var item in runtimeEvent.Messages)
         {
             total += _retainedMessageCost + item.Role.Length + item.Content.Length + CountCharacters(item.ToolCallId)
+                + OutputDispositionCharacters(item.OutputDisposition)
                 + item.ToolCalls.Sum(call => _retainedMessageCost + call.Id.Length + call.Name.Length + call.ArgumentsJson.Length + (call.ContinuationToken?.Length ?? 0))
                 + item.OutputItems.Sum(OutputItemCharacters);
         }
@@ -1882,6 +1910,12 @@ public sealed partial class LlmTestServerRuntime
                 .Append(MessageTokenText(message))
                 .Append('\u001e');
 
+            var historyDisposition = LlmTestServerOutputDisposition.ForHistory(message.OutputDisposition);
+            if (historyDisposition is not null)
+            {
+                cachePrefix.Append("output-disposition:")
+                    .Append(System.Text.Json.JsonSerializer.Serialize(historyDisposition)).Append('\u001e');
+            }
             if (message.ToolCalls.Any(call => call.ContinuationToken is not null))
             {
                 cachePrefix.Append("continuations:")

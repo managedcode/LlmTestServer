@@ -60,6 +60,10 @@ public sealed record OpenAiResponse
     [JsonPropertyName("usage")]
     public OpenAiResponseUsage Usage { get; init; } = new();
 
+    [JsonPropertyName("incomplete_details")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public OpenAiResponseIncompleteDetails? IncompleteDetails { get; init; }
+
     [JsonPropertyName("status")]
     public string Status { get; init; } = "completed";
 }
@@ -77,11 +81,16 @@ public abstract record OpenAiResponseOutputItem
     [JsonPropertyName("status")] public string Status { get; init; } = "completed";
 }
 
+public sealed record OpenAiResponseIncompleteDetails
+{
+    [JsonPropertyName("reason")] public string Reason { get; init; } = "content_filter";
+}
+
 public sealed record OpenAiResponseOutputMessage : OpenAiResponseOutputItem
 {
     [JsonIgnore] public override string Type => "message";
     [JsonPropertyName("role")] public string Role { get; init; } = "assistant";
-    [JsonPropertyName("content")] public List<OpenAiResponseOutputText> Content { get; init; } = [];
+    [JsonPropertyName("content")] public List<OpenAiResponseContentPart> Content { get; init; } = [];
 }
 
 public sealed record OpenAiResponseFunctionCall : OpenAiResponseOutputItem
@@ -92,10 +101,23 @@ public sealed record OpenAiResponseFunctionCall : OpenAiResponseOutputItem
     [JsonPropertyName("arguments")] public string Arguments { get; init; } = "{}";
 }
 
-public sealed record OpenAiResponseOutputText
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[JsonDerivedType(typeof(OpenAiResponseOutputText), "output_text")]
+[JsonDerivedType(typeof(OpenAiResponseRefusal), "refusal")]
+public abstract record OpenAiResponseContentPart
 {
-    [JsonPropertyName("type")]
-    public string Type { get; init; } = "output_text";
+    [JsonIgnore] public abstract string Type { get; }
+}
+
+public sealed record OpenAiResponseRefusal : OpenAiResponseContentPart
+{
+    [JsonIgnore] public override string Type => "refusal";
+    [JsonPropertyName("refusal")] public string Refusal { get; init; } = string.Empty;
+}
+
+public sealed record OpenAiResponseOutputText : OpenAiResponseContentPart
+{
+    [JsonIgnore] public override string Type => "output_text";
 
     [JsonPropertyName("text")]
     public string Text { get; init; } = string.Empty;

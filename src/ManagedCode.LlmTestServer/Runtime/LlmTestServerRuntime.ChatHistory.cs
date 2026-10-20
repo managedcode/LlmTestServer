@@ -34,7 +34,7 @@ public sealed partial class LlmTestServerRuntime
     {
         if (!request.StoreResponse) { return result; }
         var messages = SnapshotHistory(request.Messages);
-        messages.Add(new LlmTestServerMessage { Role = "assistant", Content = result.Content, ToolCalls = [.. result.ToolCalls], OutputItems = LlmTestServerResponseItems.Snapshot(result.OutputItems) });
+        messages.Add(new LlmTestServerMessage { Role = "assistant", Content = result.Content, OutputDisposition = LlmTestServerOutputDisposition.ForHistory(result.OutputDisposition), ToolCalls = [.. result.ToolCalls], OutputItems = LlmTestServerResponseItems.Snapshot(result.OutputItems) });
         var bytes = HistoryBytes(messages) + Encoding.UTF8.GetByteCount(request.HistoryNamespace!);
         if (_chatResponses.Count >= _configuration.MaxStoredChatResponses || bytes > _configuration.MaxStoredChatResponseBytes - _chatResponseBytes)
         {
@@ -48,7 +48,7 @@ public sealed partial class LlmTestServerRuntime
 
     private static List<LlmTestServerMessage> SnapshotHistory(IEnumerable<LlmTestServerMessage> messages)
     {
-        return messages.Where(message => !IsInstruction(message)).Select(message => message with { ToolCalls = [.. message.ToolCalls], OutputItems = LlmTestServerResponseItems.Snapshot(message.OutputItems) }).ToList();
+        return messages.Where(message => !IsInstruction(message)).Select(message => message with { OutputDisposition = LlmTestServerOutputDisposition.ForHistory(message.OutputDisposition), ToolCalls = [.. message.ToolCalls], OutputItems = LlmTestServerResponseItems.Snapshot(message.OutputItems) }).ToList();
     }
 
     private static bool IsInstruction(LlmTestServerMessage message)
@@ -66,6 +66,7 @@ public sealed partial class LlmTestServerRuntime
         return 256L + messages.Sum(message =>
         256L + Encoding.UTF8.GetByteCount(message.Role) + Encoding.UTF8.GetByteCount(message.Content)
         + Encoding.UTF8.GetByteCount(message.ToolCallId ?? string.Empty)
+        + OutputDispositionBytes(message.OutputDisposition)
         + LlmTestServerResponseItems.Bytes(message.OutputItems)
         + message.ToolCalls.Sum(call => 128L + Encoding.UTF8.GetByteCount(call.Id)
             + Encoding.UTF8.GetByteCount(call.Name) + Encoding.UTF8.GetByteCount(call.ArgumentsJson) + Encoding.UTF8.GetByteCount(call.ContinuationToken ?? string.Empty)));

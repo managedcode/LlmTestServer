@@ -90,7 +90,8 @@ public sealed record GeminiGenerateContentResponse
 public sealed record GeminiCandidate
 {
     [JsonPropertyName("content")]
-    public GeminiContent Content { get; init; } = new();
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public GeminiContent? Content { get; init; } = new();
 
     [JsonPropertyName("finishReason")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
