@@ -8,6 +8,8 @@ namespace ManagedCode.LlmTestServer.OpenAI;
 public static partial class OpenAiWireMapper
 {
     private const string _webSearchSources = "web_search_call.action.sources";
+    private const string _fileSearchResults = "file_search_call.results";
+    private const string _codeInterpreterOutputs = "code_interpreter_call.outputs";
 
     private static JsonElement FunctionResponseChoice(JsonElement choice)
     {
@@ -20,32 +22,15 @@ public static partial class OpenAiWireMapper
     private static LlmTestServerChatRequest ApplyNativeResponseRequest(OpenAiResponseRequest source,
         LlmTestServerChatRequest request, bool allowNativeTools)
     {
-        var namedNative = source.ToolChoice.ValueKind == JsonValueKind.Object
-            && source.ToolChoice.GetProperty("type").GetString() == "web_search";
         return request with
         {
-            NativeToolContract = allowNativeTools ? LlmTestServerNativeToolContract.OpenAiResponsesWebSearch : null,
-            NativeTools = source.Tools.Where(tool => tool.Type == "web_search").Select(tool =>
-                new LlmTestServerNativeToolDeclaration
-                {
-                    Contract = LlmTestServerNativeToolContract.OpenAiResponsesWebSearch,
-                    WebSearchOptions = new LlmTestServerWebSearchOptions
-                    {
-                        SearchContextSize = tool.SearchContextSize,
-                        AllowedDomains = tool.Filters?.AllowedDomains is { } domains ? [.. domains] : [],
-                        UserLocation = tool.UserLocation is { } location ? new LlmTestServerWebSearchLocation
-                        {
-                            Type = location.Type ?? "approximate",
-                            Country = location.Country,
-                            Region = location.Region,
-                            City = location.City,
-                            Timezone = location.Timezone
-                        } : null
-                    }
-                }).ToList(),
-            RequiredNativeTool = namedNative ? LlmTestServerNativeToolContract.OpenAiResponsesWebSearch : null,
-            NativeIncludes = source.Include.Contains(_webSearchSources, StringComparer.Ordinal)
-                ? [LlmTestServerNativeToolInclude.WebSearchSources] : [],
+            NativeToolSurface = allowNativeTools ? LlmTestServerNativeToolSurface.OpenAiResponses : null,
+            NativeTools = source.Tools.Where(tool => NativeContract(tool.Type) is not null)
+                .Select(CreateNativeDeclaration).ToList(),
+            RequiredNativeTool = source.ToolChoice.ValueKind == JsonValueKind.Object
+                ? NativeContract(source.ToolChoice.GetProperty("type").GetString()) : null,
+            NativeIncludes = source.Include.Select(NativeInclude).Where(include => include is not null)
+                .Select(include => include!.Value).ToList(),
         };
     }
 
@@ -53,12 +38,11 @@ public static partial class OpenAiWireMapper
         IReadOnlyCollection<string>? includedProperties)
     {
         var output = new List<OpenAiResponseOutputItem>();
-        var includeSources = includedProperties?.Contains(_webSearchSources, StringComparer.Ordinal) == true;
         if (result.OutputItems.Count > 0)
         {
             for (var index = 0; index < result.OutputItems.Count; index++)
             {
-                output.Add(MapResponseItem(result.OutputItems[index], index, result.WireMetadata, includeSources));
+                output.Add(MapResponseItem(result.OutputItems[index], index, result.WireMetadata, includedProperties));
             }
             return output;
         }
@@ -72,7 +56,7 @@ public static partial class OpenAiWireMapper
     }
 
     private static OpenAiResponseOutputItem MapResponseItem(LlmTestServerResponseItem item, int index,
-        LlmTestServerResponseMetadata? metadata, bool includeSources)
+        LlmTestServerResponseMetadata? metadata, IReadOnlyCollection<string>? includedProperties)
     {
         return item switch
         {
@@ -83,11 +67,7 @@ public static partial class OpenAiWireMapper
                 Content = [new OpenAiResponseOutputText
                 {
                     Text = message.Content,
-                    Annotations = message.Citations.Select(citation => (object)new OpenAiUrlCitation
-                    {
-                        StartIndex = citation.StartIndex, EndIndex = citation.EndIndex,
-                        Url = citation.Url, Title = citation.Title
-                    }).ToList()
+                    Annotations = message.Citations.Select(MapCitation).ToList()
                 }]
             },
             LlmTestServerResponseFunctionCallItem function => new OpenAiResponseFunctionCall
@@ -104,9 +84,11 @@ public static partial class OpenAiWireMapper
                 {
                     Type = "search",
                     Queries = [.. web.Queries],
-                    Sources = includeSources ? web.Sources.Select(source => new OpenAiWebSearchSource { Url = source.Url }).ToList() : null
+                    Sources = Includes(includedProperties, _webSearchSources) ? web.Sources.Select(source => new OpenAiWebSearchSource { Url = source.Url }).ToList() : null
                 }
             },
+            LlmTestServerResponseFileSearchItem file => MapFileSearchItem(file, includedProperties),
+            LlmTestServerResponseCodeInterpreterItem code => MapCodeInterpreterItem(code, includedProperties),
             _ => throw new InvalidOperationException("Unsupported Responses output item.")
         };
     }
@@ -127,6 +109,8 @@ public static partial class OpenAiWireMapper
                 OpenAiResponseFunctionCall function => function with { Status = "in_progress", Arguments = string.Empty },
                 OpenAiResponseOutputMessage message => message with { Status = "in_progress", Content = [] },
                 OpenAiResponseWebSearchCall web => web with { Status = "in_progress", Action = null },
+                OpenAiResponseFileSearchCall file => file with { Status = "in_progress", Queries = [], Results = null },
+                OpenAiResponseCodeInterpreterCall code => code with { Status = "in_progress", Code = code.Code is null ? null : string.Empty, Outputs = null },
                 _ => throw new InvalidOperationException("Unsupported Responses output item.")
             };
             yield return new { type = "response.output_item.added", sequence_number = sequence++, output_index = index, item = initial };
@@ -140,6 +124,29 @@ public static partial class OpenAiWireMapper
                 yield return new { type = "response.web_search_call.in_progress", sequence_number = sequence++, item_id = item.Id, output_index = index };
                 yield return new { type = "response.web_search_call.searching", sequence_number = sequence++, item_id = item.Id, output_index = index };
                 yield return new { type = "response.web_search_call.completed", sequence_number = sequence++, item_id = item.Id, output_index = index };
+            }
+            else if (item is OpenAiResponseFileSearchCall)
+            {
+                yield return new { type = "response.file_search_call.in_progress", sequence_number = sequence++, item_id = item.Id, output_index = index };
+                yield return new { type = "response.file_search_call.searching", sequence_number = sequence++, item_id = item.Id, output_index = index };
+                yield return new { type = "response.file_search_call.completed", sequence_number = sequence++, item_id = item.Id, output_index = index };
+            }
+            else if (item is OpenAiResponseCodeInterpreterCall codeItem)
+            {
+                yield return new { type = "response.code_interpreter_call.in_progress", sequence_number = sequence++, item_id = item.Id, output_index = index };
+                if (codeItem.Code is not null)
+                {
+                    IReadOnlyList<string> codeChunks = result.OutputItems.Count > index
+                        && result.OutputItems[index] is LlmTestServerResponseCodeInterpreterItem { CodeChunks.Count: > 0 } codePlan
+                        ? codePlan.CodeChunks : [codeItem.Code];
+                    foreach (var chunk in codeChunks)
+                    {
+                        yield return new { type = "response.code_interpreter_call_code.delta", sequence_number = sequence++, item_id = item.Id, output_index = index, delta = chunk };
+                    }
+                    yield return new { type = "response.code_interpreter_call_code.done", sequence_number = sequence++, item_id = item.Id, output_index = index, code = codeItem.Code };
+                }
+                yield return new { type = "response.code_interpreter_call.interpreting", sequence_number = sequence++, item_id = item.Id, output_index = index };
+                yield return new { type = "response.code_interpreter_call.completed", sequence_number = sequence++, item_id = item.Id, output_index = index };
             }
             else if (item is OpenAiResponseOutputMessage messageItem)
             {
@@ -179,21 +186,14 @@ public static partial class OpenAiWireMapper
 
     private static List<LlmTestServerResponseItem> ReadNativeMessageItems(JsonElement item, JsonElement content)
     {
-        var citations = new List<LlmTestServerUrlCitation>();
+        var citations = new List<LlmTestServerResponseCitation>();
         var parts = content.ValueKind == JsonValueKind.Array ? content.EnumerateArray().ToArray() : [];
         foreach (var part in parts)
         {
-            if (!part.TryGetProperty("annotations", out var annotations)) { continue; }
+            if (part.ValueKind != JsonValueKind.Object || !part.TryGetProperty("annotations", out var annotations)) { continue; }
             foreach (var annotation in annotations.EnumerateArray())
             {
-                if (annotation.GetProperty("type").GetString() != "url_citation") { continue; }
-                citations.Add(new()
-                {
-                    StartIndex = annotation.GetProperty("start_index").GetInt32(),
-                    EndIndex = annotation.GetProperty("end_index").GetInt32(),
-                    Url = annotation.GetProperty("url").GetString()!,
-                    Title = annotation.GetProperty("title").GetString()!
-                });
+                citations.Add(ReadCitation(annotation));
             }
         }
         var outputId = item.TryGetProperty("id", out var id) ? id.GetString()! : string.Empty;
@@ -214,8 +214,13 @@ public static partial class OpenAiWireMapper
             while (end < messages.Count && messages[end].Role == "assistant") { end++; }
             if (end == index) { result.Add(messages[index++]); continue; }
             var group = messages.GetRange(index, end - index);
-            if (!group.Any(message => message.OutputItems.Any(item => item is LlmTestServerResponseWebSearchItem)))
-            { result.AddRange(group); index = end; continue; }
+            if (!group.Any(message => message.OutputItems.Any(item => IsNativeItem(item)
+                || item is LlmTestServerResponseMessageItem { Citations.Count: > 0 })))
+            {
+                result.AddRange(group.Select(message => message with { OutputItems = [] }));
+                index = end;
+                continue;
+            }
             var items = new List<LlmTestServerResponseItem>();
             foreach (var message in group)
             {

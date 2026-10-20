@@ -97,7 +97,7 @@ public sealed partial class NativeWebSearchIntegrationTests
         var body = Request();
         switch (defect)
         {
-            case "foreignInclude": body["include"] = new JsonArray("file_search_call.results"); break;
+            case "foreignInclude": body["include"] = new JsonArray("file_search_call.unsupported"); break;
             case "missingNamedDeclaration": body["tools"] = new JsonArray(); break;
             case "unsupportedModel": body["model"] = "gpt-5-mini"; break;
             case "tooManyDomains":
@@ -107,6 +107,21 @@ public sealed partial class NativeWebSearchIntegrationTests
         using var rejected = await http.PostAsJsonAsync("/openai/v1/responses", body);
         await Assert.That(rejected.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
         await AssertWireAsync(await CompleteAsync(http));
+    }
+
+    [Test]
+    [Arguments("file_search_call.results")]
+    [Arguments("code_interpreter_call.outputs")]
+    public async Task SupportedUnusedIncludes_DoNotInventOtherNativeOutputAsync(string include)
+    {
+        using var host = await LlmTestServerTestHost.StartAsync();
+        using var http = host.GetTestClient();
+        await new LlmTestServerClient(http).ConfigureAsync(Configuration());
+        var body = Request();
+        body["include"] = new JsonArray(include);
+        var payload = await CompleteAsync(http, body);
+        await AssertWireAsync(payload, sources: false);
+        await Assert.That(payload.GetProperty("output").GetArrayLength()).IsEqualTo(2);
     }
 
     [Test]

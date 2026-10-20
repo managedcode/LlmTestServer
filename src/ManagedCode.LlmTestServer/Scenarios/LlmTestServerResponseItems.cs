@@ -2,13 +2,13 @@ using System.Text.Json;
 
 namespace ManagedCode.LlmTestServer.Scenarios;
 
-internal static class LlmTestServerResponseItems
+internal static partial class LlmTestServerResponseItems
 {
     internal static List<LlmTestServerResponseItem> Snapshot(IEnumerable<LlmTestServerResponseItem> items, bool validateChunks = false)
     {
         ArgumentNullException.ThrowIfNull(items);
         var sourceItems = items.ToList();
-        var nativePlan = sourceItems.Any(item => item is LlmTestServerResponseWebSearchItem);
+        var nativePlan = sourceItems.Any(IsNative);
         var result = new List<LlmTestServerResponseItem>();
         var ids = new HashSet<string>(StringComparer.Ordinal);
         foreach (var item in sourceItems)
@@ -27,16 +27,8 @@ internal static class LlmTestServerResponseItems
                     if (validateChunks && message.StreamChunks.Count > 0 && string.Concat(message.StreamChunks) != message.Content)
                     { throw new ArgumentException("Message chunks must concatenate to the output text.", nameof(items)); }
                     if (message.Citations.Count > 128) { throw new ArgumentException("Too many URL citations.", nameof(items)); }
-                    foreach (var citation in message.Citations)
-                    {
-                        ArgumentNullException.ThrowIfNull(citation);
-                        ArgumentNullException.ThrowIfNull(citation.Title);
-                        ValidateUrl(citation.Url);
-                        if (message.Content.Any(character => character > 127) || citation.StartIndex < 0
-                            || citation.EndIndex <= citation.StartIndex || citation.EndIndex > message.Content.Length)
-                        { throw new ArgumentException("Citation indexes require bounded ASCII output text.", nameof(items)); }
-                    }
-                    result.Add(message with { StreamChunks = [.. message.StreamChunks], Citations = [.. message.Citations.Select(citation => citation with { })] });
+                    var citations = message.Citations.Select(citation => SnapshotCitation(citation, message.Content)).ToList();
+                    result.Add(message with { StreamChunks = [.. message.StreamChunks], Citations = citations });
                     id = message.Id;
                     break;
                 case LlmTestServerResponseFunctionCallItem function:
@@ -60,6 +52,14 @@ internal static class LlmTestServerResponseItems
                     result.Add(web with { Queries = [.. web.Queries], Sources = [.. web.Sources.Select(source => source with { })] });
                     id = web.Id;
                     break;
+                case LlmTestServerResponseFileSearchItem file:
+                    result.Add(SnapshotFileSearch(file, validateChunks));
+                    id = file.Id;
+                    break;
+                case LlmTestServerResponseCodeInterpreterItem code:
+                    result.Add(SnapshotCode(code));
+                    id = code.Id;
+                    break;
                 default:
                     throw new ArgumentException("Unknown response output item.", nameof(items));
             }
@@ -82,26 +82,12 @@ internal static class LlmTestServerResponseItems
         };
     }
 
-    internal static List<LlmTestServerNativeToolDeclaration> SnapshotDeclarations(IEnumerable<LlmTestServerNativeToolDeclaration> declarations)
+    internal static List<LlmTestServerNativeToolDeclaration> SnapshotDeclarations(IEnumerable<LlmTestServerNativeToolDeclaration> declarations, bool validate = false)
     {
         ArgumentNullException.ThrowIfNull(declarations);
-        return declarations.Select(declaration =>
-        {
-            ArgumentNullException.ThrowIfNull(declaration);
-            var options = declaration.WebSearchOptions;
-            if (options is null) { return declaration with { }; }
-            ArgumentNullException.ThrowIfNull(options.AllowedDomains);
-            if (options.SearchContextSize is not (null or "low" or "medium" or "high")
-                || options.UserLocation is { Type: not "approximate" })
-            { throw new ArgumentException("Invalid web search context size or location type.", nameof(declarations)); }
-            foreach (var domain in options.AllowedDomains)
-            {
-                ArgumentException.ThrowIfNullOrWhiteSpace(domain);
-                if (Uri.CheckHostName(domain) != UriHostNameType.Dns || domain.Contains(':') || domain.Contains('/'))
-                { throw new ArgumentException("Allowed domains must be plain DNS hostnames.", nameof(declarations)); }
-            }
-            return declaration with { WebSearchOptions = options with { AllowedDomains = [.. options.AllowedDomains], UserLocation = options.UserLocation is null ? null : options.UserLocation with { } } };
-        }).ToList();
+        return validate
+            ? declarations.Select(SnapshotDeclaration).ToList()
+            : declarations.Where(declaration => declaration is not null).Select(CloneDeclaration).ToList();
     }
 
     internal static bool AllowsUrl(LlmTestServerWebSearchOptions? options, string url)
@@ -117,7 +103,7 @@ internal static class LlmTestServerResponseItems
 
     internal static string NativeTokenText(IEnumerable<LlmTestServerResponseItem> items)
     {
-        return string.Concat(items.OfType<LlmTestServerResponseWebSearchItem>().Select(item => JsonSerializer.Serialize(item)));
+        return string.Concat(items.Where(IsNative).Select(item => JsonSerializer.Serialize<LlmTestServerResponseItem>(item)));
     }
 
     internal static long Bytes(IEnumerable<LlmTestServerResponseItem> items)

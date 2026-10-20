@@ -689,9 +689,9 @@ public static partial class OpenAiWireMapper
 
         if (item.TryGetProperty("type", out var itemType))
         {
-            if (itemType.GetString() == "web_search_call")
+            if (itemType.GetString() is "web_search_call" or "file_search_call" or "code_interpreter_call")
             {
-                return new() { Role = "assistant", OutputItems = [ReadNativeWebSearchItem(item)] };
+                return new() { Role = "assistant", OutputItems = [ReadNativeToolItem(item)] };
             }
             if (itemType.GetString() == "function_call")
             {
@@ -707,7 +707,8 @@ public static partial class OpenAiWireMapper
                     ToolCalls = [call],
                     OutputItems = [new LlmTestServerResponseFunctionCallItem
                     {
-                        Id = item.TryGetProperty("id", out var outputId) ? outputId.GetString()! : "fc_" + call.Id,
+                        Id = item.TryGetProperty("id", out var outputId) && outputId.ValueKind == JsonValueKind.String
+                            ? outputId.GetString()! : "fc_" + call.Id,
                         Call = call
                     }]
                 };

@@ -497,6 +497,10 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
                 ? (long)options.AllowedDomains.Count * _chunkOverheadBytes
                     + (options.UserLocation is null ? 0 : _messageOverheadBytes)
                 : 0;
+            if (tool.FileSearchOptions is { } file)
+            { nestedOverhead += (long)file.VectorStoreIds.Count * _chunkOverheadBytes + _messageOverheadBytes; }
+            if (tool.CodeInterpreterOptions is { } code)
+            { nestedOverhead += (long)code.FileIds.Count * _chunkOverheadBytes + _messageOverheadBytes; }
             var cost = _messageOverheadBytes + payloadBytes + nestedOverhead;
             if (payloadBytes > _maxPreviewBytes || cost > remaining) { truncated = true; break; }
             remaining -= (int)cost;
@@ -518,6 +522,10 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
                     + (long)message.Citations.Count * _messageOverheadBytes,
                 LlmTestServerResponseWebSearchItem web => (long)web.Queries.Count * _chunkOverheadBytes
                     + (long)web.Sources.Count * _messageOverheadBytes,
+                LlmTestServerResponseFileSearchItem file => (long)(file.Queries.Count + file.VectorStoreIds.Count) * _chunkOverheadBytes
+                    + file.Results.Sum(result => (long)_messageOverheadBytes + (long)(result.Attributes?.Count ?? 0) * _messageOverheadBytes),
+                LlmTestServerResponseCodeInterpreterItem code => (long)(code.InputFileIds.Count + code.GeneratedFileIds.Count + code.CodeChunks.Count) * _chunkOverheadBytes
+                    + (long)(code.Outputs?.Count ?? 0) * _messageOverheadBytes,
                 LlmTestServerResponseFunctionCallItem => _messageOverheadBytes,
                 _ => 0,
             };
@@ -538,6 +546,10 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
                 AllowedDomains = [.. options.AllowedDomains],
                 UserLocation = options.UserLocation is { } location ? location with { } : null,
             } : null,
+            FileSearchOptions = tool.FileSearchOptions is { } file ? file with
+            { VectorStoreIds = [.. file.VectorStoreIds], Filters = file.Filters?.Clone() } : null,
+            CodeInterpreterOptions = tool.CodeInterpreterOptions is { } code ? code with
+            { FileIds = [.. code.FileIds] } : null,
         };
     }
 
@@ -550,6 +562,20 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
             LlmTestServerResponseFunctionCallItem function => function with { Call = function.Call with { } },
             LlmTestServerResponseWebSearchItem web => web with
             { Queries = [.. web.Queries], Sources = web.Sources.Select(source => source with { }).ToList() },
+            LlmTestServerResponseFileSearchItem file => file with
+            {
+                VectorStoreIds = [.. file.VectorStoreIds],
+                Queries = [.. file.Queries],
+                Results = file.Results.Select(result => result with
+                { Attributes = result.Attributes?.ToDictionary(pair => pair.Key, pair => pair.Value.Clone(), StringComparer.Ordinal) }).ToList(),
+            },
+            LlmTestServerResponseCodeInterpreterItem code => code with
+            {
+                InputFileIds = [.. code.InputFileIds],
+                GeneratedFileIds = [.. code.GeneratedFileIds],
+                CodeChunks = [.. code.CodeChunks],
+                Outputs = code.Outputs?.Select(output => output with { }).ToList(),
+            },
             _ => throw new InvalidOperationException("Unsupported structured response item."),
         };
     }

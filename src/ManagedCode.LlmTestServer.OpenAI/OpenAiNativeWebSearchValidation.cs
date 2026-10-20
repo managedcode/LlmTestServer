@@ -35,32 +35,46 @@ internal static class OpenAiNativeWebSearchValidation
         }
     }
 
+    internal static bool IsNativeToolType(string? type)
+    {
+        return type is _toolType or OpenAiNativeFileCodeValidation._fileType or OpenAiNativeFileCodeValidation._codeType;
+    }
+
+    internal static bool IsNativeHistoryType(string? type)
+    {
+        return type is "web_search_call" or "file_search_call" or "code_interpreter_call";
+    }
+
     internal static void ValidateResponseOptions(JsonElement body, bool enabled)
     {
         var tools = OptionalArray(body, "tools").ToArray();
-        var webTools = tools.Count(tool => tool.GetProperty("type").GetString() == _toolType);
-        var nativeUsed = webTools > 0;
+        var contracts = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var tool in tools)
+        {
+            var type = tool.GetProperty("type").GetString();
+            if (IsNativeToolType(type)) { contracts.Add(type!); }
+        }
         if (body.TryGetProperty("include", out var include))
         {
             Array(include);
             foreach (var entry in include.EnumerateArray())
             {
-                Choice(entry, _sourcesInclude);
+                Choice(entry, _sourcesInclude, OpenAiNativeFileCodeValidation._resultsInclude, OpenAiNativeFileCodeValidation._outputsInclude);
                 if (!enabled) { throw new JsonException("Unsupported include."); }
-                nativeUsed = true;
             }
         }
         if (body.TryGetProperty("tool_choice", out var choice) && choice.ValueKind == JsonValueKind.Object
-            && choice.GetProperty("type").GetString() == _toolType)
+            && IsNativeToolType(choice.GetProperty("type").GetString()))
         {
             Fields(choice, "type");
-            if (!enabled || webTools == 0) { throw new JsonException("Web search choice requires its declaration."); }
-            nativeUsed = true;
+            var selected = choice.GetProperty("type").GetString()!;
+            if (!enabled || !tools.Any(tool => tool.GetProperty("type").GetString() == selected))
+            { throw new JsonException("Native tool choice requires its declaration."); }
+            contracts.Add(selected);
         }
         if (body.TryGetProperty("input", out var input) && input.ValueKind == JsonValueKind.Object)
         {
-            if ((input.TryGetProperty("type", out var objectType)
-                && objectType.GetString() is "web_search_call" or "file_search_call" or "code_interpreter_call")
+            if ((input.TryGetProperty("type", out var objectType) && IsNativeHistoryType(objectType.GetString()))
                 || ValidateMessageCitations(input, enabled))
             { throw new JsonException("Native history must use an input array."); }
         }
@@ -70,22 +84,32 @@ internal static class OpenAiNativeWebSearchValidation
             {
                 if (item.ValueKind != JsonValueKind.Object) { continue; }
                 var itemType = item.TryGetProperty("type", out var type) ? type.GetString() : null;
-                if (itemType == "web_search_call")
+                if (IsNativeHistoryType(itemType))
                 {
                     if (!enabled) { throw new JsonException("Native history is unsupported on this provider."); }
-                    ValidateHistoryCall(item);
-                    nativeUsed = true;
+                    if (itemType == "web_search_call") { ValidateHistoryCall(item); }
+                    else
+                    {
+                        OpenAiNativeFileCodeValidation.ValidateHistory(item);
+                    }
                 }
-                if (itemType is "file_search_call" or "code_interpreter_call")
-                { throw new JsonException("Unsupported native history item."); }
                 if (HasCitations(item) && itemType is not (null or "message"))
                 { throw new JsonException("Unsupported annotated native message type."); }
-                if ((itemType is null or "message") && ValidateMessageCitations(item, enabled)) { nativeUsed = true; }
+                if (itemType is null or "message") { ValidateMessageCitations(item, enabled); }
             }
+            ValidateNativeGroups(input);
         }
-        if (input.ValueKind == JsonValueKind.Array) { ValidateNativeGroups(input); }
-        if (nativeUsed && (!enabled || body.GetProperty("model").GetString() != LlmTestServerKnownModelIds.Gpt41Mini))
-        { throw new JsonException("Native web search requires a supported Responses model."); }
+        foreach (var contract in contracts)
+        {
+            var model = contract switch
+            {
+                OpenAiNativeFileCodeValidation._fileType => LlmTestServerKnownModelIds.Gpt4OMini,
+                OpenAiNativeFileCodeValidation._codeType => LlmTestServerKnownModelIds.Gpt41,
+                _ => LlmTestServerKnownModelIds.Gpt41Mini,
+            };
+            if (!enabled || body.GetProperty("model").GetString() != model)
+            { throw new JsonException("Native tool requires a supported Responses model."); }
+        }
     }
 
     private static void ValidateHistoryCall(JsonElement item)
@@ -114,8 +138,12 @@ internal static class OpenAiNativeWebSearchValidation
         }
     }
 
-    private static bool ValidateMessageCitations(JsonElement item, bool enabled)
+    internal static bool ValidateMessageCitations(JsonElement item, bool enabled)
     {
+        if (item.TryGetProperty("role", out var role) && role.ValueKind == JsonValueKind.String
+            && role.GetString() == "assistant" && item.TryGetProperty("id", out var providedId)
+            && providedId.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
+        { throw new JsonException("An assistant output ID must be a string or null."); }
         if (!item.TryGetProperty("content", out var content) || content.ValueKind != JsonValueKind.Array) { return false; }
         var annotated = false;
         foreach (var part in content.EnumerateArray())
@@ -138,6 +166,11 @@ internal static class OpenAiNativeWebSearchValidation
             if (text.Any(character => character > 127)) { throw new JsonException("Native citation text must be ASCII in this contract."); }
             foreach (var citation in annotations.EnumerateArray())
             {
+                if (citation.GetProperty("type").GetString() != "url_citation")
+                {
+                    _ = OpenAiNativeFileCodeValidation.ValidateCitation(citation, text.Length);
+                    continue;
+                }
                 Fields(citation, "type", "start_index", "end_index", "url", "title");
                 Choice(citation.GetProperty("type"), "url_citation");
                 if (!citation.GetProperty("start_index").TryGetInt32(out var start)
@@ -173,7 +206,7 @@ internal static class OpenAiNativeWebSearchValidation
                             ? functionId.GetString() : "fc_" + item.GetProperty("call_id").GetString();
                         if (string.IsNullOrWhiteSpace(id)) { throw new JsonException("A native function output ID is required."); }
                     }
-                    else if (type == "web_search_call" || HasCitations(item) || item.TryGetProperty("id", out _))
+                    else if (IsNativeHistoryType(type) || HasCitations(item) || item.TryGetProperty("id", out _))
                     {
                         if (item.TryGetProperty("id", out var outputId))
                         {
@@ -199,17 +232,17 @@ internal static class OpenAiNativeWebSearchValidation
                 continue;
             }
             var type = item.TryGetProperty("type", out var discriminator) ? discriminator.GetString() : null;
-            var assistant = type is "web_search_call" or "function_call"
+            var assistant = IsNativeHistoryType(type) || type == "function_call"
                 || type != "function_call_output" && item.TryGetProperty("role", out var role) && role.GetString() == "assistant";
             var citations = HasCitations(item);
-            var retained = type is "web_search_call" or "function_call" or "function_call_output" || citations
+            var retained = IsNativeHistoryType(type) || type is "function_call" or "function_call_output" || citations
                 || assistant && item.TryGetProperty("id", out _)
                 || !string.IsNullOrWhiteSpace(item.TryGetProperty("content", out var content) ? OpenAiWireMapper.ReadResponseInputContent(content)
                     : item.TryGetProperty("text", out var text) ? OpenAiWireMapper.ReadResponseInputContent(text) : item.ToString());
             if (!retained) { continue; }
             if (!assistant) { FinishGroup(); continue; }
             count++;
-            native |= type == "web_search_call" || citations;
+            native |= IsNativeHistoryType(type) || citations;
             if (group.Count < 129) { group.Add(item); }
             if (native && count > 128) { throw new JsonException("Too many native assistant output items."); }
         }
@@ -224,13 +257,13 @@ internal static class OpenAiNativeWebSearchValidation
                 && annotations.GetArrayLength() > 0);
     }
 
-    private static void ValidateItemId(string id)
+    internal static void ValidateItemId(string id)
     {
         if (id.Length > 128 || id.Length > 0 && string.IsNullOrWhiteSpace(id))
         { throw new JsonException("Native output IDs must be bounded nonblank labels."); }
     }
 
-    private static void Url(JsonElement value)
+    internal static void Url(JsonElement value)
     {
         NonEmpty(value);
         if (value.GetString()!.Any(char.IsWhiteSpace) || !Uri.TryCreate(value.GetString(), UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
@@ -261,7 +294,7 @@ internal static class OpenAiNativeWebSearchValidation
         }
     }
 
-    private static void Fields(JsonElement value, params string[] allowed)
+    internal static void Fields(JsonElement value, params string[] allowed)
     {
         Object(value);
         var seen = new HashSet<string>(StringComparer.Ordinal);

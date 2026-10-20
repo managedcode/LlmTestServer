@@ -263,3 +263,21 @@ Native focused tests passed 99/99; existing provider namespace/evidence passed 8
 The independent code-only checkout passed 965/965 server integrations after the ordinary-response regression fix, with 91.96% production line coverage, 77.38% branch coverage and 94.38% method coverage. Canonical formatting and Release build passed with 0 warnings/errors. These results exclude the parallel owner analytics/visual work. Evidence: `artifacts/delivery/native-isolated-final-{format,build,coverage}.log`.
 
 The same code-only checkout packed all 19 packages; the fresh installed NuGet/Aspire/official SDK/Chromium consumer passed 2/2. Its .NET SDK-built linux/arm64 image passed actual HTTP native JSON/SSE and terminal-evidence acceptance. Evidence: `artifacts/delivery/native-isolated-{pack,consumer,container-publish,container-smoke}.log`; container evidence `artifacts/native-code-validation/artifacts/container-verification/220fcd85c2a76ed5`. No public package/image publication is claimed.
+
+## Native file-search and code checkpoint
+
+The bounded [OpenAI file-search/code fixture contract](OpenAiNativeFileCode.md) adds completed native calls, ordered file/container citations, include projections, code deltas, explicit/automatic container references and file filter/result admission. It uses the same queue/graph, history, cache, replay and evidence paths. File search is independently qualified for gpt-4o-mini and code interpreter for gpt-4.1; no retrieval or code execution occurs.
+
+Focused running-server HTTP/SDK tests passed 191/191, including 24 exact-numeric regressions and 17 normalization cases. Existing web-search regressions passed 105/105. Exact numeric comparison corrects a demonstrated HTTP false match between 1e-29 and 2e-29; ID-shape and ordinary-group handling prevent normalization errors without weakening native history bounds. The code-only final qualification is recorded below. Other E5 families and E6–E13 remain unfinished.
+
+### File/code code-only qualification
+
+- Focused file/code HTTP/official SDK: 191/191, including 24 exact-number and 17 normalization cases.
+- Existing web-search regression: 105/105.
+- Full isolated server suite: 1158/1158; production line coverage 92.21%, branch coverage 78.21%, method coverage 94.55%.
+- Canonical format verification and final Release build passed with 0 warnings/errors.
+- All 19 packages packed. A .NET SDK `PublishContainer` linux/arm64 image passed actual web/file/code JSON/SSE, includes, citations, code deltas, management/auth/reset and terminal-evidence smoke.
+
+Evidence: `artifacts/delivery/native-file-code-*`; container record: `artifacts/native-code-validation/artifacts/container-verification/bb0d14644caef9d4`. This checkout excludes the concurrent owner analytics/visual changes. Public package/image publication, owner merge and remaining E5–E13 work are not asserted by these local results.
+
+The clean installed NuGet/Aspire/official SDK/Chromium consumer passed 3/3 from an isolated package cache, including independent file/code JSON/SSE and stored continuation. Evidence: `artifacts/delivery/native-file-code-consumer.log`.

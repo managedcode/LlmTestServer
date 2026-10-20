@@ -19,7 +19,7 @@ public sealed record LlmTestServerChatRequest
     public bool StoreResponse { get; init; }
 
     /// <summary>The qualified native route contract; null on surfaces without native support.</summary>
-    public LlmTestServerNativeToolContract? NativeToolContract { get; init; }
+    public LlmTestServerNativeToolSurface? NativeToolSurface { get; init; }
     public List<LlmTestServerNativeToolDeclaration> NativeTools { get; init; } = [];
     public LlmTestServerNativeToolContract? RequiredNativeTool { get; init; }
     public List<LlmTestServerNativeToolInclude> NativeIncludes { get; init; } = [];

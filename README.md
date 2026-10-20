@@ -27,6 +27,7 @@ provider endpoints and runtime configuration/assertion control endpoints require
 Test-session lifecycle uses the credentials described in the [session guide](docs/Features/TestSessions.md).
 Branching tool workflows use the [typed conversation DSL](docs/Features/ConversationDSL.md).
 Use [request verification and deterministic wire clocks](docs/Features/RequestVerificationAndDeterminism.md) to inspect/export requests, assert complete tool workflows and retry behavior, and reproduce fixture IDs and timestamps.
+Configure scripted OpenAI Responses [web search](docs/Features/OpenAiNativeWebSearch.md) and [file-search/code fixtures](docs/Features/OpenAiNativeFileCode.md) to return native calls, citations and streaming events. The guides list the qualified models, options and resource-reference contracts.
 
 ## First passing test
 

@@ -1,6 +1,6 @@
 # ADR-0006: Ordered native tool fixtures on the existing conversation engine
 
-Status: Accepted; implemented and locally qualified for the first web-search contract, public delivery pending
+Status: Accepted; bounded OpenAI web/file/code contracts locally qualified; public delivery pending
 Date: 2026-10-20
 Related: [native tool inventory](../Features/NativeBuiltInToolContractInventory.md),
 [delivery plan](../Features/LlmTestServerDeliveryPlan.md),
@@ -15,8 +15,10 @@ text/function/native lists also lose the order of mixed response items and break
 
 Add a typed ordered output plan to the existing scenario/conversation response, chat result and retained
 assistant history. Keep the current reservation, cancellation, graph progression, replay and session ownership.
-The first qualified contract targets completed OpenAI Responses web searches; file retrieval, code execution,
-other tool families and providers remain in the full E5/E10 roadmap and require their own adapters and evidence.
+The first qualified contract targets completed OpenAI Responses web searches. Bounded completed file-search
+and code-interpreter contracts now use the same engine and are locally qualified. Other native
+families, broader options and providers remain in E5/E10 and require their own adapters and evidence.
+The expanded contract is documented in [OpenAI native file/code fixtures](../Features/OpenAiNativeFileCode.md).
 
 ```mermaid
 flowchart LR
@@ -32,10 +34,16 @@ flowchart LR
 
 ## Boundaries and data
 
-Core owns message/function/search fixture data, immutable snapshots, declaration options, semantic validation,
+Core owns message/function/web-search/file-search/code fixture data, immutable snapshots, declaration options, semantic validation,
 ordering, usage accounting and capacity admission. The provider package owns its request and output unions,
 include projection, citation wire fields and streaming events. Hosting enables native contracts only on the
 qualified route, reads the request, calls the runtime and writes the mapped response.
+
+`LlmTestServerNativeToolSurface.OpenAiResponses` identifies the qualified route independently from each declaration's
+`Contract` (`LlmTestServerNativeToolContract`). The ordered output union includes message, function call, web search, file search and
+code interpreter. A separate ordered annotation union retains URL, file and container-file citations without
+regrouping annotations by kind. Control JSON uses `kind`; the provider adapter emits the corresponding API
+`type` discriminators. Native results remain outside function-call counters.
 
 Explicit output plans and ordinary Content/ToolCalls/StreamChunks are mutually exclusive in configuration.
 The engine projects a selected plan once into the existing text/function fields needed by matchers and clients,
@@ -66,6 +74,31 @@ Explicit fixture IDs and existing seeded wire metadata preserve deterministic re
 stream progress, output-item completion, citations and final completion must agree with ordinary JSON output.
 The terminal marker is observed only after the final response event has been written and flushed.
 
+## Bounded file/code extension
+
+The current independent model pairings are web search with `gpt-4.1-mini`, file search with `gpt-4o-mini`,
+and code interpreter with `gpt-4.1`. Model checks apply to current declarations/choices, while completed prior
+outputs remain history on the qualified surface. No common supported model is inferred for mixed native
+families from SDK serialization alone.
+
+File search preserves declared store IDs, max-result count, ranker, threshold and bounded comparison/compound
+filter trees. Configured results must already meet the count/score/filter restrictions; an admission mismatch
+returns 409 without consumption rather than silently rewriting fixture results. Strings compare ordinally;
+accepted numbers compare by decimal value, preserving precision in their JSON representation. Missing or
+mismatched attribute kinds do not match. Boolean ordering, hybrid ranking and unsupported option fields are
+rejected. The filter depth/node limits are explicit fixture limits, not claims about upstream limits.
+
+Code fixtures carry explicit container, input-file and generated-file references, nullable code/outputs and
+optional code chunks. Automatic request mode matches the configured input asset set and resolves to the
+configured container identity; it does not provision a container. Container-file citations reference that
+container and its input or explicitly generated references. Zero-length container citation ranges are permitted;
+the existing URL citation boundary remains positive-length. Cited text remains ASCII in this subset.
+
+Results/outputs include projection is provider-owned and leaves authoritative retained data intact. File/code
+JSON/SSE, structured diagnostic copies, native cache identity and explicit/stored continuation use the same
+bounded state paths. Memory/network controls, actual file retrieval and resource lifecycle remain pending.
+The initial 150 HTTP/SDK cases passed; expanded regression and final combined qualification remain pending.
+
 ## First contract and remaining breadth
 
 The initial OpenAI contract uses gpt-4.1-mini, completed search actions, typed source URLs, URL citations and
@@ -95,8 +128,10 @@ ownership without pretending they share a provider wire format.
 Use running ASP.NET endpoints and the installed official Responses SDK. NativeWebSearch*IntegrationTests must
 prove typed JSON and streaming, mixed output order, include gating, explicit/stored continuation, named choices,
 invalid declarations and atomic configure failure, domain mismatch without consumption, route/model boundaries,
-reset/cancellation/replay, credential/session isolation and capacity limits. Provider contract/evidence suites
-and existing function/structured-output integrations remain mandatory regressions.
+reset/cancellation/replay, credential/session isolation and capacity limits. `NativeFileCodeIntegrationTests` must independently prove file/code models, typed SDK results and citations,
+nullable include behavior, filter operators/precision/bounds, explicit/auto resource matching, ordered streaming,
+malformed-ID/history rejection and no-consumption behavior. Provider contract/evidence suites and existing
+function/structured-output integrations remain mandatory regressions.
 
 Run the repository format check, canonical Release build, complete integration suite and coverage gate; pack
 all packages and qualify a clean installed-package consumer before claiming delivery. Qualification results are
@@ -108,3 +143,8 @@ owner-approved v1.0.0 launch batch.
 - [OpenAI web search](https://developers.openai.com/api/docs/guides/tools-web-search)
 - [Responses create](https://developers.openai.com/api/reference/resources/responses/methods/create)
 - [Responses streaming schema](https://developers.openai.com/api/reference/resources/responses/streaming-events)
+
+- [OpenAI file search](https://developers.openai.com/api/docs/guides/tools-file-search)
+- [OpenAI code interpreter](https://developers.openai.com/api/docs/guides/tools-code-interpreter)
+- [File-search model pairing](https://developers.openai.com/cookbook/examples/file_search_responses)
+- [Code-interpreter model pairing](https://developers.openai.com/cookbook/examples/mcp/mcp_tool_guide)

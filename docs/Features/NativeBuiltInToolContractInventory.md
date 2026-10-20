@@ -1,10 +1,11 @@
 # Native built-in tool contract inventory
 
-Status: **OpenAI completed-search subset implemented with 99 focused HTTP/SDK cases passing; remaining contracts proposed.**
+Status: **Bounded OpenAI completed web/file/code contracts locally qualified: file/code 191/191, web regressions 105/105, full server suite 1158/1158; remaining contracts proposed.**
 Audit date: **2026-10-20**.
 Scope: first E5 native search, file retrieval and code execution contracts for OpenAI Responses,
 Anthropic Messages and Gemini generateContent. The bounded OpenAI completed-search subset is described in [its feature contract](OpenAiNativeWebSearch.md).
-All other cells below are prerequisites and proposed contracts, not support claims.
+The additional [bounded file/code contract](OpenAiNativeFileCode.md) is implemented and locally qualified; public delivery remains pending.
+Unresolved cells and other providers below remain prerequisites/proposed contracts, not support claims.
 Related: [delivery plan](LlmTestServerDeliveryPlan.md), [conversation DSL](ConversationDSL.md),
 [request verification](RequestVerificationAndDeterminism.md), [existing function-tool fixtures](ToolAndStructuredFixtures.md).
 
@@ -54,12 +55,12 @@ Reference: [streaming events](https://developers.openai.com/api/reference/resour
 
 | Unresolved prerequisite | Required resolution before support claim |
 | --- | --- |
-| Tool-specific errors | Pin the exact response/item error unions and HTTP versus tool-result failure behavior |
-| File-search result spelling | Resolve canonical `results` against the older guide's `search_results` example using current schema and installed SDK |
-| Expanded ranking options | Pin ranker, score threshold, hybrid weights, filter operators and their validation rules |
-| Model applicability | Record an exact model/tool/version matrix; do not infer support from generic Responses compatibility |
+| Tool-specific errors | Completed results are the implemented subset; failed/incomplete result/error relationships remain pending |
+| File-search result spelling | Resolved as `results`; no alternate field is emitted. Bounded implementation is locally qualified |
+| Expanded ranking options | Bounded ranker/threshold and comparison/compound filters implemented; hybrid weights remain unsupported pending separate qualification |
+| Model applicability | Current independent pairings: web/gpt-4.1-mini, file/gpt-4o-mini, code/gpt-4.1; broader combinations remain pending |
 | Containers/artifacts | Pin memory tiers, file download contracts, container reuse and bounded fixture ownership; coordinate with E9 lifecycle |
-| SDK | Exercise installed official .NET SDK declarations, native polymorphic items, citations, streaming and mixed function/native flows |
+| SDK | Completed subset qualified through official .NET SDK JSON/SSE and a fresh installed-package consumer; broader native contracts still need independent qualification |
 
 ## Anthropic Messages
 

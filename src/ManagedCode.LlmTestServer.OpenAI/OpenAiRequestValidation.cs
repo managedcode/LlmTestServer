@@ -18,10 +18,10 @@ public static class OpenAiRequestValidation
 
     public static LlmTestServerRequestValidationResult ValidateNativeResponse(JsonElement body)
     {
-        return Check(body, value => Validate(value, true, nativeWebSearch: true));
+        return Check(body, value => Validate(value, true, nativeTools: true));
     }
 
-    private static void Validate(JsonElement body, bool responses, bool nativeWebSearch = false)
+    private static void Validate(JsonElement body, bool responses, bool nativeTools = false)
     {
         if (body.TryGetProperty("functions", out _) || body.TryGetProperty("function_call", out _))
         {
@@ -29,9 +29,11 @@ public static class OpenAiRequestValidation
         }
         foreach (var tool in OptionalArray(body, "tools"))
         {
-            if (nativeWebSearch && tool.GetProperty("type").GetString() == OpenAiNativeWebSearchValidation._toolType)
+            if (nativeTools && OpenAiNativeWebSearchValidation.IsNativeToolType(tool.GetProperty("type").GetString()))
             {
-                OpenAiNativeWebSearchValidation.ValidateTool(tool);
+                if (tool.GetProperty("type").GetString() == OpenAiNativeWebSearchValidation._toolType)
+                { OpenAiNativeWebSearchValidation.ValidateTool(tool); }
+                else { OpenAiNativeFileCodeValidation.ValidateTool(tool); }
                 continue;
             }
             Choice(tool.GetProperty("type"), "function");
@@ -42,7 +44,7 @@ public static class OpenAiRequestValidation
         {
             if (choice.ValueKind == JsonValueKind.Object)
             {
-                if (nativeWebSearch && choice.GetProperty("type").GetString() == OpenAiNativeWebSearchValidation._toolType)
+                if (nativeTools && OpenAiNativeWebSearchValidation.IsNativeToolType(choice.GetProperty("type").GetString()))
                 {
                     // Exact choice fields and declaration applicability are validated below.
                 }
@@ -63,19 +65,32 @@ public static class OpenAiRequestValidation
         {
             ValidateFormat(format, true);
         }
-        if (responses) { OpenAiNativeWebSearchValidation.ValidateResponseOptions(body, nativeWebSearch); }
+        if (responses) { OpenAiNativeWebSearchValidation.ValidateResponseOptions(body, nativeTools); }
         var field = responses ? "input" : "messages";
         if (!body.TryGetProperty(field, out var messages) || messages.ValueKind != JsonValueKind.Array) { return; }
         foreach (var message in messages.EnumerateArray())
         {
             if (message.ValueKind != JsonValueKind.Object) { continue; }
+            if (!responses)
+            {
+                if (message.TryGetProperty("type", out var nativeType)
+                    && OpenAiNativeWebSearchValidation.IsNativeHistoryType(nativeType.GetString()))
+                { throw new JsonException("Native history is unsupported on this operation."); }
+                _ = OpenAiNativeWebSearchValidation.ValidateMessageCitations(message, enabled: false);
+            }
             foreach (var call in OptionalArray(message, "tool_calls", allowNull: true))
             {
                 Name(call.GetProperty("function")); NonEmpty(call.GetProperty("id")); String(call.GetProperty("function").GetProperty("arguments"));
             }
             if (responses && message.TryGetProperty("type", out var type))
             {
-                if (type.GetString() == "function_call") { Name(message); NonEmpty(message.GetProperty("call_id")); String(message.GetProperty("arguments")); }
+                if (type.GetString() == "function_call")
+                {
+                    Name(message); NonEmpty(message.GetProperty("call_id")); String(message.GetProperty("arguments"));
+                    if (message.TryGetProperty("id", out var outputId)
+                        && outputId.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
+                    { throw new JsonException("A function output ID must be a string or null."); }
+                }
                 if (type.GetString() == "function_call_output") { NonEmpty(message.GetProperty("call_id")); _ = message.GetProperty("output"); }
             }
         }

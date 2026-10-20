@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace ManagedCode.LlmTestServer.Scenarios;
@@ -6,6 +7,8 @@ namespace ManagedCode.LlmTestServer.Scenarios;
 [JsonDerivedType(typeof(LlmTestServerResponseMessageItem), "message")]
 [JsonDerivedType(typeof(LlmTestServerResponseFunctionCallItem), "function_call")]
 [JsonDerivedType(typeof(LlmTestServerResponseWebSearchItem), "web_search")]
+[JsonDerivedType(typeof(LlmTestServerResponseFileSearchItem), "file_search")]
+[JsonDerivedType(typeof(LlmTestServerResponseCodeInterpreterItem), "code_interpreter")]
 public abstract record LlmTestServerResponseItem;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -14,7 +17,7 @@ public sealed record LlmTestServerResponseMessageItem : LlmTestServerResponseIte
     public string Id { get; init; } = string.Empty;
     public string Content { get; init; } = string.Empty;
     public List<string> StreamChunks { get; init; } = [];
-    public List<LlmTestServerUrlCitation> Citations { get; init; } = [];
+    public List<LlmTestServerResponseCitation> Citations { get; init; } = [];
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -41,8 +44,14 @@ public sealed record LlmTestServerWebSearchSource
 }
 
 /// <summary>Explicit provider citation indexes; this initial fixture contract accepts ASCII text only.</summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
+[JsonDerivedType(typeof(LlmTestServerUrlCitation), "url")]
+[JsonDerivedType(typeof(LlmTestServerFileCitation), "file")]
+[JsonDerivedType(typeof(LlmTestServerContainerFileCitation), "container_file")]
+public abstract record LlmTestServerResponseCitation;
+
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record LlmTestServerUrlCitation
+public sealed record LlmTestServerUrlCitation : LlmTestServerResponseCitation
 {
     public int StartIndex { get; init; }
     public int EndIndex { get; init; }
@@ -50,14 +59,17 @@ public sealed record LlmTestServerUrlCitation
     public string Title { get; init; } = string.Empty;
 }
 
-public enum LlmTestServerNativeToolContract { OpenAiResponsesWebSearch }
-public enum LlmTestServerNativeToolInclude { WebSearchSources }
+public enum LlmTestServerNativeToolContract { OpenAiResponsesWebSearch, OpenAiResponsesFileSearch, OpenAiResponsesCodeInterpreter }
+public enum LlmTestServerNativeToolSurface { OpenAiResponses }
+public enum LlmTestServerNativeToolInclude { WebSearchSources, FileSearchResults, CodeInterpreterOutputs }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record LlmTestServerNativeToolDeclaration
 {
     public LlmTestServerNativeToolContract Contract { get; init; }
     public LlmTestServerWebSearchOptions? WebSearchOptions { get; init; }
+    public LlmTestServerFileSearchOptions? FileSearchOptions { get; init; }
+    public LlmTestServerCodeInterpreterOptions? CodeInterpreterOptions { get; init; }
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -76,4 +88,91 @@ public sealed record LlmTestServerWebSearchLocation
     public string? Region { get; init; }
     public string? City { get; init; }
     public string? Timezone { get; init; }
+}
+
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record LlmTestServerFileCitation : LlmTestServerResponseCitation
+{
+    public string FileId { get; init; } = string.Empty;
+    public string Filename { get; init; } = string.Empty;
+    public int Index { get; init; }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record LlmTestServerContainerFileCitation : LlmTestServerResponseCitation
+{
+    public string ContainerId { get; init; } = string.Empty;
+    public string FileId { get; init; } = string.Empty;
+    public string Filename { get; init; } = string.Empty;
+    public int StartIndex { get; init; }
+    public int EndIndex { get; init; }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record LlmTestServerResponseFileSearchItem : LlmTestServerResponseItem
+{
+    public string Id { get; init; } = string.Empty;
+    public LlmTestServerNativeToolContract Contract { get; init; } = LlmTestServerNativeToolContract.OpenAiResponsesFileSearch;
+    public List<string> VectorStoreIds { get; init; } = [];
+    public List<string> Queries { get; init; } = [];
+    public List<LlmTestServerFileSearchResult> Results { get; init; } = [];
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record LlmTestServerFileSearchResult
+{
+    public string? FileId { get; init; }
+    public string? Filename { get; init; }
+    public string? Text { get; init; }
+    public double? Score { get; init; }
+    public Dictionary<string, JsonElement>? Attributes { get; init; }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record LlmTestServerResponseCodeInterpreterItem : LlmTestServerResponseItem
+{
+    public string Id { get; init; } = string.Empty;
+    public LlmTestServerNativeToolContract Contract { get; init; } = LlmTestServerNativeToolContract.OpenAiResponsesCodeInterpreter;
+    public string ContainerId { get; init; } = string.Empty;
+    public List<string> InputFileIds { get; init; } = [];
+    public List<string> GeneratedFileIds { get; init; } = [];
+    public string? Code { get; init; }
+    public List<string> CodeChunks { get; init; } = [];
+    public List<LlmTestServerCodeInterpreterOutput>? Outputs { get; init; }
+}
+
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
+[JsonDerivedType(typeof(LlmTestServerCodeInterpreterLogsOutput), "logs")]
+[JsonDerivedType(typeof(LlmTestServerCodeInterpreterImageOutput), "image")]
+public abstract record LlmTestServerCodeInterpreterOutput;
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record LlmTestServerCodeInterpreterLogsOutput : LlmTestServerCodeInterpreterOutput
+{
+    public string Logs { get; init; } = string.Empty;
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record LlmTestServerCodeInterpreterImageOutput : LlmTestServerCodeInterpreterOutput
+{
+    public string Url { get; init; } = string.Empty;
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record LlmTestServerFileSearchOptions
+{
+    public List<string> VectorStoreIds { get; init; } = [];
+    public int? MaxNumResults { get; init; }
+    public string? Ranker { get; init; }
+    public double? ScoreThreshold { get; init; }
+    public JsonElement? Filters { get; init; }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record LlmTestServerCodeInterpreterOptions
+{
+    public string? ContainerId { get; init; }
+    public bool AutomaticContainer { get; init; }
+    public List<string> FileIds { get; init; } = [];
 }

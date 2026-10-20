@@ -131,7 +131,7 @@ public sealed class NativePackageTests
         new LlmTestServerResponseMessageItem
         {
             Id = _messageId, Content = "Paris fixture.", StreamChunks = ["Paris ", "fixture."],
-            Citations = [new() { StartIndex = 0, EndIndex = 5, Url = _source, Title = "Installed fixture source" }],
+            Citations = [new LlmTestServerUrlCitation() { StartIndex = 0, EndIndex = 5, Url = _source, Title = "Installed fixture source" }],
         },
     ];
 

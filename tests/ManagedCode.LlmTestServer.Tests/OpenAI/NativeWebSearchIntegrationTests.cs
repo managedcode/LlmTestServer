@@ -35,7 +35,7 @@ public sealed partial class NativeWebSearchIntegrationTests
         new LlmTestServerResponseMessageItem
         {
             Id = _messageId, Content = _answer, StreamChunks = ["Paris ", "fixture."],
-            Citations = [new() { StartIndex = 0, EndIndex = 5, Url = _sourceUrl, Title = "Fixture source" }],
+            Citations = [new LlmTestServerUrlCitation() { StartIndex = 0, EndIndex = 5, Url = _sourceUrl, Title = "Fixture source" }],
         },
     ];
     }

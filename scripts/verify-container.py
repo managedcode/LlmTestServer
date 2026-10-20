@@ -120,7 +120,7 @@ def main():
         source_url = "https://example.com/container-source"
         search_id = "ws_container_native"
         message_id = "msg_container_native"
-        citation = {"startIndex": 0, "endIndex": 5, "url": source_url, "title": "Container fixture"}
+        citation = {"kind": "url", "startIndex": 0, "endIndex": 5, "url": source_url, "title": "Container fixture"}
         native_items = [
             {"kind": "web_search", "id": search_id, "queries": ["container fixture facts"],
              "sources": [{"url": source_url}]},
@@ -198,6 +198,75 @@ def main():
         assert trace["responseOutputItems"][0]["kind"] == "web_search"
         assert trace["responseOutputItems"][0]["id"] == search_id
         results.append("native SSE progress, deltas, citation, completed output and terminal request evidence")
+        for code in (False, True):
+            model = "gpt-4.1" if code else "gpt-4o-mini"
+            native_kind = "code_interpreter" if code else "file_search"
+            wire_kind = native_kind + "_call"
+            output_id = "ci_container" if code else "fs_container"
+            if code:
+                native_item = {"kind": native_kind, "id": output_id, "containerId": "cntr_container",
+                    "inputFileIds": ["file_input"], "generatedFileIds": ["file_generated"],
+                    "code": "print(42)", "codeChunks": ["print(", "42)"],
+                    "outputs": [{"kind": "logs", "logs": "42\n"},
+                        {"kind": "image", "url": "https://example.com/container-chart.png"}]}
+                native_citation = {"kind": "container_file", "containerId": "cntr_container", "fileId": "file_generated",
+                    "filename": "chart.png", "startIndex": 0, "endIndex": 0}
+                declaration = {"type": native_kind, "container": {"type": "auto", "file_ids": ["file_input"]}}
+                include = "code_interpreter_call.outputs"
+                payload_key = "outputs"
+            else:
+                native_item = {"kind": native_kind, "id": output_id, "vectorStoreIds": ["vs_container"],
+                    "queries": ["container file fixture"], "results": [{"fileId": "file_container", "filename": "fixture.txt",
+                    "text": "File fixture.", "score": 0.9, "attributes": {"category": "fixture"}}]}
+                native_citation = {"kind": "file", "fileId": "file_container", "filename": "fixture.txt", "index": 4}
+                declaration = {"type": native_kind, "vector_store_ids": ["vs_container"], "max_num_results": 1,
+                    "ranking_options": {"ranker": "auto", "score_threshold": 0.5},
+                    "filters": {"type": "eq", "key": "category", "value": "fixture"}}
+                include = "file_search_call.results"
+                payload_key = "results"
+            items = [native_item, {"kind": "message", "id": "msg_" + native_kind, "content": "File fixture.",
+                "citations": [native_citation]}]
+            configuration = {"requiredBearerToken": token, "models": [{"id": model, "kind": "chat"}],
+                "chatScenarios": [{"id": "container-file-code", "modelId": model,
+                    "responses": [{"outputItems": items} for _ in range(3)]}]}
+            status, configured, _ = request("/admin-api/configure", body=configuration)
+            assert status == 200, (native_kind, status, configured)
+            body = {"model": model, "input": "container file/code", "tools": [declaration], "tool_choice": "required"}
+            status, excluded, _ = request("/openai/v1/responses", body=body)
+            assert status == 200, (native_kind, status, excluded)
+            assert json.loads(excluded)["output"][0].get(payload_key) is None
+            body["include"] = [include]
+            status, included, _ = request("/openai/v1/responses", body=body)
+            assert status == 200, (native_kind, status, included)
+            output = json.loads(included)["output"]
+            assert output[0]["type"] == wire_kind and output[0]["id"] == output_id
+            annotation = output[1]["content"][0]["annotations"][0]
+            assert annotation["type"] == ("container_file_citation" if code else "file_citation")
+            if code:
+                assert output[0]["code"] == "print(42)" and output[0]["container_id"] == "cntr_container"
+                assert output[0]["outputs"] == [{"type": "logs", "logs": "42\n"},
+                    {"type": "image", "url": "https://example.com/container-chart.png"}]
+                assert annotation["start_index"] == annotation["end_index"] == 0
+            else:
+                assert output[0]["queries"] == ["container file fixture"]
+                assert output[0]["results"][0]["file_id"] == "file_container" and annotation["index"] == 4
+            status, stream, _ = request("/openai/v1/responses", body=body | {"stream": True})
+            assert status == 200, (native_kind, status, stream)
+            frames = [json.loads(line[6:]) for line in stream.decode().splitlines() if line.startswith("data: ")]
+            assert [frame["sequence_number"] for frame in frames] == list(range(len(frames)))
+            assert frames[-1]["type"] == "response.completed" and frames[-1]["response"]["output"] == output
+            progress = [frame["type"] for frame in frames if frame["type"].startswith("response." + wire_kind + ".")]
+            assert progress == ["response." + wire_kind + ".in_progress",
+                "response." + wire_kind + (".interpreting" if code else ".searching"), "response." + wire_kind + ".completed"]
+            if code:
+                assert "".join(frame["delta"] for frame in frames if frame["type"] == "response.code_interpreter_call_code.delta") == "print(42)"
+                assert len([frame for frame in frames if frame["type"] == "response.code_interpreter_call_code.done"]) == 1
+            status, response, _ = request("/admin-api/requests?streaming=true&limit=1")
+            trace = json.loads(response)[0]
+            assert status == 200 and trace["terminalMarkerObserved"] is True and trace["responseToolCalls"] == []
+            assert trace["responseOutputItems"][0]["kind"] == native_kind
+            assert trace["responseOutputItems"][1]["citations"][0]["kind"] == ("container_file" if code else "file")
+            results.append(native_kind + " configuration, optional includes, typed citations, JSON/SSE and terminal evidence")
         assert request("/admin-api/reset", method="POST")[0] == 200
         assert json.loads(request("/admin-api/assertions")[1])["totalEvents"] == 0
         results.append("management reset")

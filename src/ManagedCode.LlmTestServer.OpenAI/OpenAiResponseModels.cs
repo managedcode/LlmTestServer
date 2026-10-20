@@ -68,6 +68,8 @@ public sealed record OpenAiResponse
 [JsonDerivedType(typeof(OpenAiResponseOutputMessage), "message")]
 [JsonDerivedType(typeof(OpenAiResponseFunctionCall), "function_call")]
 [JsonDerivedType(typeof(OpenAiResponseWebSearchCall), "web_search_call")]
+[JsonDerivedType(typeof(OpenAiResponseFileSearchCall), "file_search_call")]
+[JsonDerivedType(typeof(OpenAiResponseCodeInterpreterCall), "code_interpreter_call")]
 public abstract record OpenAiResponseOutputItem
 {
     [JsonIgnore] public abstract string Type { get; }
@@ -142,7 +144,14 @@ public sealed record OpenAiResponseTool
 {
     [JsonPropertyName("search_context_size")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? SearchContextSize { get; init; }
     [JsonPropertyName("user_location")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public OpenAiWebSearchLocation? UserLocation { get; init; }
-    [JsonPropertyName("filters")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public OpenAiWebSearchFilters? Filters { get; init; }
+    [JsonPropertyName("filters")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public JsonElement? Filters { get; init; }
+    [JsonIgnore]
+    public OpenAiWebSearchFilters? WebSearchFilters => Type == "web_search" && Filters is { ValueKind: JsonValueKind.Object } filters
+        ? filters.Deserialize<OpenAiWebSearchFilters>() : null;
+    [JsonPropertyName("vector_store_ids")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string>? VectorStoreIds { get; init; }
+    [JsonPropertyName("max_num_results")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? MaxNumResults { get; init; }
+    [JsonPropertyName("ranking_options")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public OpenAiFileSearchRankingOptions? RankingOptions { get; init; }
+    [JsonPropertyName("container")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public JsonElement Container { get; init; }
     [JsonPropertyName("type")] public string Type { get; init; } = "function";
     [JsonPropertyName("name")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Name { get; init; }
     [JsonPropertyName("description")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Description { get; init; }

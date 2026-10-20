@@ -28,7 +28,7 @@ await control.ConfigureAsync(config => config.UseGpt41Mini()
                 Id = "msg_fixture",
                 Content = "Paris fixture.",
                 StreamChunks = ["Paris ", "fixture."],
-                Citations = [new()
+                Citations = [new LlmTestServerUrlCitation()
                 {
                     StartIndex = 0,
                     EndIndex = 5,
@@ -115,8 +115,9 @@ retention remains bounded and explicitly marks omitted payload evidence.
 ## Remaining E5 scope
 
 This slice makes no support claim for `web_search_preview`, open/find actions, native tool failures,
-non-ASCII citation-offset semantics, external-web-access/return-token-budget controls, file search,
-code interpreter, resource lifecycle or native tools on other provider namespaces. Those remain in the
+non-ASCII citation-offset semantics, external-web-access/return-token-budget controls,
+resource lifecycle or native tools on other provider namespaces. File search and code interpreter use their
+separate [bounded fixture contract](OpenAiNativeFileCode.md). Remaining contracts are tracked in the
 [native contract inventory](NativeBuiltInToolContractInventory.md) and delivery plan.
 
 ## Contract sources and integration evidence
