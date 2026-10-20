@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>ManagedCode.LlmTestServer.Aspire</PackageId>
+    <Description>Aspire AppHost resource extensions for ManagedCode.LlmTestServer provider emulation.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting" />
+    <PackageReference Include="MessagePack" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None
+      Include="buildTransitive\ManagedCode.LlmTestServer.Aspire.targets"
+      Pack="true"
+      PackagePath="buildTransitive\ManagedCode.LlmTestServer.Aspire.targets"
+      Visible="false" />
+  </ItemGroup>
+
+  <Target Name="PublishPackagedLlmTestServerService" BeforeTargets="_GetPackageFiles">
+    <PropertyGroup>
+      <LlmTestServerServicePublishDir>$(MSBuildThisFileDirectory)obj/$(Configuration)/service-publish/</LlmTestServerServicePublishDir>
+    </PropertyGroup>
+    <RemoveDir Directories="$(LlmTestServerServicePublishDir)" />
+    <MSBuild
+      Projects="$(MSBuildThisFileDirectory)../../samples/ManagedCode.LlmTestServer.Service/ManagedCode.LlmTestServer.Service.csproj"
+      Targets="Publish"
+      Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework);PublishDir=$(LlmTestServerServicePublishDir);UseAppHost=false;SelfContained=false;NoBuild=false"
+      RemoveProperties="PackageOutputPath;NoBuild;RuntimeIdentifier" />
+    <Error Condition="!Exists('$(LlmTestServerServicePublishDir)wwwroot/_framework/blazor.web.js')"
+           Text="Published LlmTestServer service is missing Blazor JavaScript assets." />
+    <ItemGroup>
+      <_PublishedLlmTestServerService Include="$(LlmTestServerServicePublishDir)**/*" />
+      <None Include="@(_PublishedLlmTestServerService)"
+            Pack="true"
+            PackagePath="tools/llm-test-server-service/%(_PublishedLlmTestServerService.RecursiveDir)%(_PublishedLlmTestServerService.Filename)%(_PublishedLlmTestServerService.Extension)"
+            Visible="false" />
+    </ItemGroup>
+  </Target>
+</Project>

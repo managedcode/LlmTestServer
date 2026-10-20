@@ -1,30 +1,38 @@
-# LLM TCK Architecture
+# LLM Test Server Architecture
 
 ## Purpose
 
-LLM TCK provides deterministic provider emulation for integration tests. Test suites can host a local compatibility server, script exact responses and failures, call it through normal client abstractions, and inspect assertion summaries after execution.
+LLM Test Server provides deterministic provider emulation for integration tests. Test suites can host a local compatibility server, script exact responses and failures, call it through normal client abstractions, and inspect assertion summaries after execution.
 
 ## Package Boundaries
 
-- `ManagedCode.LlmTck` owns provider-neutral runtime state: models, scenarios, match rules, deterministic modality fixtures, auth checks, and assertion events.
-- `ManagedCode.LlmTck.OpenAI` owns OpenAI-compatible DTOs and mapping from runtime results to wire responses.
-- `ManagedCode.LlmTck.AzureOpenAI`, `ManagedCode.LlmTck.Foundry`, `ManagedCode.LlmTck.Anthropic`, `ManagedCode.LlmTck.Gemini`, `ManagedCode.LlmTck.Groq`, `ManagedCode.LlmTck.Mistral`, `ManagedCode.LlmTck.Ollama`, `ManagedCode.LlmTck.Cohere`, `ManagedCode.LlmTck.Bedrock`, `ManagedCode.LlmTck.OpenRouter`, `ManagedCode.LlmTck.DeepSeek`, `ManagedCode.LlmTck.Perplexity`, `ManagedCode.LlmTck.SystemOne`, and `ManagedCode.LlmTck.Cloudflare` own provider compatibility profiles and provider-specific wire contracts as they are implemented.
-- `ManagedCode.LlmTck.Hosting` exposes the runtime through ASP.NET Core endpoints and serves the browser admin panel as Blazor server-side rendered components.
-- `ManagedCode.LlmTck.Client` exposes a control client and `Microsoft.Extensions.AI` clients.
-- `ManagedCode.LlmTck.Aspire` adds a package-owned Aspire resource with `builder.AddLlmTck()`.
-- `samples/ManagedCode.LlmTck.Service` is the runnable HTTP provider emulator.
-- `samples/ManagedCode.LlmTck.AppHost` shows the consumer AppHost shape for the Aspire package.
+- `ManagedCode.LlmTestServer` owns provider-neutral runtime state: models, scenarios, match rules, deterministic modality fixtures, auth checks, and assertion events.
+- `ManagedCode.LlmTestServer.OpenAI` owns OpenAI-compatible DTOs and mapping from runtime results to wire responses.
+- `ManagedCode.LlmTestServer.AzureOpenAI`, `ManagedCode.LlmTestServer.Foundry`, `ManagedCode.LlmTestServer.Anthropic`, `ManagedCode.LlmTestServer.Gemini`, `ManagedCode.LlmTestServer.Groq`, `ManagedCode.LlmTestServer.Mistral`, `ManagedCode.LlmTestServer.Ollama`, `ManagedCode.LlmTestServer.Cohere`, `ManagedCode.LlmTestServer.Bedrock`, `ManagedCode.LlmTestServer.OpenRouter`, `ManagedCode.LlmTestServer.DeepSeek`, `ManagedCode.LlmTestServer.Perplexity`, `ManagedCode.LlmTestServer.SystemOne`, and `ManagedCode.LlmTestServer.Cloudflare` own provider compatibility profiles and provider-specific wire contracts as they are implemented.
+- `ManagedCode.LlmTestServer.Hosting` exposes the runtime through ASP.NET Core endpoints and serves the browser admin panel as Blazor server-side rendered components.
+- `ManagedCode.LlmTestServer.Client` exposes a control client and `Microsoft.Extensions.AI` clients.
+- `ManagedCode.LlmTestServer.Aspire` adds a package-owned Aspire resource with `builder.AddLlmTestServer()`.
+- `samples/ManagedCode.LlmTestServer.Service` is the runnable HTTP provider emulator.
+- `samples/ManagedCode.LlmTestServer.AppHost` shows the consumer AppHost shape for the Aspire package.
 
 ## Runtime Flow
 
-1. Tests configure the runtime through `AddLlmTck(...)` at host startup, through `LlmTckClient.ConfigureAsync(config => ...)`, or through `POST /admin-api/configure`.
-2. Provider requests arrive through `/v1/*` endpoints.
+1. Tests configure the runtime through `AddLlmTestServer(...)` at host startup, through `LlmTestServerClient.ConfigureAsync(config => ...)`, or through `POST /admin-api/configure`.
+2. Provider requests arrive through explicit namespaces such as `/openai/v1/*`, `/anthropic/v1/*` and `/gemini/*`.
 3. Hosting maps provider requests into provider-neutral runtime requests.
 4. The runtime checks bearer-token requirements, configured model IDs, model modality kind, and scenario match rules.
 5. The provider adapter maps success or failure to the expected wire shape.
 6. Tests call `/admin-api/assertions` to inspect matched, unmatched, unknown-model, auth-failed, exhausted, and error-returned events.
 
 Control endpoints use the same bearer-token requirement when one is configured, so tests can expose the service without leaving runtime reset or reconfiguration open to unauthenticated callers.
+
+## Isolated test sessions
+
+Hosting owns a bounded registry of independent core runtimes and request journals. Request-scoped DI selects a
+session using its ID/key headers before provider/control execution; no header selects the default runtime.
+Session credentials are independent of provider credentials. Reset/configure/delete affect only their owning
+session. See [Test sessions](Features/TestSessions.md) for the HTTP/client contract and
+[ADR-0003](ADR/ADR-0003-isolated-test-sessions.md) for bounds, ownership and concurrency decisions.
 
 ## Stored response continuation
 
@@ -38,8 +46,8 @@ Chat scenarios are queued. Each matched request consumes the next response. Stre
 
 Audio transcription fixtures carry explicitly configured duration or complete audio/text/output token usage
 through runtime results and OpenAI-compatible JSON, verbose JSON and final streaming events. Configure it
-with `WithDefaultTranscriptionUsage(LlmTckTranscriptionUsage.ForDuration(seconds))` at startup or
-`UseTranscriptionUsage(LlmTckTranscriptionUsage.ForTokens(audio, text, output))` through the control client.
+with `WithDefaultTranscriptionUsage(LlmTestServerTranscriptionUsage.ForDuration(seconds))` at startup or
+`UseTranscriptionUsage(LlmTestServerTranscriptionUsage.ForTokens(audio, text, output))` through the control client.
 The default fixture duration is one second; it is deterministic fixture data, never inferred from input bytes.
 Azure OpenAI and Microsoft Foundry expose `/openai/v1/audio/transcriptions` with no required query version;
 explicit `v1` and `preview` are accepted and unknown or duplicate versions are rejected. Official SDK tests
@@ -48,7 +56,7 @@ and [OpenAI usage contract](https://developers.openai.com/api/reference/resource
 
 ## Client Configuration Surface
 
-`ManagedCode.LlmTck.Client` owns the universal pre-test configuration API. A test can create one `LlmTckClient`, optionally bind a bearer token, call `ConfigureAsync(config => ...)`, and then create `Microsoft.Extensions.AI` chat, embedding, and image clients from the same control client. Audio and video fixtures are reachable through `LlmTckClient.GenerateAudioAsync(...)` and `LlmTckClient.GenerateVideoAsync(...)` until first-party `Microsoft.Extensions.AI` abstractions exist.
+`ManagedCode.LlmTestServer.Client` owns the universal pre-test configuration API. A test can create one `LlmTestServerClient`, optionally bind a bearer token, call `ConfigureAsync(config => ...)`, and then create `Microsoft.Extensions.AI` chat, embedding, and image clients from the same control client. Audio and video fixtures are reachable through `LlmTestServerClient.GenerateAudioAsync(...)` and `LlmTestServerClient.GenerateVideoAsync(...)` until first-party `Microsoft.Extensions.AI` abstractions exist.
 
 The client builder wraps the provider-neutral configuration builder; it does not create a separate runtime model. This keeps startup configuration, control endpoint configuration, and raw JSON configuration on the same contract.
 
@@ -56,7 +64,7 @@ The client builder wraps the provider-neutral configuration builder; it does not
 
 OpenAI compatibility is the first implemented provider endpoint surface. The hosted surface also maps Azure OpenAI deployment routes, Microsoft Foundry / Azure AI Inference chat and embedding routes, and the native Anthropic Messages route. The provider matrix is explicit: OpenAI, Azure OpenAI, Microsoft Foundry, Anthropic, Gemini, Groq, Mistral, Ollama, Cohere, Amazon Bedrock, OpenRouter, DeepSeek, and Perplexity each have a package-level compatibility profile. Each profile carries a doc-backed `ApiContract` so claimed routes, methods, streaming modes, modalities, and version requirements can be checked against official provider documentation. Provider-specific DTOs and mapping belong in the matching provider package; provider-neutral scenario behavior stays in the core runtime.
 
-Aspire integration adds the TCK through `builder.AddLlmTck()` without requiring consumer AppHosts to reference a service project, generated `Projects.*` metadata type, project path, Docker, or a container runtime. The package-owned resource starts the packaged .NET LLM TCK service executable and exposes its `http` endpoint. Consumers that explicitly want container hosting can opt in with `builder.AddLlmTckContainer()`, which uses the versioned `ghcr.io/managedcode/llm-tck` image. Consumer resources reference the `LlmTckResource`, wait for it, and read its `http` endpoint through `GetHttpEndpoint()` or Aspire's `GetEndpoint("http")`.
+Aspire integration adds the Test Server through `builder.AddLlmTestServer()` without requiring consumer AppHosts to reference a service project, generated `Projects.*` metadata type, project path, Docker, or a container runtime. The package-owned resource starts the packaged .NET LLM Test Server service executable and exposes its `http` endpoint. Consumers that explicitly want container hosting can opt in with `builder.AddLlmTestServerContainer()`, which uses the versioned `ghcr.io/managedcode/llm-test-server` image. Consumer resources reference the `LlmTestServerResource`, wait for it, and read its `http` endpoint through `GetHttpEndpoint()` or Aspire's `GetEndpoint("http")`.
 
 Native decision fixtures live under the core `Decisions` slice; model profile metadata selects documented SystemOne limits and rounding. OpenAI wire contracts stay in OpenAI, SystemOne Jev/Kev contracts share their native protocol package, and Cloudflare owns Workers AI envelopes and native Clef validation. Hosting delegates the new native routes to the same authenticated/fault-injected runtime and request tracing.
 

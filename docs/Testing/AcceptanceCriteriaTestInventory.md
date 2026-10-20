@@ -1,119 +1,65 @@
-# Acceptance Criteria Test Inventory
+# Server integration acceptance inventory
 
-| Criterion | Coverage |
+Only integration tests are accepted: start the server, call its public HTTP endpoints or real provider SDKs,
+and inspect public responses/control APIs. Test setup may build explicit fixtures, but assertions must prove
+observable server behavior. Source/document scans, fake clients, reflection guards and direct runtime unit tests
+have been removed. This inventory is documentation; tests do not read it to assert that method names appear here.
+
+## Existing executable flows
+
+| Contract | Integration evidence |
 | --- | --- |
-| Runtime matches scripted chat scenarios | `LlmTckRuntimeTests.CompleteChatAsync_MatchesScenarioAndRecordsAssertionAsync` |
-| Runtime exposes deterministic token usage on chat and video operation results | `LlmTckRuntimeTests.CompleteChatAsync_MatchesScenarioAndRecordsAssertionAsync`, `LlmTckRuntimeTests.Modalities_ReturnDeterministicDefaultsAndUseBearerTokenAsync` |
-| Runtime reports unmatched requests | `LlmTckRuntimeTests.CompleteChatAsync_ReportsUnmatchedRequestAsync` |
-| Runtime supports embeddings, images, audio, and auth | `LlmTckRuntimeTests.Modalities_ReturnDeterministicDefaultsAndUseBearerTokenAsync` |
-| Runtime rejects unknown or wrong-kind models | `LlmTckRuntimeTests.Modalities_RejectUnknownOrWrongKindModelsAsync` |
-| Runtime fault simulation applies configured content-filter and rate-limit errors across modalities | `LlmTckRuntimeTests.FaultSimulation_ReturnsContentFilterAcrossRuntimeModalitiesAsync`, `LlmTckRuntimeTests.FaultSimulation_RateLimitCountsRequestsAcrossModalitiesAndResetAsync` |
-| Runtime snapshots mutable configuration input | `LlmTckRuntimeTests.ConfigureAsync_SnapshotsMutableConfigurationAsync` |
-| Cancelled delayed chat does not consume queued response | `LlmTckRuntimeTests.CancelledDelayedChat_DoesNotConsumeScenarioResponseAsync` |
-| OpenAI-compatible endpoints expose models and modalities | `OpenAiEndpointTests.OpenAiEndpoints_ExposeModelsAndAllModalitiesAsync` |
-| Streaming endpoint emits SSE chunks and done marker | `OpenAiEndpointTests.StreamingChatCompletion_ReturnsServerSentChunksAsync` |
-| Bearer failures use OpenAI error envelope | `OpenAiEndpointTests.BearerTokenRequirement_ReturnsOpenAiErrorShapeAsync` |
-| Control endpoints require bearer token when configured | `OpenAiEndpointTests.ControlEndpoints_RequireConfiguredBearerTokenAsync` |
-| Provider endpoints reject unknown models | `OpenAiEndpointTests.ProviderEndpoints_RejectUnknownModelsAsync` |
-| Malformed chat payloads return OpenAI bad request envelope | `OpenAiEndpointTests.MalformedChatCompletion_ReturnsOpenAiBadRequestAsync` |
-| Audio speech fixture advertises a matching media type | `OpenAiEndpointTests.AudioSpeech_ReturnsTruthfulWavFixtureAsync` |
-| `IChatClient` fake follows dotnet/extensions delegate pattern | `MicrosoftExtensionsAiClientTests.TestChatClient_UsesDotnetExtensionsCallbackPatternAsync` |
-| Streaming fake follows delegate pattern | `MicrosoftExtensionsAiClientTests.TestChatClient_StreamsThroughCallbackPatternAsync` |
-| `Microsoft.Extensions.AI` clients call the compatibility server | `MicrosoftExtensionsAiClientTests.MicrosoftExtensionsAiClients_InvokeLlmTckThroughOpenAiCompatibilityEndpointsAsync` |
-| Official OpenAI SDK clients call the namespaced OpenAI API root for streaming chat | `OpenAiSdkCompatibilityTests.OpenAiChatClient_CanUseNamespacedChatStreamingAsync` |
-| Official Azure OpenAI SDK clients call deployment chat and embedding routes | `AzureSdkCompatibilityTests.AzureOpenAiClient_CanUseDeploymentChatAndEmbeddingsAsync` |
-| Azure OpenAI v1 image generation works through the official OpenAI SDK and returns image bytes | `AzureV1SdkCompatibilityTests.AzureOpenAiV1Images_UseOfficialOpenAiSdkAndReturnImageBytesAsync` |
-| Azure OpenAI deployment routes use deployment names, API keys, and documented modality envelopes | `AzureSdkCompatibilityTests.AzureOpenAiDeploymentRoutes_UseApiKeyAndDeploymentModelForModalitiesAsync` |
-| Official Azure AI Inference clients call Foundry chat and embedding routes | `AzureSdkCompatibilityTests.AzureAiInferenceClients_CanUseFoundryChatAndEmbeddingsAsync` |
-| Universal client API configures datasets, models, auth, and modality fixtures before a test | `LlmTckClientConfigurationTests.ConfigureAsync_WithFluentClientApi_LoadsDatasetAndFixturesAsync` |
-| Provider packages expose stable compatibility profiles | `ProviderPackageCatalogTests.ProviderPackages_ExposeExpectedCompatibilityProfilesAsync` |
-| Provider profiles are backed by official docs and every hosted provider route maps to a documented implemented operation | `ProviderApiContractTests.ProviderApiContracts_AreDocBackedAndCoverClaimedCapabilitiesAsync`, `ProviderApiContractTests.HostingProviderRoutes_AreCoveredByImplementedDocumentedOperationsAsync` |
-| Every implemented provider operation has behavior-test evidence, and every streaming operation has streaming evidence | `ProviderApiContractTests.ProviderBehaviorEvidence_CoversEveryImplementedOperationAsync` |
-| Provider-neutral fault simulation returns native provider error envelopes for every provider family | `ProviderFaultSimulationTests.ProviderFamilies_ReturnConfiguredContentFilterErrorsAsync`, `ProviderFaultSimulationTests.ProviderFamilies_ReturnConfiguredRateLimitErrorsAsync` |
-| Anthropic Messages API route follows the documented create-message and streaming surface | `AnthropicEndpointTests.MessagesEndpoint_ReturnsAnthropicMessageShapeAsync`, `AnthropicEndpointTests.MessagesEndpoint_StreamsAnthropicServerSentEventsAsync`, `AnthropicEndpointTests.MessagesEndpoint_RequiresAnthropicVersionHeaderAsync`, `AnthropicEndpointTests.MessagesEndpoint_AcceptsAnthropicApiKeyHeaderAsync` |
-| OpenAI-compatible provider route aliases are documented and executable for non-streaming and streaming chat | `OpenAiCompatibleProviderRouteTests.OpenAiCompatibleChatRoutes_ReturnChatCompletionShapeAsync`, `OpenAiCompatibleProviderRouteTests.OpenAiCompatibleChatRoutes_StreamServerSentChunksAsync`, `OpenAiCompatibleProviderRouteTests.OpenAiCompatibleModelRoutes_ReturnModelListShapeAsync`, `OpenAiCompatibleProviderRouteTests.MistralEmbeddingRoute_ReturnsEmbeddingShapeAsync`, `OpenAiCompatibleProviderRouteTests.FoundryEmbeddingRoutes_ReturnEmbeddingShapeAsync` |
-| OpenAI-compatible Responses API routes are documented and executable for non-streaming and streaming responses | `OpenAiCompatibleProviderRouteTests.OpenAiCompatibleResponsesRoutes_ReturnResponseShapeAsync`, `OpenAiCompatibleProviderRouteTests.OpenAiCompatibleResponsesRoutes_StreamResponseServerSentEventsAsync` |
-| OpenAI image generation, editing, variation, and image SSE routes are documented and executable | `OpenAiEndpointTests.ImageRoutes_ReturnDocumentedEditVariationAndStreamingShapesAsync` |
-| OpenAI-compatible audio transcription routes are documented and executable for multipart input, JSON/text output, OpenAI streaming events, Groq metadata, and Azure deployment/API-key routing | `OpenAiEndpointTests.AudioTranscription_ReturnsJsonTextAndStreamingShapesAsync`, `OpenAiCompatibleProviderRouteTests.GroqAudioTranscriptionRoute_ReturnsGroqTranscriptionShapeAsync`, `OpenAiCompatibleProviderRouteTests.AzureOpenAiAudioTranscriptionRoute_UsesDeploymentModelAndApiKeyAsync` |
-| OpenAI-compatible audio translation routes are documented and executable for multipart input, JSON/text or verbose JSON output, no unsupported streaming flag, Groq metadata, and Azure deployment/API-key routing | `OpenAiEndpointTests.AudioTranslation_ReturnsJsonTextAndRejectsStreamingAsync`, `OpenAiCompatibleProviderRouteTests.GroqAudioTranslationRoute_ReturnsGroqTranslationShapeAsync`, `OpenAiCompatibleProviderRouteTests.AzureOpenAiAudioTranslationRoute_UsesDeploymentModelAndApiKeyAsync` |
-| Groq OpenAI-compatible audio speech route is documented and executable with required voice, deterministic audio bytes, and Groq-specific response-format validation | `OpenAiCompatibleProviderRouteTests.GroqAudioSpeechRoute_ReturnsAudioAndValidatesDocumentedRequestAsync` |
-| OpenAI and Azure OpenAI video routes are documented and executable for lifecycle metadata, media content, Azure preview jobs, and header-only content retrieval | `OpenAiEndpointTests.VideoRoutes_ReturnDocumentedOpenAiShapesAndValidateEnumsAsync`, `OpenAiCompatibleProviderRouteTests.AzureOpenAiVideoRoutes_FollowPreviewJobAndContentShapesAsync` |
-| Ollama and Cohere native routes follow documented chat, streaming, and embedding surfaces | `OllamaEndpointTests.ChatEndpoint_WithStreamFalse_ReturnsOllamaChatShapeAsync`, `OllamaEndpointTests.ChatEndpoint_DefaultStreamsOllamaJsonLinesAsync`, `OllamaEndpointTests.EmbedEndpoint_ReturnsOllamaEmbeddingShapeAsync`, `CohereEndpointTests.ChatEndpoint_ReturnsCohereChatShapeAsync`, `CohereEndpointTests.ChatEndpoint_StreamsCohereServerSentEventsAsync`, `CohereEndpointTests.EmbedEndpoint_ReturnsCohereEmbeddingShapeForTextsAsync`, `CohereEndpointTests.EmbedEndpoint_ReturnsCohereEmbeddingShapeForInputsAsync` |
-| Provider response envelopes expose deterministic input/output usage where the provider surface documents usage | `OpenAiCompatibleProviderRouteTests.OpenAiCompatibleChatRoutes_ReturnChatCompletionShapeAsync`, `OpenAiCompatibleProviderRouteTests.OpenAiCompatibleResponsesRoutes_ReturnResponseShapeAsync`, `AnthropicEndpointTests.MessagesEndpoint_ReturnsAnthropicMessageShapeAsync`, `AnthropicEndpointTests.MessagesEndpoint_StreamsAnthropicServerSentEventsAsync`, `GeminiEndpointTests.GenerateContentEndpoint_ReturnsGeminiCandidateShapeAsync`, `GeminiEndpointTests.PredictLongRunningVideoEndpoint_ReturnsGeminiOperationAndGeneratedFileAsync`, `CohereEndpointTests.ChatEndpoint_ReturnsCohereChatShapeAsync`, `OllamaEndpointTests.ChatEndpoint_WithStreamFalse_ReturnsOllamaChatShapeAsync`, `BedrockEndpointTests.ConverseEndpoint_ReturnsBedrockConverseShapeAsync`, `BedrockEndpointTests.ConverseStreamEndpoint_ReturnsBedrockEventStreamShapeAsync` |
-| Gemini native routes follow documented generateContent, streamGenerateContent, embedContent, and long-running Veo video/file surfaces | `GeminiEndpointTests.GenerateContentEndpoint_ReturnsGeminiCandidateShapeAsync`, `GeminiEndpointTests.StreamGenerateContentEndpoint_ReturnsGeminiServerSentEventsAsync`, `GeminiEndpointTests.EmbedContentEndpoint_ReturnsGeminiEmbeddingShapeAsync`, `GeminiEndpointTests.PredictLongRunningVideoEndpoint_ReturnsGeminiOperationAndGeneratedFileAsync` |
-| Bedrock native runtime routes follow documented Converse, ConverseStream, InvokeModel, and InvokeModelWithResponseStream envelopes | `BedrockEndpointTests.ConverseEndpoint_ReturnsBedrockConverseShapeAsync`, `BedrockEndpointTests.ConverseStreamEndpoint_ReturnsBedrockEventStreamShapeAsync`, `BedrockEndpointTests.InvokeEndpoint_ReturnsTitanTextShapeForChatModelAsync`, `BedrockEndpointTests.InvokeModelWithResponseStreamEndpoint_ReturnsChunkBytesAsync`, `BedrockEndpointTests.InvokeEndpoint_ReturnsTitanEmbeddingShapeForEmbeddingModelAsync`, `BedrockEndpointTests.InvokeEndpoint_ReturnsImageShapeForImageModelAsync` |
-| Aspire AppHost is built in test code, adds the package-owned TCK with `builder.AddLlmTck()`, resolves the provider URL from the Aspire resource endpoint, configures API key auth, starts the packaged .NET service without Docker, and serves implemented modalities plus official Azure SDK clients | `AspireIntegrationTests.AddLlmTck_BuildsAppHostInTestAndSupportsConfiguredClientsAsync` |
+| Default models, chat, embeddings, images, audio | `OpenAiEndpointTests.OpenAiEndpoints_ExposeModelsAndAllModalitiesAsync` |
+| JSON and native SSE streaming, usage, terminal events | `OpenAiEndpointTests`, `OpenAiSdkCompatibilityTests`, `OpenAiCompatibleProviderRouteTests` |
+| Fixed output tokenizer counts exposed on response and journal | `LlmTestServerTokenCounterTests.ChatResponse_ReportsConfiguredOutputTokenUsageThroughHttpAsync` |
+| Reasoning and prompt-cache usage | `OpenAiEndpointTests`, `AnthropicEndpointTests`, `GeminiEndpointTests`, `BedrockEndpointTests`, `ProviderApiDriftTests` |
+| Auth, malformed bodies, unknown models, required parameters | `OpenAiEndpointTests`, `ProviderValidationBoundaryTests`, `ReviewHttpRegressionTests` |
+| Configure/reset/assertions through typed control client | `OpenAiEndpointTests.ControlClient_ConfiguresReadsAssertionsAndResetsRuntimeAsync` |
+| Invalid configuration preserves the active runtime after HTTP 400 | `ConfigurationBoundaryIntegrationTests` |
+| Per-modality auth, wrong model kind, content filter, rate limit and reset | `ModalityFailureIntegrationTests` |
+| Stored response credential/provider isolation, count/byte capacity, store=false and reset/configure | `ResponseHistoryIntegrationTests` |
+| Exact conversation order, scenario credentials, exhaustion and cancellation/retry | `ScenarioFlowIntegrationTests` |
+| Parallel session queues, reset/configure, credentials and admission/disposal | `SessionIsolationIntegrationTests`, `SessionBoundaryIntegrationTests` |
+| Session response history, video/fault state, cancellation and in-flight deletion | `SessionStateIntegrationTests` |
+| Session provider matrix, official SDK JSON/SSE, native decisions, cache and journal limits | `SessionProviderIntegrationTests` |
+| Client model presets actually reach the server | `LlmTestServerClientConfigurationTests` |
+| MEAI chat, embedding and image clients call the server | `MicrosoftExtensionsAiClientTests.MicrosoftExtensionsAiClients_InvokeLlmTestServerThroughOpenAiCompatibilityEndpointsAsync` |
+| Official OpenAI SDK chat, Responses, tools, embeddings and modalities | `OpenAiSdkCompatibilityTests`, `ToolFixtureClientTests` |
+| Azure OpenAI deployment endpoints through official SDK | `AzureSdkCompatibilityTests` |
+| Azure/Foundry v1 endpoints through official clients | `AzureV1SdkCompatibilityTests`, `V1AudioTranscriptionCompatibilityTests` |
+| Foundry inference version and auth requirements | `AzureSdkCompatibilityTests`, `ReviewHttpRegressionTests.FoundryInference_RequiresDocumentedVersionWithoutConsumingQueueAsync` |
+| Anthropic Messages, SSE, tool history, cache | `AnthropicEndpointTests`, `ToolFixtureEndpointTests` |
+| Gemini generation, stream, embedding, video, schema options | `GeminiEndpointTests`, `FollowUpEndpointTests`, `ProviderApiDriftTests` |
+| Cohere/Ollama native chat and embedding | `CohereEndpointTests`, `OllamaEndpointTests` |
+| Bedrock Converse/Invoke and native binary event streams | `BedrockEndpointTests`, `BedrockSdkCompatibilityTests` |
+| OpenAI-compatible provider namespaces and documented operations | `OpenAiCompatibleProviderRouteTests` |
+| Provider-neutral rate limit and content filter errors | `ProviderFaultSimulationTests` |
+| Tool/schema operation variants, JSON and streaming, negative then successful recovery | `ProviderCapabilityEvidenceTests.ClaimedToolAndSchemaCases_ExecutePositiveAndNegativeHttpEvidenceAsync` |
+| Tool selection, local references, invalid arguments, structured stream concatenation | `ToolFixtureValidationTests` |
+| Parallel-tool request limits and malformed-schema/nullable/nested constraints | `FollowUpEndpointTests`, `ToolFixtureClientTests` |
+| Official SDK/MEAI function invocation, tool-result continuation and model changes | `ToolFixtureClientTests`, `LlmTestServerResponsesContinuationTests` |
+| Video CRUD/content/delete/reset/provider isolation | `ReviewVideoRegressionTests`, `OpenAiEndpointTests`, `AzureSdkCompatibilityTests` |
+| Native Jev/Kev/OpenAI/Clef responses, errors, images, bounds and parameter variants | `DecisionEndpointTests`, `DecisionRuntimeTests`, `DecisionValidationTests`, `DecisionQuestionTests`, `DecisionInputTests`, `DecisionFixtureContractTests` |
+| Jev multipart/image/box/long-context contracts | `Jev114EndpointTests`, `Jev114MultipartTests`, `TypeSafeVisionContractTests` |
+| Native Clef image/scalar/error envelopes and typed client | `CloudflareDecisionContractTests`, `CloudflareDecisionErrorTests`, `CloudflareDecisionImageTests`, `CloudflareNativeClientTests` |
+| Native Kev formatting and required/optional request fields over HTTP | `SystemOneNativeContractTests` |
+| Dashboard root HTML and request/response presentation | `AdminPanelTests` |
+| Public request journal auth, all filter/paging parameters, validation, reset | `RequestJournalIntegrationTests` |
+| Bounded request/response diagnostics preserve full HTTP response bytes | `RequestJournalIntegrationTests.Journal_BoundsRetentionWithoutTruncatingActualProviderResponsesAsync` |
+| Aspire starts packaged service and exercises official SDKs through allocated endpoint | `AspireIntegrationTests` |
+| New/legacy configuration key precedence enforced by running Aspire server | `AspireAuthorizationIntegrationTests` |
+| Installed NuGet assets, typed configuration, official SDK and interactive Chromium dashboard | `scripts/package-consumer/PackageTests.cs`, run by `scripts/verify-package.py` with isolated build configuration/cache |
+| Actual public GitHub release and all NuGet bytes | `scripts/verify-release.py`, executed after publication |
+| Clean public-feed installed consumer | `scripts/verify-package.py --public-feed`, executed after publication |
 
-## September 2026 provider API refresh
+## Migration qualification still in progress
 
-- `AzureV1SdkCompatibilityTests.V1ChatAndEmbeddings_UseOfficialSdkWithoutApiVersionAsync`: Azure OpenAI and Microsoft Foundry v1 chat, streaming and base64 embeddings through the official OpenAI SDK, without a dated API version.
-- `AzureV1SdkCompatibilityTests.V1Responses_UseOfficialSdkAndStreamAsync`: OpenAI, Azure OpenAI and Foundry Responses parsed and streamed through OpenAI 2.13.0.
-- `AzureV1SdkCompatibilityTests.AzureOpenAiV1Images_UseOfficialOpenAiSdkAndReturnImageBytesAsync`: Azure OpenAI v1 image generation routed through the official OpenAI SDK with nonempty returned bytes.
-- `AzureV1SdkCompatibilityTests.V1Responses_AcceptsApiKeyAndRejectsMissingCredentialsAsync`: Azure v1 API-key authentication and unauthorized requests preserving the response queue.
-- `ProviderApiDriftTests.OpenRouterResponses_RejectsStateBeforeConsumingScenarioAsync`: stateless Responses validation, including an empty non-null previous response ID.
-- `ProviderApiDriftTests.OllamaChat_ReportsCacheReadsInFinalStreamingChunkAsync`: cold and cached requests, with cache accounting on the final NDJSON chunk.
-- `ProviderApiDriftTests.AnthropicZeroMaxTokens_WarmsCacheWithoutConsumingResponseAsync`: cache-only requests in JSON and SSE modes, zero output, and preserved scripted response.
-- `ProviderApiDriftTests.GeminiStreaming_PreservesResponseIdAndReasoningUsageAsync`: JSON/default/SSE transport, stable response ID, distinct thought tokens and final total accounting.
-- `ProviderApiDriftTests.ResponsesStreaming_UsesDocumentedEventsAndStableItemIdentityAsync`: complete Responses text event lifecycle, monotonically increasing sequence numbers and one output item ID across OpenAI, Groq and OpenRouter.
-- `BedrockEndpointTests.ConverseStreamEndpoint_ReturnsBedrockEventStreamShapeAsync` and `InvokeModelWithResponseStreamEndpoint_ReturnsChunkBytesAsync`: binary AWS event-stream decoded by the AWS SDK, including fragmented headers, payload and CRC checksums.
+Removing old internal tests does not prove equivalent public API coverage. The remaining migration obligations
+are tracked in `artifacts/llm-test-server-migration/integration-parity.json` and the implementation ledger in
+[the migration plan](../Features/LlmTestServerMigrationPlan.md). Remaining work includes final coverage qualification, installed-package browser flows and container
+execution; the configuration/history/cancellation integrations passed in the 629/629 integration-only suite (90.86% production line coverage). Add real server flows for uncovered behavior; do not restore internal tests or lower the 90% coverage gate.
 
-- `BedrockSdkCompatibilityTests.ConverseStream_OfficialSdkReadsTextAndUsageAsync`: the official AmazonBedrockRuntimeClient parses the hosted binary stream into typed text, usage and stop events.
-
-`BedrockEndpointTests.StreamingEndpoints_RejectInvalidRequestsWithoutConsumingFixtureAsync` verifies malformed, null and incomplete JSON plus unauthorized calls on both binary streaming routes; a subsequent authenticated request still receives the configured response.
-
-## Project review regressions
-
-| Acceptance criterion | Evidence |
-| --- | --- |
-| Pre-cancelled/concurrently cancelled calls preserve unconsumed responses | `ReviewRuntimeRegressionTests` |
-| Dataset-local scenario IDs stay independent | `ReviewRuntimeRegressionTests.SameLocalScenarioId_RemainsIndependentAcrossDatasetsAndResetAsync` |
-| Errors before generation have zero output/reasoning tokens | `ReviewRuntimeRegressionTests.RejectedAndScriptedErrorRequests_DoNotGenerateReasoningOrOutputUsageAsync` |
-| Prompt cache has deterministic capacity/eviction | `ReviewRuntimeRegressionTests.PromptCache_EvictsOldestPrefixAtConfiguredCapacityAsync` |
-| Invalid configuration preserves the previous runtime and traces | `ReviewHttpRegressionTests.InvalidConfigure_PreservesConfigurationAndTracesAsync` |
-| Azure SDK default supports deployment chat, streaming and embeddings without a pinned version | `AzureSdkCompatibilityTests.AzureOpenAiClient_CanUseDeploymentChatAndEmbeddingsAsync` |
-| Documented GA and preview API versions are accepted; unknown date-shaped versions are rejected before queue consumption | `ReviewHttpRegressionTests.AzureLegacyVersion_AcceptsDocumentedStableAndPreviewVersionsAsync` |
-| Nested null provider inputs and malformed Azure versions return 400 | `ReviewHttpRegressionTests` |
-| Streaming and MEAI usage survive to callers | `ReviewHttpRegressionTests.StreamingUsage_IsOptInAndFollowsTerminalChoiceAsync`, `ChatClient_PreservesUsageAndTerminalUpdate_EmbeddingsPreserveUsageAsync` |
-| Legacy function options fail explicitly; implemented tools/schema retain full behavior | `ReviewCapabilityRegressionTests.LegacyFunctions_ReturnExplicitErrorWithoutConsumingFixtureAsync`, `ToolFixtureEndpointTests`, `ToolFixtureClientTests` |
-| Tool selection, argument/schema mismatch and malformed history preserve the queue | `ToolFixtureValidationTests` |
-| Multiple calls, mixed text/tool blocks, snapshots and cache keys retain tool data | `ToolFixtureStateTests` |
-| Foundry inference requires its documented API version | `ReviewHttpRegressionTests.FoundryInference_RequiresDocumentedVersionWithoutConsumingQueueAsync` |
-| Stored OpenAI/Azure video lifecycle and content respect deletion/reset | `ReviewVideoRegressionTests` |
-| Actual Aspire NuGet contains assets and interactive dashboard works | `scripts/package-consumer/PackageTests.cs`, executed by `scripts/verify-package.py` outside the repository |
-| Interrupted NuGet publishing remains resumable | `scripts/test-release.py` with local fake CLIs |
-
-## Follow-up review regressions (2026-09-08)
-
-- `FollowUpRuntimeTests.SummaryMutations_CannotChangeRetainedMessagesOrChunksAsync`: mutation of returned snapshots cannot alter retained diagnostics.
-- `FixtureMismatch_IsCountedAndJournaledWithoutConsumingResponseAsync`: mismatch status, usage, journal correlation and queue recovery.
-- `ExactMatch_RejectsUnexpectedToolMetadataWhileContainsKeepsWildcardsAsync`: null/empty tool metadata is strict under Exact.
-- `FollowUpEndpointTests.ParallelTools_RespectRequestLimitAndPreserveQueueAsync`: OpenAI Chat/Responses and Anthropic, JSON and streaming.
-- `ChatModel_IsRequiredExceptForAzureDeploymentRoutesAsync`: required wire model and deployment URL exception.
-- `GeminiSchema_ValidatesNullableNestedAlternativesAndStringLimitsAsync` and `FollowUpSchemaTests`: nullable, all six int64 limits, nested alternatives, parameters, JSON Schema separation and malformed-schema rejection.
-- `VideoCapacity_RejectsOverflowAndReclaimsDeletedBytesAsync`, `VideoCapacity_ValidatesConfigurationAndHandlesOversizedOrFailedResultsAsync`, `VideoCapacity_ReturnsConflictThroughProviderEndpointAsync`: count/byte overflow, cross-provider budget, reset/configure/delete and HTTP failures.
-- `ToolFixtureClientTests.ExtensionsAi_RespectsSingleToolOptionWithoutConsumingFixtureAsync`: MEAI parallel option, both response modes.
-- `ProviderCapabilityEvidenceTests.ClaimedToolAndSchemaCases_ExecutePositiveAndNegativeHttpEvidenceAsync`: all 13 provider profiles, every claimed tool/schema operation, supported JSON/stream modes, accept/reject outcomes with queue recovery and journal checks.
-- `EvidenceGuard_RequiresExecutableProviderAndEdgeCasesAsync`: executable test attributes, complete provider arguments, named Gemini cases and all six parallel-option cases are mandatory.
-
-## v1 audio transcription and usage
-
-| Criterion | Automated evidence |
-|---|---|
-| Azure OpenAI, Foundry and OpenAI multipart transcription works through the official SDK; control configuration survives transport and MEAI retains duration / complete token usage. | `V1AudioTranscriptionCompatibilityTests.OfficialSdk_PreservesTranscriptionUsageAsync` |
-| Streaming transcription retains configured usage in its final event. | `V1AudioTranscriptionCompatibilityTests.Streaming_PreservesFinalUsageAsync` |
-| Azure/Foundry v1 audio enforces credentials, accepts default/v1/preview, denies unknown/duplicate versions and missing files, and returns actual fixture duration in verbose JSON. | `V1AudioTranscriptionCompatibilityTests.V1Audio_EnforcesAuthAndVersionAndSupportsVerboseJsonAsync` |
-| Malformed duration or incomplete/mixed/overflow token configuration fails before use. | `TranscriptionUsageConfigurationTests` |
-
-| Native Jev/Kev, Clef/flash and OpenAI Decisions preserve fixture probabilities, native score, usage and tracing | `DecisionEndpointTests.NativeDecisionEndpoints_PreserveAnswersAndUsageAsync` |
-| Jev 1.14 JSON images, mixed and box-only answers, structured legends and native image opt-in validation | `Jev114EndpointTests.Jev114_JsonImagesAndBoxPreserveNativeAnswersAsync`, `Jev114EndpointTests.Jev114_RejectsInvalidImageAndBoxRequestsAsync` |
-| Jev typed client handles JSON/multipart images, format inference, part precedence, physical byte limits and native part/header failures | `Jev114MultipartTests.Jev114_TypedClientSupportsJsonAndMultipartImagesAsync`, `Jev114MultipartTests.Jev114_MultipartRejectsNativePartViolationsAsync`, `Jev114MultipartTests.Jev114_MultipartEnforcesPhysicalBodyAndImageByteLimitsAsync`, `Jev114MultipartTests.Jev114_MultipartInfersFormatAndPrefersPartOverBase64Async` |
-| Decision routes enforce authentication, simulated faults, required fields and fixture mismatch | `DecisionEndpointTests.NativeDecisionEndpoints_EnforceAuthAndFaultsAsync`, `DecisionEndpointTests.NativeDecisionEndpoints_RejectMissingRequiredFieldsAsync`, `DecisionEndpointTests.DecisionControlClient_ConfiguresFixturesAndMismatchIsObservableAsync` |
-
-| Native OpenAI positional names, typed choices, score labels and message/image input constraints | `DecisionQuestionTests`, `DecisionInputTests` |
-
-| Native OpenAI choice values preserve strings beyond question text limits and usage defaults stay present | `DecisionQuestionTests.OpenAiQuestions_PreserveChoiceValuesWithoutUndocumentedTextLimitAsync`, `DecisionEndpointTests.NativeDecisionEndpoints_PreserveAnswersAndUsageAsync` |
-
-| Native SystemOne profile-specific JSON/defaults, empty IDs, rendered Kev legends, request IDs, latency/truncation, validation422 and predicate field filtering | `SystemOneNativeContractTests` |
-| Native required confidence, complete probability domains, rounding tolerance, explicit malformed-response scenarios | `DecisionFixtureContractTests` |
-| Cloudflare image formats/body/dimension limits, native numeric errors, whitespace selectors and null criteria | `CloudflareDecisionContractTests`, `CloudflareDecisionImageTests`, `CloudflareDecisionErrorTests` |
-| Clef and Clef Flash binary criterion values accept native JSON scalars without loosening TypeSafe state/instruction/criterion validation | `CloudflareDecisionContractTests.PredicateCriteria_AcceptsNativeJsonScalarsWithoutWeakeningTypeSafeAsync` |
+Each implemented operation must be exercised with every supported parameter, positive and invalid/boundary
+values, supported streaming modes, auth/version handling and stateful continuation where applicable. A passing
+subset or this inventory alone does not establish full parameter coverage. New provider claims require official
+method-level contracts plus passing HTTP/SDK behavior evidence.

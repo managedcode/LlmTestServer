@@ -1,27 +1,88 @@
-# LLM Technology Compatibility Kit 
+# LLM Test Server
 
-[![CI](https://github.com/managedcode/LlmTck/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/managedcode/LlmTck/actions/workflows/ci.yml)
-[![Release](https://github.com/managedcode/LlmTck/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/managedcode/LlmTck/actions/workflows/release.yml)
-[![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTck.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck)
-[![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTck.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck)
-[![License](https://img.shields.io/github/license/managedcode/LlmTck.svg?style=flat-square)](LICENSE)
+[![CI](https://github.com/managedcode/LlmTestServer/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/managedcode/LlmTestServer/actions/workflows/ci.yml)
+[![Release](https://github.com/managedcode/LlmTestServer/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/managedcode/LlmTestServer/actions/workflows/release.yml)
+[![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer)
+[![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTestServer.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer)
+[![License](https://img.shields.io/github/license/managedcode/LlmTestServer.svg?style=flat-square)](LICENSE)
 
-`ManagedCode.LlmTck` is a deterministic Technology Compatibility Kit for LLM APIs.
+**Deterministic LLM API mocking for .NET and Aspire.**
+
+`ManagedCode.LlmTestServer` is a local mock server for applications that call LLM APIs.
 It gives tests a local provider-compatible server that can be hosted by Aspire,
 scripted with explicit scenarios, and called through regular HTTP, official SDKs,
 or `Microsoft.Extensions.AI`.
+
+Previously **LlmTck**. See the [package and source migration guide](docs/Features/LlmTestServerMigration.md).
 
 The hosted surface is provider-namespaced. OpenAI-compatible routes live under
 `/openai`, Azure OpenAI under `/azure-openai`, Microsoft Foundry under
 `/microsoft-foundry`, Anthropic Messages under `/anthropic`, and every other
 provider family uses its own namespace. Provider packages carry doc-backed API
-contracts, and `ManagedCode.LlmTck.Hosting` only claims routes that are mapped by
-`MapLlmTck()` and covered by tests.
+contracts, and `ManagedCode.LlmTestServer.Hosting` only claims routes that are mapped by
+`MapLlmTestServer()` and covered by tests.
 
 Use it when a test needs to prove what an application sends to an LLM provider,
 script deterministic provider responses, exercise retry/error/model-routing paths,
 or assert that no unexpected LLM calls occurred. When a bearer token is configured,
-both provider endpoints and `/admin-api/*` control endpoints require it.
+provider endpoints and runtime configuration/assertion control endpoints require it.
+Test-session lifecycle uses the credentials described in the [session guide](docs/Features/TestSessions.md).
+
+## First passing test
+
+In a .NET 10 TUnit test project, add `ManagedCode.LlmTestServer.Aspire`, `ManagedCode.LlmTestServer.Client`
+and `Aspire.Hosting.Testing`. This starts the packaged server without Docker, configures a response, calls it
+through `IChatClient` and verifies the recorded request:
+
+```csharp
+using Aspire.Hosting.Testing;
+using ManagedCode.LlmTestServer.Aspire;
+using ManagedCode.LlmTestServer.Client;
+using Microsoft.Extensions.AI;
+
+public sealed class AiIntegrationTests
+{
+    [Test]
+    public async Task ApplicationReceivesScriptedResponse(CancellationToken cancellationToken)
+    {
+        var builder = DistributedApplicationTestingBuilder.Create([]);
+        builder.AddLlmTestServer("llm-test-server").WithApiKey("test-key");
+        await using var app = await builder.BuildAsync(cancellationToken);
+        await app.StartAsync(cancellationToken);
+        await app.ResourceNotifications.WaitForResourceHealthyAsync("llm-test-server", cancellationToken);
+
+        using var http = app.CreateHttpClient("llm-test-server", "http");
+        var control = new LlmTestServerClient(http, "test-key");
+        await control.ConfigureAsync(config => config.RequireBearerToken("test-key").UseGpt41Mini()
+            .UseChatScenario("greeting", scenario => scenario.WhenUserContains("hello").Responds("Hello from your test!")),
+            cancellationToken);
+        using var chat = control.CreateChatClient();
+        var response = await chat.GetResponseAsync([new ChatMessage(ChatRole.User, "hello")],
+            cancellationToken: cancellationToken);
+
+        await Assert.That(response.Text).IsEqualTo("Hello from your test!");
+        await Assert.That((await control.GetAssertionsAsync(cancellationToken)).Matched).IsEqualTo(1);
+    }
+}
+```
+
+See [provider operation coverage](docs/Features/ProviderApiContractCoverage.md) for the exact supported contracts.
+
+## Parallel tests on a shared server
+
+Create a separate session for each test. Each one owns its configuration, response queues, history, prompt cache,
+fault counters, video jobs and request journal. Disposal removes its server state; the shared transport stays usable.
+
+```csharp
+await using var session = await control.CreateSessionAsync(config => config
+    .RequireBearerToken("test-key")
+    .UseChatScenario("isolated", scenario => scenario.Responds("This test's response")));
+using var chat = session.Control.CreateChatClient();
+var response = await chat.GetResponseAsync([new ChatMessage(ChatRole.User, "hello")]);
+```
+
+Use `session.HttpClient` as the transport for official provider SDKs. See [test sessions](docs/Features/TestSessions.md)
+for credentials, capacity limits, configure/reset semantics and HTTP routes.
 
 ## Jev / TypeSafe System One
 
@@ -33,10 +94,10 @@ require `TypeSafe-Danger-Zone-Images: true`; long-context requests can explicitl
 `TypeSafe-Danger-Zone-Long-Context: true`. It uses deterministic fixtures and never
 calls a production model or estimates image tokens.
 
-- Native TCK route: `POST /systemone/v1/systemone`.
-- Contracts: `ManagedCode.LlmTck.SystemOne`.
-- Typed client: `LlmTckClient.CreateSystemOneClient()` from `ManagedCode.LlmTck.Client`.
-- Register `jev-1.14.0` or `jev-preview` with `AddDecisionModel(id, LlmTckDecisionProvider.TypeSafe)`.
+- Native test-server route: `POST /systemone/v1/systemone`.
+- Contracts: `ManagedCode.LlmTestServer.SystemOne`.
+- Typed client: `LlmTestServerClient.CreateSystemOneClient()` from `ManagedCode.LlmTestServer.Client`.
+- Register `jev-1.14.0` or `jev-preview` with `AddDecisionModel(id, LlmTestServerDecisionProvider.TypeSafe)`.
 - [Jev 1.14 guide and limits](docs/Features/Jev114.md), [native decision fixtures](#native-decision-api-fixtures),
   [official images API](https://docs.typesafe.ai/images).
 
@@ -46,11 +107,11 @@ The Blazor dashboard at `/` is an operator-focused request inbox. It keeps provi
 model, status, latency, token/cache usage, multi-turn context, sanitized wire payloads,
 stream chunks, and the deterministic runtime result together for each request.
 
-![LLM TCK provider request dashboard showing a selected multi-turn OpenAI request](https://raw.githubusercontent.com/managedcode/LlmTck/main/docs/images/admin-dashboard-overview.jpg)
+![LLM Test Server provider request dashboard showing a selected multi-turn OpenAI request](https://raw.githubusercontent.com/managedcode/LlmTestServer/main/docs/images/admin-dashboard-overview.jpg)
 
 | Conversation timeline | Runtime diagnostics |
 | --- | --- |
-| ![Chronological multi-turn request and provider response](https://raw.githubusercontent.com/managedcode/LlmTck/main/docs/images/admin-dashboard-conversation.jpg) | ![Fluent UI runtime diagnostics dialog with fixtures, provider APIs, assertions, and events](https://raw.githubusercontent.com/managedcode/LlmTck/main/docs/images/admin-dashboard-runtime.jpg) |
+| ![Chronological multi-turn request and provider response](https://raw.githubusercontent.com/managedcode/LlmTestServer/main/docs/images/admin-dashboard-conversation.jpg) | ![Fluent UI runtime diagnostics dialog with fixtures, provider APIs, assertions, and events](https://raw.githubusercontent.com/managedcode/LlmTestServer/main/docs/images/admin-dashboard-runtime.jpg) |
 
 ## Packages
 
@@ -58,25 +119,25 @@ Package links open the latest stable release on NuGet; badges update automatical
 
 | Package | Latest version | Downloads | Description |
 | --- | --- | --- | --- |
-| [ManagedCode.LlmTck](https://www.nuget.org/packages/ManagedCode.LlmTck) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTck.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTck.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck) | Provider-neutral scenario runtime and assertion state. |
-| [ManagedCode.LlmTck.OpenAI](https://www.nuget.org/packages/ManagedCode.LlmTck.OpenAI) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTck.OpenAI.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.OpenAI) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTck.OpenAI.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.OpenAI) | OpenAI-compatible wire contracts. |
-| [ManagedCode.LlmTck.AzureOpenAI](https://www.nuget.org/packages/ManagedCode.LlmTck.AzureOpenAI) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTck.AzureOpenAI.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.AzureOpenAI) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTck.AzureOpenAI.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.AzureOpenAI) | Azure OpenAI compatibility profile and future wire contracts. |
-| [ManagedCode.LlmTck.Foundry](https://www.nuget.org/packages/ManagedCode.LlmTck.Foundry) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTck.Foundry.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Foundry) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTck.Foundry.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Foundry) | Microsoft Foundry compatibility profile and future wire contracts. |
-| [ManagedCode.LlmTck.Anthropic](https://www.nuget.org/packages/ManagedCode.LlmTck.Anthropic) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTck.Anthropic.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Anthropic) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTck.Anthropic.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Anthropic) | Anthropic Messages compatibility profile and wire contracts. |
-| [ManagedCode.LlmTck.Gemini](https://www.nuget.org/packages/ManagedCode.LlmTck.Gemini) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTck.Gemini.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Gemini) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTck.Gemini.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Gemini) | Gemini compatibility profile and future wire contracts. |
-| [ManagedCode.LlmTck.Groq](https://www.nuget.org/packages/ManagedCode.LlmTck.Groq) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTck.Groq.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Groq) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTck.Groq.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Groq) | Groq compatibility profile and future wire contracts. |
-| [ManagedCode.LlmTck.Mistral](https://www.nuget.org/packages/ManagedCode.LlmTck.Mistral) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTck.Mistral.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Mistral) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTck.Mistral.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Mistral) | Mistral compatibility profile and future wire contracts. |
-| [ManagedCode.LlmTck.Ollama](https://www.nuget.org/packages/ManagedCode.LlmTck.Ollama) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTck.Ollama.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Ollama) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTck.Ollama.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Ollama) | Ollama compatibility profile and future wire contracts. |
-| [ManagedCode.LlmTck.Cohere](https://www.nuget.org/packages/ManagedCode.LlmTck.Cohere) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTck.Cohere.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Cohere) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTck.Cohere.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Cohere) | Cohere compatibility profile and future wire contracts. |
-| [ManagedCode.LlmTck.Bedrock](https://www.nuget.org/packages/ManagedCode.LlmTck.Bedrock) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTck.Bedrock.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Bedrock) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTck.Bedrock.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Bedrock) | Amazon Bedrock compatibility profile and future wire contracts. |
-| [ManagedCode.LlmTck.OpenRouter](https://www.nuget.org/packages/ManagedCode.LlmTck.OpenRouter) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTck.OpenRouter.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.OpenRouter) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTck.OpenRouter.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.OpenRouter) | OpenRouter compatibility profile and future wire contracts. |
-| [ManagedCode.LlmTck.DeepSeek](https://www.nuget.org/packages/ManagedCode.LlmTck.DeepSeek) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTck.DeepSeek.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.DeepSeek) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTck.DeepSeek.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.DeepSeek) | DeepSeek compatibility profile and future wire contracts. |
-| [ManagedCode.LlmTck.Perplexity](https://www.nuget.org/packages/ManagedCode.LlmTck.Perplexity) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTck.Perplexity.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Perplexity) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTck.Perplexity.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Perplexity) | Perplexity compatibility profile and future wire contracts. |
-| [ManagedCode.LlmTck.SystemOne](https://www.nuget.org/packages/ManagedCode.LlmTck.SystemOne) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTck.SystemOne.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.SystemOne) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTck.SystemOne.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.SystemOne) | Native Jev/Kev SystemOne decision contracts. |
-| [ManagedCode.LlmTck.Cloudflare](https://www.nuget.org/packages/ManagedCode.LlmTck.Cloudflare) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTck.Cloudflare.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Cloudflare) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTck.Cloudflare.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Cloudflare) | Cloudflare Workers AI Clef/flash decision envelopes and validation. |
-| [ManagedCode.LlmTck.Hosting](https://www.nuget.org/packages/ManagedCode.LlmTck.Hosting) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTck.Hosting.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Hosting) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTck.Hosting.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Hosting) | ASP.NET Core endpoint mapping. |
-| [ManagedCode.LlmTck.Client](https://www.nuget.org/packages/ManagedCode.LlmTck.Client) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTck.Client.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Client) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTck.Client.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Client) | Control client plus `IChatClient`, `IEmbeddingGenerator<string, Embedding<float>>`, and `IImageGenerator` implementations. |
-| [ManagedCode.LlmTck.Aspire](https://www.nuget.org/packages/ManagedCode.LlmTck.Aspire) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTck.Aspire.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Aspire) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTck.Aspire.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTck.Aspire) | Aspire AppHost extension methods. |
+| [ManagedCode.LlmTestServer](https://www.nuget.org/packages/ManagedCode.LlmTestServer) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTestServer.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer) | Provider-neutral scenario runtime and assertion state. |
+| [ManagedCode.LlmTestServer.OpenAI](https://www.nuget.org/packages/ManagedCode.LlmTestServer.OpenAI) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.OpenAI.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.OpenAI) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTestServer.OpenAI.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.OpenAI) | OpenAI-compatible wire contracts. |
+| [ManagedCode.LlmTestServer.AzureOpenAI](https://www.nuget.org/packages/ManagedCode.LlmTestServer.AzureOpenAI) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.AzureOpenAI.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.AzureOpenAI) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTestServer.AzureOpenAI.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.AzureOpenAI) | Azure OpenAI compatibility profile and wire contracts. |
+| [ManagedCode.LlmTestServer.Foundry](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Foundry) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Foundry.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Foundry) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTestServer.Foundry.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Foundry) | Microsoft Foundry compatibility profile and wire contracts. |
+| [ManagedCode.LlmTestServer.Anthropic](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Anthropic) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Anthropic.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Anthropic) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTestServer.Anthropic.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Anthropic) | Anthropic Messages compatibility profile and wire contracts. |
+| [ManagedCode.LlmTestServer.Gemini](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Gemini) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Gemini.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Gemini) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTestServer.Gemini.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Gemini) | Gemini compatibility profile and wire contracts. |
+| [ManagedCode.LlmTestServer.Groq](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Groq) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Groq.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Groq) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTestServer.Groq.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Groq) | Groq compatibility profile and wire contracts. |
+| [ManagedCode.LlmTestServer.Mistral](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Mistral) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Mistral.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Mistral) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTestServer.Mistral.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Mistral) | Mistral compatibility profile and wire contracts. |
+| [ManagedCode.LlmTestServer.Ollama](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Ollama) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Ollama.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Ollama) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTestServer.Ollama.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Ollama) | Ollama compatibility profile and wire contracts. |
+| [ManagedCode.LlmTestServer.Cohere](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Cohere) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Cohere.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Cohere) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTestServer.Cohere.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Cohere) | Cohere compatibility profile and wire contracts. |
+| [ManagedCode.LlmTestServer.Bedrock](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Bedrock) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Bedrock.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Bedrock) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTestServer.Bedrock.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Bedrock) | Amazon Bedrock compatibility profile and wire contracts. |
+| [ManagedCode.LlmTestServer.OpenRouter](https://www.nuget.org/packages/ManagedCode.LlmTestServer.OpenRouter) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.OpenRouter.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.OpenRouter) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTestServer.OpenRouter.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.OpenRouter) | OpenRouter compatibility profile and wire contracts. |
+| [ManagedCode.LlmTestServer.DeepSeek](https://www.nuget.org/packages/ManagedCode.LlmTestServer.DeepSeek) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.DeepSeek.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.DeepSeek) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTestServer.DeepSeek.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.DeepSeek) | DeepSeek compatibility profile and wire contracts. |
+| [ManagedCode.LlmTestServer.Perplexity](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Perplexity) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Perplexity.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Perplexity) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTestServer.Perplexity.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Perplexity) | Perplexity compatibility profile and wire contracts. |
+| [ManagedCode.LlmTestServer.SystemOne](https://www.nuget.org/packages/ManagedCode.LlmTestServer.SystemOne) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.SystemOne.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.SystemOne) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTestServer.SystemOne.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.SystemOne) | Native Jev/Kev SystemOne decision contracts. |
+| [ManagedCode.LlmTestServer.Cloudflare](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Cloudflare) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Cloudflare.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Cloudflare) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTestServer.Cloudflare.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Cloudflare) | Cloudflare Workers AI Clef/flash decision envelopes and validation. |
+| [ManagedCode.LlmTestServer.Hosting](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Hosting) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Hosting.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Hosting) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTestServer.Hosting.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Hosting) | ASP.NET Core endpoint mapping. |
+| [ManagedCode.LlmTestServer.Client](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Client) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Client.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Client) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTestServer.Client.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Client) | Control client plus `IChatClient`, `IEmbeddingGenerator<string, Embedding<float>>`, and `IImageGenerator` implementations. |
+| [ManagedCode.LlmTestServer.Aspire](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Aspire) | [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Aspire.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Aspire) | [![Downloads](https://img.shields.io/nuget/dt/ManagedCode.LlmTestServer.Aspire.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Aspire) | Aspire AppHost extension methods. |
 
 ## Current Functionality
 
@@ -84,8 +145,8 @@ This is the currently implemented behavior, not future intent:
 
 | Surface | What works now |
 | --- | --- |
-| Hosting | `builder.Services.AddLlmTck(...)` registers one deterministic runtime; `app.MapLlmTck()` maps the Blazor server-side browser panel at `/`, JSON control endpoints under `/admin-api`, and provider-namespaced HTTP routes. |
-| Runtime configuration | Configure at host startup, through `LlmTckClient.ConfigureAsync(...)`, or through `POST /admin-api/configure`. Configuration replaces the current runtime state and resets assertions, scenario positions, fault counters, and prompt-cache entries. |
+| Hosting | `builder.Services.AddLlmTestServer(...)` registers one deterministic runtime; `app.MapLlmTestServer()` maps the Blazor server-side browser panel at `/`, JSON control endpoints under `/admin-api`, and provider-namespaced HTTP routes. |
+| Runtime configuration | Configure at host startup, through `LlmTestServerClient.ConfigureAsync(...)`, or through `POST /admin-api/configure`. Configuration replaces the current runtime state and resets assertions, scenario positions, fault counters, and prompt-cache entries. |
 | Reset | `ResetAsync()` and `POST /admin-api/reset` keep the current models/scenarios/fixtures but clear assertion events, scenario response positions, rate-limit counters, and prompt-cache entries. |
 | Models | Default models use official fixture IDs for chat, embeddings, images, audio, and video. Typed helpers register broader OpenAI model families, and `AddModel(...)` supports custom deployment or provider IDs. Model kind is enforced on every route. |
 | Chat scenarios | Contains matching, exact prompt matching, queued responses, streaming chunks, scripted errors, delayed responses, cancellation-safe queues, and scenario-specific bearer tokens are implemented. |
@@ -97,7 +158,7 @@ This is the currently implemented behavior, not future intent:
 | Assertions | `/admin-api/assertions` returns counters plus every runtime event with request preview, response/error text, model id, scenario id, event kind, and deterministic usage. |
 | Usage accounting | Input, output, reasoning, total, cached-input, and cache-write token values are computed deterministically and projected into provider-specific response envelopes when that provider surface documents usage fields. |
 | Browser panel | `/` shows models/fixtures, actions, control and provider endpoint groups, grouped runtime events, captured requests, captured responses, counters, and per-event usage. It auto-refreshes every 15 seconds using Blazor component state and `StateHasChanged()`. |
-| Aspire | `builder.AddLlmTck()` starts the packaged .NET service without Docker by default; `WithApiKey(...)` wires auth, `GetHttpEndpoint()` and provider-specific endpoint helpers expose URLs, and `AddLlmTckContainer()` is an explicit container opt-in. |
+| Aspire | `builder.AddLlmTestServer()` starts the packaged .NET service without Docker by default; `WithApiKey(...)` wires auth, `GetHttpEndpoint()` and provider-specific endpoint helpers expose URLs, and `AddLlmTestServerContainer()` is an explicit container opt-in. |
 
 ## Provider Packages
 
@@ -105,28 +166,28 @@ Provider packages keep vendor-specific protocol and compatibility metadata out o
 
 | Package | Provider ID | Protocol family | Primary hosted route |
 | --- | --- | --- | --- |
-| `ManagedCode.LlmTck.OpenAI` | `openai` | OpenAI | `/openai/v1` |
-| `ManagedCode.LlmTck.AzureOpenAI` | `azure-openai` | Azure OpenAI | `/azure-openai/openai/deployments/{deployment}/chat/completions` |
-| `ManagedCode.LlmTck.Foundry` | `microsoft-foundry` | Microsoft Foundry | `/microsoft-foundry/models/chat/completions` |
-| `ManagedCode.LlmTck.Anthropic` | `anthropic` | Anthropic Messages | `/anthropic/v1/messages` |
-| `ManagedCode.LlmTck.Gemini` | `gemini` | Gemini | `/gemini/v1beta/models/{model}:generateContent` |
-| `ManagedCode.LlmTck.Groq` | `groq` | Groq | `/groq/openai/v1/chat/completions` |
-| `ManagedCode.LlmTck.Mistral` | `mistral` | Mistral | `/mistral/v1/chat/completions` |
-| `ManagedCode.LlmTck.Ollama` | `ollama` | Ollama | `/ollama/api/chat` |
-| `ManagedCode.LlmTck.Cohere` | `cohere` | Cohere | `/cohere/v2/chat` |
-| `ManagedCode.LlmTck.Bedrock` | `bedrock` | Amazon Bedrock | `/bedrock/model/{modelId}/converse` |
-| `ManagedCode.LlmTck.OpenRouter` | `openrouter` | OpenRouter | `/openrouter/api/v1/chat/completions` |
-| `ManagedCode.LlmTck.DeepSeek` | `deepseek` | DeepSeek | `/deepseek/v1/chat/completions` |
-| `ManagedCode.LlmTck.Perplexity` | `perplexity` | Perplexity | `/perplexity/v1/sonar` |
-| `ManagedCode.LlmTck.SystemOne` | `systemone` | Jev / TypeSafe and Kev native decisions | `/systemone/v1/systemone` |
-| `ManagedCode.LlmTck.Cloudflare` | `cloudflare` | Clef / Clef Flash native decisions | `/cloudflare/client/v4/accounts/{accountId}/ai/run/@cf/cloudflare/clef` |
+| `ManagedCode.LlmTestServer.OpenAI` | `openai` | OpenAI | `/openai/v1` |
+| `ManagedCode.LlmTestServer.AzureOpenAI` | `azure-openai` | Azure OpenAI | `/azure-openai/openai/deployments/{deployment}/chat/completions` |
+| `ManagedCode.LlmTestServer.Foundry` | `microsoft-foundry` | Microsoft Foundry | `/microsoft-foundry/models/chat/completions` |
+| `ManagedCode.LlmTestServer.Anthropic` | `anthropic` | Anthropic Messages | `/anthropic/v1/messages` |
+| `ManagedCode.LlmTestServer.Gemini` | `gemini` | Gemini | `/gemini/v1beta/models/{model}:generateContent` |
+| `ManagedCode.LlmTestServer.Groq` | `groq` | Groq | `/groq/openai/v1/chat/completions` |
+| `ManagedCode.LlmTestServer.Mistral` | `mistral` | Mistral | `/mistral/v1/chat/completions` |
+| `ManagedCode.LlmTestServer.Ollama` | `ollama` | Ollama | `/ollama/api/chat` |
+| `ManagedCode.LlmTestServer.Cohere` | `cohere` | Cohere | `/cohere/v2/chat` |
+| `ManagedCode.LlmTestServer.Bedrock` | `bedrock` | Amazon Bedrock | `/bedrock/model/{modelId}/converse` |
+| `ManagedCode.LlmTestServer.OpenRouter` | `openrouter` | OpenRouter | `/openrouter/api/v1/chat/completions` |
+| `ManagedCode.LlmTestServer.DeepSeek` | `deepseek` | DeepSeek | `/deepseek/v1/chat/completions` |
+| `ManagedCode.LlmTestServer.Perplexity` | `perplexity` | Perplexity | `/perplexity/v1/sonar` |
+| `ManagedCode.LlmTestServer.SystemOne` | `systemone` | Jev / TypeSafe and Kev native decisions | `/systemone/v1/systemone` |
+| `ManagedCode.LlmTestServer.Cloudflare` | `cloudflare` | Clef / Clef Flash native decisions | `/cloudflare/client/v4/accounts/{accountId}/ai/run/@cf/cloudflare/clef` |
 
-Each provider profile also carries a doc-backed `ApiContract` with official documentation links, retrieval date, API version or header requirements, documented operations, streaming support, and whether `ManagedCode.LlmTck.Hosting` currently maps the operation.
+Each provider profile also carries a doc-backed `ApiContract` with official documentation links, retrieval date, API version or header requirements, documented operations, streaming support, and whether `ManagedCode.LlmTestServer.Hosting` currently maps the operation.
 
 Use a provider profile when code needs a stable package-level declaration without starting a host:
 
 ```csharp
-using ManagedCode.LlmTck.AzureOpenAI;
+using ManagedCode.LlmTestServer.AzureOpenAI;
 
 var profile = AzureOpenAiCompatibility.Profile;
 Console.WriteLine(profile.Id); // azure-openai
@@ -135,7 +196,7 @@ Console.WriteLine(profile.Id); // azure-openai
 ## OpenAI SDK
 
 The official OpenAI .NET SDK expects its `Endpoint` to be the API root. Use
-`/openai/v1` for this TCK, or `llmTck.GetOpenAiEndpoint()` from the Aspire
+`/openai/v1` for this Test Server, or `llmTestServer.GetOpenAiEndpoint()` from the Aspire
 package when wiring an AppHost resource.
 
 ```csharp
@@ -162,7 +223,7 @@ await foreach (var update in chat.CompleteChatStreamingAsync(
 
 The OpenAI v1 API is available at `/azure-openai/openai/v1/` and `/microsoft-foundry/openai/v1/`, with `chat/completions`, `responses` and `embeddings`. Point the official OpenAI client endpoint at the corresponding base URL and supply the configured API key. These v1 routes accept bearer or `api-key` authentication and need no dated `api-version` query parameter. Responses supports ordinary JSON and documented SSE events. See the [September 2026 API review](docs/Features/ProviderApiReview20260907.md) for the verified SDK versions and provider contracts.
 
-Azure OpenAI deployment routes use the deployment name as the TCK model id. API keys sent through the official SDK's `api-key` header are accepted anywhere a bearer token would be accepted.
+Azure OpenAI deployment routes use the deployment name as the Test Server model id. API keys sent through the official SDK's `api-key` header are accepted anywhere a bearer token would be accepted.
 
 ```csharp
 using Azure.AI.OpenAI;
@@ -185,7 +246,7 @@ var answer = await chat.CompleteChatAsync(
 var vector = await embeddings.GenerateEmbeddingAsync("invoice");
 ```
 
-Microsoft Foundry / Azure AI Inference clients call the `/microsoft-foundry/chat/completions` and `/microsoft-foundry/embeddings` routes. The inference routes require `api-version=2024-05-01-preview`, which the official SDK supplies. Set `Model` to the model id configured in LLM TCK.
+Microsoft Foundry / Azure AI Inference clients call the `/microsoft-foundry/chat/completions` and `/microsoft-foundry/embeddings` routes. The inference routes require `api-version=2024-05-01-preview`, which the official SDK supplies. Set `Model` to the model id configured in LLM Test Server.
 
 ```csharp
 using Azure;
@@ -215,12 +276,12 @@ var embedding = await embeddings.EmbedAsync(
 
 ## Configuration Model
 
-LLM TCK is configured with one `LlmTckConfiguration`.
+LLM Test Server is configured with one `LlmTestServerConfiguration`.
 
 You can apply that configuration in two places:
 
-- at host startup through `builder.Services.AddLlmTck(options => ...)`
-- at test runtime through `LlmTckClient.ConfigureAsync(...)` or `POST /admin-api/configure`
+- at host startup through `builder.Services.AddLlmTestServer(options => ...)`
+- at test runtime through `LlmTestServerClient.ConfigureAsync(...)` or `POST /admin-api/configure`
 
 Runtime configuration is a replacement, not a merge. Applying a new configuration resets scenario positions and assertion events. The runtime snapshots the configuration, so later mutations to your builder/list objects do not change the running provider.
 
@@ -256,7 +317,7 @@ Individual helpers are also available, including `AddGpt55(...)`, `AddGpt54Mini(
 Fault simulation is configured on the provider-neutral runtime and applies through every provider namespace. Use it when a test needs retry, moderation, or provider-error handling without scripting each provider route separately.
 
 ```csharp
-builder.Services.AddLlmTck(options =>
+builder.Services.AddLlmTestServer(options =>
 {
     // Allow two accepted runtime requests, then return 429 too_many_requests.
     options.SimulateRateLimitAfter(2);
@@ -273,35 +334,35 @@ builder.Services.AddLlmTck(options =>
 The simplest host config is one chat scenario:
 
 ```csharp
-using ManagedCode.LlmTck.Hosting;
-using ManagedCode.LlmTck.Models;
+using ManagedCode.LlmTestServer.Hosting;
+using ManagedCode.LlmTestServer.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddLlmTck(options =>
+builder.Services.AddLlmTestServer(options =>
 {
     options.AddChatScenario(
         "blue-whale",
         scenario => scenario
-            .ForModel(LlmTckKnownModelIds.Gpt41Mini)
+            .ForModel(LlmTestServerKnownModelIds.Gpt41Mini)
             .WhenUserContains("largest animal")
             .Responds("blue whale", "blue ", "whale"));
 });
 
 var app = builder.Build();
-app.MapLlmTck();
+app.MapLlmTestServer();
 app.Run();
 ```
 
 A fuller config can advertise your application's real model names while still serving deterministic fixtures:
 
 ```csharp
-using ManagedCode.LlmTck.Hosting;
-using ManagedCode.LlmTck.Models;
+using ManagedCode.LlmTestServer.Hosting;
+using ManagedCode.LlmTestServer.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddLlmTck(options =>
+builder.Services.AddLlmTestServer(options =>
 {
     options.RequireBearerToken("test-key");
 
@@ -313,7 +374,7 @@ builder.Services.AddLlmTck(options =>
     options.AddChatScenario(
         "invoice-total",
         scenario => scenario
-            .ForModel(LlmTckKnownModelIds.Gpt41Mini)
+            .ForModel(LlmTestServerKnownModelIds.Gpt41Mini)
             .WhenUserContains("invoice total")
             .Responds(
                 "{\"total\":42.50}",
@@ -324,21 +385,21 @@ builder.Services.AddLlmTck(options =>
     options.AddChatScenario(
         "provider-rate-limit",
         scenario => scenario
-            .ForModel(LlmTckKnownModelIds.Gpt41Mini)
+            .ForModel(LlmTestServerKnownModelIds.Gpt41Mini)
             .WhenUserContains("rate limit")
-            .Fails(429, "rate_limit_exceeded", "Scripted rate limit from LLM TCK."));
+            .Fails(429, "rate_limit_exceeded", "Scripted rate limit from LLM Test Server."));
 
     options.AddChatScenario(
         "slow-response",
         scenario => scenario
-            .ForModel(LlmTckKnownModelIds.Gpt41Mini)
+            .ForModel(LlmTestServerKnownModelIds.Gpt41Mini)
             .WhenUserContains("slow")
             .Responds("done")
             .DelaysBy(250));
 });
 
 var app = builder.Build();
-app.MapLlmTck();
+app.MapLlmTestServer();
 app.Run();
 ```
 
@@ -347,43 +408,43 @@ app.Run();
 Install the Aspire integration package in the AppHost:
 
 ```bash
-dotnet add package ManagedCode.LlmTck.Aspire
+dotnet add package ManagedCode.LlmTestServer.Aspire
 ```
 
-Then add the package-owned TCK resource directly:
+Then add the package-owned Test Server resource directly:
 
 ```csharp
-using ManagedCode.LlmTck.Aspire;
+using ManagedCode.LlmTestServer.Aspire;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-var llmTck = builder
-    .AddLlmTck()
+var llmTestServer = builder
+    .AddLlmTestServer()
     .WithApiKey("test-key");
 
 builder
     .AddProject<Projects.Consumer>("consumer")
-    .WithReference(llmTck)
-    .WithEnvironment("LLM_PROVIDER_ENDPOINT", llmTck.GetHttpEndpoint())
-    .WithEnvironment("OPENAI_ENDPOINT", llmTck.GetOpenAiEndpoint())
-    .WaitFor(llmTck);
+    .WithReference(llmTestServer)
+    .WithEnvironment("LLM_PROVIDER_ENDPOINT", llmTestServer.GetHttpEndpoint())
+    .WithEnvironment("OPENAI_ENDPOINT", llmTestServer.GetOpenAiEndpoint())
+    .WaitFor(llmTestServer);
 
 builder.Build().Run();
 ```
 
-`AddLlmTck()` creates a `LlmTckResource` backed by the packaged .NET LLM TCK service executable and exposes its `http` endpoint. It does not require a consumer service project reference, generated `Projects.*` metadata type, project path, Docker, or a container runtime. Consumer resources should reference the TCK resource, wait for it, and use `llmTck.GetHttpEndpoint()` when they need the provider-compatible base URL. `.WithApiKey("test-key")` sets `LlmTck:RequiredBearerToken` so both provider endpoints and `/admin-api/*` control endpoints require the same bearer token.
+`AddLlmTestServer()` creates a `LlmTestServerResource` backed by the packaged .NET LLM Test Server service executable and exposes its `http` endpoint. It does not require a consumer service project reference, generated `Projects.*` metadata type, project path, Docker, or a container runtime. Consumer resources should reference the Test Server resource, wait for it, and use `llmTestServer.GetHttpEndpoint()` when they need the provider-compatible base URL. `.WithApiKey("test-key")` sets `LlmTestServer:RequiredBearerToken` so both provider endpoints and `/admin-api/*` control endpoints require the same bearer token.
 
-Use `AddLlmTckContainer()` only when you explicitly want a container-backed resource, for example for a deployment or container-runtime smoke test. The container mode uses a `ghcr.io/managedcode/llm-tck` image tagged with the same release version as the installed `ManagedCode.LlmTck.Aspire` package; it is not the default local Aspire path.
+Use `AddLlmTestServerContainer()` only when you explicitly want a container-backed resource, for example for a deployment or container-runtime smoke test. The container mode uses a `ghcr.io/managedcode/llm-test-server` image tagged with the same release version as the installed `ManagedCode.LlmTestServer.Aspire` package; it is not the default local Aspire path.
 
 ## Control Panel And Token Usage
 
-Open the TCK resource endpoint from the Aspire dashboard to inspect the running configuration at `/`. The browser admin panel is rendered by Blazor server-side rendering from `ManagedCode.LlmTck.Hosting`. If the resource was configured with `.WithApiKey("test-key")` or `RequireBearerToken("test-key")`, enter the same token in the control panel before refreshing.
+Open the Test Server resource endpoint from the Aspire dashboard to inspect the running configuration at `/`. The browser admin panel is rendered by Blazor server-side rendering from `ManagedCode.LlmTestServer.Hosting`. If the resource was configured with `.WithApiKey("test-key")` or `RequireBearerToken("test-key")`, enter the same token in the control panel before refreshing.
 
 The panel reads `/admin-api/models` and `/admin-api/assertions`. It shows advertised models, actions, control endpoint groups, provider endpoint groups, grouped runtime events, captured requests, captured responses, assertion counters, and deterministic token usage. Auto-refresh is enabled by default and runs every 15 seconds on the server-side Blazor component; there is no client-side polling script and no visible countdown.
 
 Token usage is counted with the repo-owned tiktoken-compatible counter and reported both as summary totals and per runtime event with `inputTokens`, `cachedInputTokens`, `cacheCreationInputTokens`, `outputTokens`, `reasoningTokens`, and `totalTokens`. Provider response envelopes also receive the same deterministic usage values: OpenAI-compatible chat and Responses usage including reasoning-token and prompt-cache details when configured, Anthropic sync messages and streaming `message_start`/`message_delta`, Gemini `usageMetadata` including long-running video operation results, Cohere chat usage, Ollama prompt/eval counts, and Bedrock Converse usage.
 
-For reasoning-capable fixture models, configure a deterministic reasoning-token count on the model. LLM TCK includes those tokens in `outputTokens` and exposes the split in `reasoningTokens`; OpenAI-compatible responses also include `completion_tokens_details.reasoning_tokens` or `output_tokens_details.reasoning_tokens`.
+For reasoning-capable fixture models, configure a deterministic reasoning-token count on the model. LLM Test Server includes those tokens in `outputTokens` and exposes the split in `reasoningTokens`; OpenAI-compatible responses also include `completion_tokens_details.reasoning_tokens` or `output_tokens_details.reasoning_tokens`.
 
 ```csharp
 options.AddGpt5Nano(reasoningTokens: 128);
@@ -391,7 +452,7 @@ options.AddGpt5Nano(reasoningTokens: 128);
 
 ## Prompt Cache Accounting
 
-Prompt cache accounting is deterministic runtime state for testing provider usage handling. LLM TCK does not call a real cache service and does not hide prompt text; it calculates repeated prompt-prefix usage from the requests that reach the runtime.
+Prompt cache accounting is deterministic runtime state for testing provider usage handling. LLM Test Server does not call a real cache service and does not hide prompt text; it calculates repeated prompt-prefix usage from the requests that reach the runtime.
 
 Cache entries are created only for successful chat or Responses requests on provider surfaces with a cache policy. A failed, unmatched, unauthorized, cancelled, unknown-model, or scripted-error request does not create a cache entry. `ConfigureAsync(...)` and `ResetAsync()` both clear prompt-cache entries so each test can start from a known cache state.
 
@@ -425,9 +486,9 @@ Provider envelopes expose the same runtime usage through provider-native field n
 | Ollama chat | `prompt_eval_cached_count`, reported on the final NDJSON chunk for streaming |
 | Bedrock Converse and ConverseStream metadata | `usage.cacheReadInputTokens` and `usage.cacheWriteInputTokens` |
 
-![LLM TCK request dashboard showing per-request token and cache usage](docs/images/admin-dashboard-token-usage.png)
+![LLM Test Server request dashboard showing per-request token and cache usage](docs/images/admin-dashboard-token-usage.png)
 
-![LLM TCK mobile request detail showing token, cache, conversation, and response data](docs/images/admin-dashboard-mobile-request-detail.png)
+![LLM Test Server mobile request detail showing token, cache, conversation, and response data](docs/images/admin-dashboard-mobile-request-detail.png)
 
 ## Chat Scenarios
 
@@ -439,7 +500,7 @@ Provider envelopes expose the same runtime usage through provider-native field n
 options.AddChatScenario(
     "support-refund",
     scenario => scenario
-        .ForModel(LlmTckKnownModelIds.Gpt41Mini)
+        .ForModel(LlmTestServerKnownModelIds.Gpt41Mini)
         .WhenUserContains("refund")
         .Responds("I can help with a refund."));
 ```
@@ -449,15 +510,15 @@ options.AddChatScenario(
 Use exact matching when a test must prove the complete prompt contract:
 
 ```csharp
-using ManagedCode.LlmTck.Scenarios;
+using ManagedCode.LlmTestServer.Scenarios;
 
 options.AddChatScenario(
     "exact-system-contract",
     scenario => scenario
-        .ForModel(LlmTckKnownModelIds.Gpt41Mini)
+        .ForModel(LlmTestServerKnownModelIds.Gpt41Mini)
         .WithExactMatch(
-            new LlmTckMessage { Role = "system", Content = "Return JSON only." },
-            new LlmTckMessage { Role = "user", Content = "Give me the invoice total." })
+            new LlmTestServerMessage { Role = "system", Content = "Return JSON only." },
+            new LlmTestServerMessage { Role = "user", Content = "Give me the invoice total." })
         .Responds("{\"total\":42.50}"));
 ```
 
@@ -469,7 +530,7 @@ Each matched request consumes the next response. This makes multi-turn flows det
 options.AddChatScenario(
     "two-turn-plan",
     scenario => scenario
-        .ForModel(LlmTckKnownModelIds.Gpt41Mini)
+        .ForModel(LlmTestServerKnownModelIds.Gpt41Mini)
         .WhenUserContains("make a plan")
         .Responds("First draft")
         .Responds("Revised draft"));
@@ -485,12 +546,12 @@ The first `Responds` argument is the non-streaming response. The remaining argum
 options.AddChatScenario(
     "streaming-answer",
     scenario => scenario
-        .ForModel(LlmTckKnownModelIds.Gpt41Mini)
+        .ForModel(LlmTestServerKnownModelIds.Gpt41Mini)
         .WhenUserContains("stream this")
         .Responds("blue whale", "blue ", "whale"));
 ```
 
-For `stream: true`, LLM TCK emits SSE `data:` frames and a final `data: [DONE]` marker. All chunks in one response share the same response id.
+For `stream: true`, LLM Test Server emits SSE `data:` frames and a final `data: [DONE]` marker. All chunks in one response share the same response id.
 
 ### Scripted Errors
 
@@ -500,7 +561,7 @@ Use `Fails(...)` to test client error handling without waiting for a real provid
 options.AddChatScenario(
     "content-policy-error",
     scenario => scenario
-        .ForModel(LlmTckKnownModelIds.Gpt41Mini)
+        .ForModel(LlmTestServerKnownModelIds.Gpt41Mini)
         .WhenUserContains("blocked fixture")
         .Fails(400, "content_filter", "The scripted request was rejected."));
 ```
@@ -513,7 +574,7 @@ Use `DelaysBy(...)` to test timeout and cancellation behavior:
 options.AddChatScenario(
     "timeout-path",
     scenario => scenario
-        .ForModel(LlmTckKnownModelIds.Gpt41Mini)
+        .ForModel(LlmTestServerKnownModelIds.Gpt41Mini)
         .WhenUserContains("slow path")
         .Responds("eventual answer")
         .DelaysBy(1_500));
@@ -529,7 +590,7 @@ A scenario can require its own bearer token:
 options.AddChatScenario(
     "tenant-a-only",
     scenario => scenario
-        .ForModel(LlmTckKnownModelIds.Gpt41Mini)
+        .ForModel(LlmTestServerKnownModelIds.Gpt41Mini)
         .RequireBearerToken("tenant-a-key")
         .WhenUserContains("tenant secret")
         .Responds("tenant-a response"));
@@ -549,12 +610,12 @@ options.WithDefaultEmbeddingVector(0.01f, 0.02f, 0.03f, 0.04f);
 ```
 
 ```csharp
-using ManagedCode.LlmTck.Client;
+using ManagedCode.LlmTestServer.Client;
 using Microsoft.Extensions.AI;
 
 using var httpClient = new HttpClient { BaseAddress = new Uri("http://localhost:5000") };
 using IEmbeddingGenerator<string, Embedding<float>> embeddings =
-    new LlmTckEmbeddingGenerator(httpClient, "text-embedding-3-small");
+    new LlmTestServerEmbeddingGenerator(httpClient, "text-embedding-3-small");
 
 var result = await embeddings.GenerateAsync(["alpha", "beta"]);
 ```
@@ -568,11 +629,11 @@ options.AddGptImage1();
 ```
 
 ```csharp
-using ManagedCode.LlmTck.Client;
+using ManagedCode.LlmTestServer.Client;
 using Microsoft.Extensions.AI;
 
 using var httpClient = new HttpClient { BaseAddress = new Uri("http://localhost:5000") };
-using IImageGenerator images = new LlmTckImageGenerator(httpClient, "gpt-image-1");
+using IImageGenerator images = new LlmTestServerImageGenerator(httpClient, "gpt-image-1");
 
 var image = await images.GenerateAsync(
     new ImageGenerationRequest { Prompt = "compatibility marker" });
@@ -602,14 +663,14 @@ Use runtime reconfiguration when each test needs a different provider script.
 
 ### Configure Before A Test
 
-Use `ManagedCode.LlmTck.Client` as the universal test control surface. A test can start or discover the hosted TCK, create one `LlmTckClient`, load all required models, datasets, scripted responses, errors, embeddings, images, and audio fixtures, and then call the provider through regular clients.
+Use `ManagedCode.LlmTestServer.Client` as the universal test control surface. A test can start or discover the hosted Test Server, create one `LlmTestServerClient`, load all required models, datasets, scripted responses, errors, embeddings, images, and audio fixtures, and then call the provider through regular clients.
 
 ```csharp
-using ManagedCode.LlmTck.Client;
+using ManagedCode.LlmTestServer.Client;
 using Microsoft.Extensions.AI;
 
 using var httpClient = new HttpClient { BaseAddress = new Uri("http://localhost:5000") };
-var tck = LlmTckClient.Create(httpClient, bearerToken: "test-key");
+var tck = LlmTestServerClient.Create(httpClient, bearerToken: "test-key");
 
 await tck.ConfigureAsync(
     config => config
@@ -656,23 +717,23 @@ var assertions = await tck.GetAssertionsAsync();
 
 `resetFirst: true` clears previous assertion events and scenario positions before the new configuration is applied. Named datasets are active after configuration; they group scenarios so a test can load a whole conversation set without flattening everything by hand.
 
-### Configure With `LlmTckClient`
+### Configure With `LlmTestServerClient`
 
 ```csharp
-using ManagedCode.LlmTck.Client;
-using ManagedCode.LlmTck.Configuration;
-using ManagedCode.LlmTck.Models;
+using ManagedCode.LlmTestServer.Client;
+using ManagedCode.LlmTestServer.Configuration;
+using ManagedCode.LlmTestServer.Models;
 
 using var httpClient = new HttpClient { BaseAddress = new Uri("http://localhost:5000") };
 httpClient.DefaultRequestHeaders.Authorization =
     new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "test-key");
 
-var control = new LlmTckClient(httpClient);
+var control = new LlmTestServerClient(httpClient);
 
-var configuration = new LlmTckConfigurationBuilder()
+var configuration = new LlmTestServerConfigurationBuilder()
     .RequireBearerToken("test-key")
-    .AddModel("docs-chat", LlmTckModelKind.Chat)
-    .AddModel("docs-embedding", LlmTckModelKind.Embedding)
+    .AddModel("docs-chat", LlmTestServerModelKind.Chat)
+    .AddModel("docs-embedding", LlmTestServerModelKind.Embedding)
     .AddChatScenario(
         "docs-blue-whale",
         scenario => scenario
@@ -745,7 +806,7 @@ curl -X POST http://localhost:5000/openai/v1/chat/completions \
 Use the client package when you want tests to call the fake provider through normal `Microsoft.Extensions.AI` abstractions:
 
 ```csharp
-using ManagedCode.LlmTck.Client;
+using ManagedCode.LlmTestServer.Client;
 using Microsoft.Extensions.AI;
 
 using var httpClient = new HttpClient
@@ -755,7 +816,7 @@ using var httpClient = new HttpClient
 httpClient.DefaultRequestHeaders.Authorization =
     new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "test-key");
 
-using IChatClient chatClient = new LlmTckChatClient(httpClient);
+using IChatClient chatClient = new LlmTestServerChatClient(httpClient);
 
 var response = await chatClient.GetResponseAsync(
 [
@@ -768,7 +829,7 @@ Console.WriteLine(response.Text);
 When a bearer token is required, prefer creating the modality clients from the control client so the same token is applied consistently:
 
 ```csharp
-var tck = LlmTckClient.Create(httpClient, bearerToken: "test-key");
+var tck = LlmTestServerClient.Create(httpClient, bearerToken: "test-key");
 
 using IChatClient chatClient = tck.CreateChatClient("docs-chat");
 using IEmbeddingGenerator<string, Embedding<float>> embeddings =
@@ -791,7 +852,7 @@ await foreach (var update in chatClient.GetStreamingResponseAsync(
 The assertion summary is intentionally simple: it tells the test whether requests matched configured scenarios, missed, failed auth, used unknown models, exhausted a response queue, or returned scripted errors.
 
 ```csharp
-var control = new LlmTckClient(httpClient);
+var control = new LlmTestServerClient(httpClient);
 var assertions = await control.GetAssertionsAsync();
 
 if (assertions.Unmatched > 0 || assertions.ModelNotFound > 0)
@@ -845,9 +906,9 @@ Audio speech returns a deterministic WAV fixture by default. When
 
 ### Replace Provider Calls In Integration Tests
 
-1. Start the LLM TCK service in Aspire or an ASP.NET Core test host.
+1. Start the LLM Test Server service in Aspire or an ASP.NET Core test host.
 2. Configure the expected scenarios for the test.
-3. Point the application under test at the LLM TCK base URL.
+3. Point the application under test at the LLM Test Server base URL.
 4. Run the application flow.
 5. Assert `GetAssertionsAsync()` has no unmatched, unknown-model, auth-failed, or exhausted events.
 
@@ -857,7 +918,7 @@ Audio speech returns a deterministic WAV fixture by default. When
 options.AddChatScenario(
     "retry-then-success",
     scenario => scenario
-        .ForModel(LlmTckKnownModelIds.Gpt41Mini)
+        .ForModel(LlmTestServerKnownModelIds.Gpt41Mini)
         .WhenUserContains("retry")
         .Fails(429, "rate_limit_exceeded", "Try again.")
         .Responds("success after retry"));
@@ -869,10 +930,10 @@ options.AddChatScenario(
 options.AddChatScenario(
     "exact-contract",
     scenario => scenario
-        .ForModel(LlmTckKnownModelIds.Gpt41Mini)
+        .ForModel(LlmTestServerKnownModelIds.Gpt41Mini)
         .WithExactMatch(
-            new LlmTckMessage { Role = "system", Content = "Return JSON only." },
-            new LlmTckMessage { Role = "user", Content = "Summarize invoice INV-42." })
+            new LlmTestServerMessage { Role = "system", Content = "Return JSON only." },
+            new LlmTestServerMessage { Role = "user", Content = "Summarize invoice INV-42." })
         .Responds("{\"summary\":\"paid\"}"));
 ```
 
@@ -883,17 +944,17 @@ If the application changes the prompt, the request becomes unmatched and the tes
 Configure only the models your application is allowed to call:
 
 ```csharp
-options.AddModel("approved-chat-model", LlmTckModelKind.Chat);
+options.AddModel("approved-chat-model", LlmTestServerModelKind.Chat);
 ```
 
-If the app calls `old-chat-model` or calls `approved-chat-model` through the embeddings endpoint, LLM TCK returns `llm_tck_unknown_model`.
+If the app calls `old-chat-model` or calls `approved-chat-model` through the embeddings endpoint, LLM Test Server returns `llm_tck_unknown_model`.
 
 ## Build And Test
 
 ```bash
-dotnet restore ManagedCode.LlmTck.slnx
-dotnet build ManagedCode.LlmTck.slnx --configuration Release --no-restore
-dotnet test --project tests/ManagedCode.LlmTck.Tests/ManagedCode.LlmTck.Tests.csproj --configuration Release --no-build --verbosity normal
+dotnet restore ManagedCode.LlmTestServer.slnx
+dotnet build ManagedCode.LlmTestServer.slnx --configuration Release --no-restore
+dotnet test --project tests/ManagedCode.LlmTestServer.Tests/ManagedCode.LlmTestServer.Tests.csproj --configuration Release --no-build --verbosity normal
 for project in src/*/*.csproj; do dotnet pack "$project" --configuration Release --no-build --output artifacts/packages; done
 ```
 
@@ -901,7 +962,7 @@ for project in src/*/*.csproj; do dotnet pack "$project" --configuration Release
 
 ## Compatibility boundaries and verification
 
-Tool calls and structured output use explicit deterministic fixtures: `CallsTool(...)`, `CallsTools(...)` and `RespondsJson(...)`. Provider adapters preserve tool history and streaming events; `LlmTckChatClient` supports the standard Microsoft.Extensions.AI function-invocation loop. Fixtures must satisfy tool selection, argument schemas and response schemas; mismatches return 409 without consuming the response. See [supported contracts and tests](docs/Features/ToolAndStructuredFixtures.md).
+Tool calls and structured output use explicit deterministic fixtures: `CallsTool(...)`, `CallsTools(...)` and `RespondsJson(...)`. Provider adapters preserve tool history and streaming events; `LlmTestServerChatClient` supports the standard Microsoft.Extensions.AI function-invocation loop. Fixtures must satisfy tool selection, argument schemas and response schemas; mismatches return 409 without consuming the response. See [supported contracts and tests](docs/Features/ToolAndStructuredFixtures.md).
 
 OpenAI chat streaming supports `stream_options.include_usage`; the control library's `IChatClient` carries token usage and terminal updates, including reasoning and cache details. Authentication failures and scripted errors before generation do not accrue output/reasoning tokens.
 
@@ -915,16 +976,16 @@ After restore/build, run `bash scripts/coverage.sh` for the production 90% cover
 
 ## Native decision API fixtures
 
-Native typed clients are available through `LlmTckClient.CreateSystemOneClient()`
-and `LlmTckClient.CreateCloudflareDecisionClient(accountId)`. Clef accepts embedded
+Native typed clients are available through `LlmTestServerClient.CreateSystemOneClient()`
+and `LlmTestServerClient.CreateCloudflareDecisionClient(accountId)`. Clef accepts embedded
 PNG/JPEG/WebP data URLs or base64 objects; Jev accepts PNG/JPEG reference assets as
 JSON or multipart, with explicit image/long-context opt-ins. See the
 [official-contract audit and supported limits](docs/Features/DecisionVisionAudit.md).
 
 
-Jev, Kev, Cloudflare Clef/Clef Flash and OpenAI Decisions use explicit decision fixtures. The TCK hosts their native JSON shapes under provider namespaces and does not contact production providers. Declare the provider profile explicitly; model names never select an API implicitly.
+Jev, Kev, Cloudflare Clef/Clef Flash and OpenAI Decisions use explicit decision fixtures. The Test Server hosts their native JSON shapes under provider namespaces and does not contact production providers. Declare the provider profile explicitly; model names never select an API implicitly.
 
-| Provider | TCK POST route | Production POST endpoint | Model helper | Official contract |
+| Provider | Test Server POST route | Production POST endpoint | Model helper | Official contract |
 | --- | --- | --- | --- | --- |
 | TypeSafe Jev | `/systemone/v1/systemone` | `https://api.typesafe.ai/v1/systemone` | `AddJevLatest()` | [OpenAPI](https://api.typesafe.ai/openapi.json), [primitives](https://docs.typesafe.ai/primitives/choice) |
 | Kev | `/systemone/v1/systemone` | `{kev-server}/v1/systemone` | `AddKevLatest()` | [native request models](https://github.com/jaredpalmer/kev/blob/main/kev/api.py), [server/auth](https://github.com/jaredpalmer/kev/blob/main/kev/serve.py) |
@@ -932,11 +993,11 @@ Jev, Kev, Cloudflare Clef/Clef Flash and OpenAI Decisions use explicit decision 
 | Cloudflare Clef Flash | `/cloudflare/client/v4/accounts/{accountId}/ai/run/@cf/cloudflare/clef-flash` | `https://api.cloudflare.com/client/v4/accounts/{accountId}/ai/run/@cf/cloudflare/clef-flash` | `AddClefFlash()` | [Clef Flash API](https://developers.cloudflare.com/workers-ai/models/clef-flash/) |
 | OpenAI Decisions | `/openai/v1/decisions` | `https://api.openai.com/v1/decisions` | `AddOpenAiDecisionModel("gpt-6-luna")` | [create API](https://developers.openai.com/api/reference/resources/decisions/methods/create/) |
 
-Production APIs use `Authorization: Bearer <provider-token>`; Kev checks `KEV_API_KEY` only when configured and otherwise permits unauthenticated calls. For the TCK, `RequireBearerToken` controls the expected test token and protects both provider routes and `/admin-api/*`. Tests do not need production credentials. Resolve the hosted base URL from the Aspire resource (`GetEndpoint("http")` / `CreateHttpClient(...)`), then append the TCK route.
+Production APIs use `Authorization: Bearer <provider-token>`; Kev checks `KEV_API_KEY` only when configured and otherwise permits unauthenticated calls. For the Test Server, `RequireBearerToken` controls the expected test token and protects both provider routes and `/admin-api/*`. Tests do not need production credentials. Resolve the hosted base URL from the Aspire resource (`GetEndpoint("http")` / `CreateHttpClient(...)`), then append the Test Server route.
 
 ### SystemOne: Jev and Kev
 
-Jev requires `model`, string/object/array `state`, and a nonempty question map. Kev accepts any JSON `state`, including numbers, booleans and null; instructions and criterion descriptions also accept arbitrary JSON. Kev defaults an omitted `model` to `kev-latest`; the TCK enables that default only when `AddKevLatest()` explicitly registers the Kev profile. Binary questions use `type: "noul"`; optional `criteria` maps the native `true` and `false` descriptions. Choices use an opaque ID-to-description map. Scores use an ordered criteria array.
+Jev requires `model`, string/object/array `state`, and a nonempty question map. Kev accepts any JSON `state`, including numbers, booleans and null; instructions and criterion descriptions also accept arbitrary JSON. Kev defaults an omitted `model` to `kev-latest`; the Test Server enables that default only when `AddKevLatest()` explicitly registers the Kev profile. Binary questions use `type: "noul"`; optional `criteria` maps the native `true` and `false` descriptions. Choices use an opaque ID-to-description map. Scores use an ordered criteria array.
 
 ```json
 {
@@ -953,24 +1014,24 @@ Jev requires `model`, string/object/array `state`, and a nonempty question map. 
 Use `model: "jev-latest"` for Jev. Native responses contain keyed `answers`: `noul`, or `choice`/`score` with `confidence` and `probabilities`; score `legend` keys are zero-based numeric strings. `usage` contains `input_tokens` and `output_tokens`. Scores are native ordinal values and can exceed one.
 
 ```csharp
-using ManagedCode.LlmTck.Decisions;
+using ManagedCode.LlmTestServer.Decisions;
 
-options.AddKevLatest().AddDecisionScenario(new LlmTckDecisionScenario
+options.AddKevLatest().AddDecisionScenario(new LlmTestServerDecisionScenario
 {
     Id = "priority", ModelId = "kev-latest",
     Answers = new()
     {
-        ["urgent"] = new() { Kind = LlmTckDecisionKind.Predicate, Probability = 0.95 },
-        ["route"] = new() { Kind = LlmTckDecisionKind.Choice, Choice = "fast", Confidence = 0.9,
+        ["urgent"] = new() { Kind = LlmTestServerDecisionKind.Predicate, Probability = 0.95 },
+        ["route"] = new() { Kind = LlmTestServerDecisionKind.Choice, Choice = "fast", Confidence = 0.9,
             Probabilities = new() { ["fast"] = 0.95, ["regular"] = 0.05 } },
-        ["severity"] = new() { Kind = LlmTckDecisionKind.Score, Score = 1.75, Confidence = 0.625,
+        ["severity"] = new() { Kind = LlmTestServerDecisionKind.Score, Score = 1.75, Confidence = 0.625,
             Probabilities = new() { ["0"] = 0.05, ["1"] = 0.15, ["2"] = 0.8 } },
     },
     Usage = new() { InputTokens = 100, OutputTokens = 10, TotalTokens = 110 },
 });
 ```
 
-Kev score legends contain rendered strings, while Jev retains string/object/array criteria. Kev responses include `latency_ms`; `LlmTckDecisionScenario.Metadata` supplies deterministic latency and optional `Truncated`, `StateTokens`, `StateTokensUsed` fields. The route echoes or generates `x-typesafe-request-id`, including on errors. Invalid SystemOne request shapes return HTTP 422 with a native `detail` validation array; runtime/admission faults retain `detail` strings. Kev bearer failures include `WWW-Authenticate: Bearer`. This compatibility surface covers `/v1/systemone`; Kev demo `/permute` and `/separate` routes are outside its scope.
+Kev score legends contain rendered strings, while Jev retains string/object/array criteria. Kev responses include `latency_ms`; `LlmTestServerDecisionScenario.Metadata` supplies deterministic latency and optional `Truncated`, `StateTokens`, `StateTokensUsed` fields. The route echoes or generates `x-typesafe-request-id`, including on errors. Invalid SystemOne request shapes return HTTP 422 with a native `detail` validation array; runtime/admission faults retain `detail` strings. Kev bearer failures include `WWW-Authenticate: Bearer`. This compatibility surface covers `/v1/systemone`; Kev demo `/permute` and `/separate` routes are outside its scope.
 
 ### Cloudflare Workers AI: Clef and Clef Flash
 
@@ -989,9 +1050,9 @@ Send the same SystemOne question shape to the account/model route with body `mod
 }
 ```
 
-Configure `AddClef()` / `AddClefFlash()` and fixtures with the matching short model ID; native surrounding model whitespace is accepted. Runtime/auth failures remain non-success HTTP responses and use `success: false` with native numeric `errors[].code`. Explicit numeric scenario error codes are preserved, including 5004/400 (invalid input), 3007 or 3008/408 (timeout), 3036 or 3040/429 (capacity/rate limit). See [native errors](https://developers.cloudflare.com/workers-ai/platform/errors/). For native error cases, configure the explicit numeric `LlmTckScenarioError.Code`. Unmapped TCK-only errors such as fixture mismatch use the HTTP status as a synthetic code; that fallback is not a claimed Cloudflare native error code.
+Configure `AddClef()` / `AddClefFlash()` and fixtures with the matching short model ID; native surrounding model whitespace is accepted. Runtime/auth failures remain non-success HTTP responses and use `success: false` with native numeric `errors[].code`. Explicit numeric scenario error codes are preserved, including 5004/400 (invalid input), 3007 or 3008/408 (timeout), 3036 or 3040/429 (capacity/rate limit). See [native errors](https://developers.cloudflare.com/workers-ai/platform/errors/). For native error cases, configure the explicit numeric `LlmTestServerScenarioError.Code`. Unmapped Test Server-only errors such as fixture mismatch use the HTTP status as a synthetic code; that fallback is not a claimed Cloudflare native error code.
 
-Optional `images` is an array of inline data URLs or `{ "content_type": "image/png", "base64": "..." }` objects. PNG/JPEG/WebP are supported; remote URLs are rejected. Limits: four images, 4 MiB decoded file bytes and 16 megapixels per image, 8 MiB combined decoded bytes, and 13 MiB for the complete request body. Image dimensions and file type are read as metadata; compressed pixel streams are not decoded, so full raster validity is outside this deterministic mock validation. The TCK retains supplied images in the matched input and trace. See [input schema](https://developers.cloudflare.com/workers-ai/models/clef/schema-input.json), [output schema](https://developers.cloudflare.com/workers-ai/models/clef/schema-output.json).
+Optional `images` is an array of inline data URLs or `{ "content_type": "image/png", "base64": "..." }` objects. PNG/JPEG/WebP are supported; remote URLs are rejected. Limits: four images, 4 MiB decoded file bytes and 16 megapixels per image, 8 MiB combined decoded bytes, and 13 MiB for the complete request body. Image dimensions and file type are read as metadata; compressed pixel streams are not decoded, so full raster validity is outside this deterministic mock validation. The Test Server retains supplied images in the matched input and trace. See [input schema](https://developers.cloudflare.com/workers-ai/models/clef/schema-input.json), [output schema](https://developers.cloudflare.com/workers-ai/models/clef/schema-output.json).
 
 ### OpenAI Decisions
 
@@ -1016,20 +1077,20 @@ OpenAI uses `input` and an ordered question array. Predicate questions return on
 OpenAI fixture question IDs use `OpenAiDecisionFixtureIds.ForQuestionIndex(index)` for the zero-based position, regardless of optional native names. Choice fixture IDs use `ForChoiceValue(string/bool)` canonical JSON literals so string `"true"` differs from boolean `true`. Responses preserve names (including `null`), duplicate names and answer order.
 
 ```csharp
-using ManagedCode.LlmTck.Decisions;
-using ManagedCode.LlmTck.OpenAI;
+using ManagedCode.LlmTestServer.Decisions;
+using ManagedCode.LlmTestServer.OpenAI;
 
 var fast = OpenAiDecisionFixtureIds.ForChoiceValue("fast");
 var defer = OpenAiDecisionFixtureIds.ForChoiceValue(false);
-options.AddOpenAiDecisionModel("gpt-6-luna").AddDecisionScenario(new LlmTckDecisionScenario
+options.AddOpenAiDecisionModel("gpt-6-luna").AddDecisionScenario(new LlmTestServerDecisionScenario
 {
     Id = "priority-openai", ModelId = "gpt-6-luna",
     Answers = new()
     {
         [OpenAiDecisionFixtureIds.ForQuestionIndex(0)] = new() { Probability = 0.95 },
-        [OpenAiDecisionFixtureIds.ForQuestionIndex(1)] = new() { Kind = LlmTckDecisionKind.Choice, Choice = fast,
+        [OpenAiDecisionFixtureIds.ForQuestionIndex(1)] = new() { Kind = LlmTestServerDecisionKind.Choice, Choice = fast,
             Confidence = 0.9, Probabilities = new() { [fast] = 0.9, [defer] = 0.1 } },
-        [OpenAiDecisionFixtureIds.ForQuestionIndex(2)] = new() { Kind = LlmTckDecisionKind.Score, Score = 1.75,
+        [OpenAiDecisionFixtureIds.ForQuestionIndex(2)] = new() { Kind = LlmTestServerDecisionKind.Score, Score = 1.75,
             Confidence = 0.8, Probabilities = new() { ["0"] = 0.05, ["1"] = 0.15, ["2"] = 0.8 } },
     },
     Usage = new() { InputTokens = 100, CachedInputTokens = 4, OutputTokens = 0, TotalTokens = 100 },
@@ -1047,6 +1108,6 @@ options.AddOpenAiDecisionModel("gpt-6-luna").AddDecisionScenario(new LlmTckDecis
 | Cloudflare Clef/Flash | 2..255 | 2..10 | 1..64 questions; ASCII letter/digit/underscore/dot/hyphen IDs, max 100 characters; required nonempty instructions; four-decimal probabilities/native scores. |
 | OpenAI | 2..255 distinct typed values | Ordered labels; no undocumented count cap | Optional names/descriptions, empty strings and repeated score labels preserved; max 128 embedded images; model/names/instructions/labels/descriptions max 1,048,576 characters; no invented choice-value length cap. |
 
-`AddDecisionModel(id, LlmTckDecisionProvider...)` supports explicit custom model IDs; the control client mirrors it with `UseDecisionModel` and `UseDecisionScenario`. Fixtures are repeatable snapshots. Optional `ExpectedInput` matches the provider input exactly; SystemOne JSON state and OpenAI message arrays use serialized JSON. Cloudflare requests with supplied images match serialized `{state,images}`; text-only requests retain the state-only input. Question IDs, kinds and requested value domains must fit the fixture. Unknown models, unmatched inputs, mismatched fixtures, authentication, configured rate limits/content filtering and scripted errors produce observable non-success HTTP responses. Normal native choice/score fixtures require confidence and a complete probability domain, near-unit probability mass. SystemOne and Cloudflare choices must have maximal probability; OpenAI preserves any selected value in the supplied domain. Cloudflare confidence must equal the maximum probability within native rounding tolerance. Configure profile-correct explicit values: the Kev/Jev example above has score confidence 0.625; Clef uses the maximum probability 0.8. Values are validated and preserved without normalization or recomputation. Four-decimal distributions may total 0.9999 and native scores are not recomputed from rounded probabilities. For deliberate malformed-response regressions, set `AllowMalformedResponse = true` on the scenario; this explicitly bypasses native response conformance while keeping question-kind/domain mapping safe.
+`AddDecisionModel(id, LlmTestServerDecisionProvider...)` supports explicit custom model IDs; the control client mirrors it with `UseDecisionModel` and `UseDecisionScenario`. Fixtures are repeatable snapshots. Optional `ExpectedInput` matches the provider input exactly; SystemOne JSON state and OpenAI message arrays use serialized JSON. Cloudflare requests with supplied images match serialized `{state,images}`; text-only requests retain the state-only input. Question IDs, kinds and requested value domains must fit the fixture. Unknown models, unmatched inputs, mismatched fixtures, authentication, configured rate limits/content filtering and scripted errors produce observable non-success HTTP responses. Normal native choice/score fixtures require confidence and a complete probability domain, near-unit probability mass. SystemOne and Cloudflare choices must have maximal probability; OpenAI preserves any selected value in the supplied domain. Cloudflare confidence must equal the maximum probability within native rounding tolerance. Configure profile-correct explicit values: the Kev/Jev example above has score confidence 0.625; Clef uses the maximum probability 0.8. Values are validated and preserved without normalization or recomputation. Four-decimal distributions may total 0.9999 and native scores are not recomputed from rounded probabilities. For deliberate malformed-response regressions, set `AllowMalformedResponse = true` on the scenario; this explicitly bypasses native response conformance while keeping question-kind/domain mapping safe.
 
 See [complete native contracts and fixture details](docs/Features/DecisionModels.md) and [behavior-test evidence](docs/Testing/AcceptanceCriteriaTestInventory.md). Provider-specific limits and optional-field rules above are reconciled against the linked primary contracts.

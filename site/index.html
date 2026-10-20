@@ -3,13 +3,13 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>LLM TCK</title>
-    <meta name="description" content="Deterministic Aspire-hosted LLM API compatibility testing for .NET.">
+    <title>LLM Test Server</title>
+    <meta name="description" content="Deterministic LLM API mocking for .NET and Aspire. Script responses, streaming, tool calls, and failures locally.">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
     <header class="topbar">
-      <a class="brand" href="#top">LLM TCK</a>
+      <a class="brand" href="#top">LLM Test Server</a>
       <nav aria-label="Primary navigation">
         <a href="#coverage">Coverage</a>
         <a href="#packages">Packages</a>
@@ -20,17 +20,17 @@
     <main id="top">
       <section class="hero">
         <div class="hero-copy">
-          <p class="eyebrow">ManagedCode.LlmTck</p>
-          <h1>Deterministic LLM compatibility tests for .NET.</h1>
+          <p class="eyebrow">ManagedCode.LlmTestServer</p>
+          <h1>Test your AI integrations locally.</h1>
           <p class="lede">
-            Host a local provider-compatible server with Aspire, script exact model behavior, and call it through HTTP or Microsoft.Extensions.AI.
+            Script provider responses, streaming, tool calls, and failures. Inspect requests in a built-in dashboard. Built for .NET and Aspire.
           </p>
           <div class="actions">
             <a class="primary" href="#start">Get started</a>
-            <a class="secondary" href="https://github.com/managedcode/llm-tck">GitHub</a>
+            <a class="secondary" href="https://github.com/managedcode/LlmTestServer">GitHub</a>
           </div>
         </div>
-        <img class="hero-art" src="assets/llm-tck-hero.png" alt="LLM TCK compatibility test bench showing model modality nodes connected to a deterministic server.">
+        <img class="hero-art" src="assets/admin-dashboard-overview.jpg" alt="LLM Test Server request dashboard showing provider calls and conversation details.">
       </section>
 
       <section id="coverage" class="band">
@@ -57,10 +57,10 @@
           </p>
         </div>
         <ul class="package-list">
-          <li><strong>ManagedCode.LlmTck</strong><span>Scenarios and assertions</span></li>
-          <li><strong>ManagedCode.LlmTck.Hosting</strong><span>Provider and control endpoints</span></li>
-          <li><strong>ManagedCode.LlmTck.Client</strong><span>Control and AI clients</span></li>
-          <li><strong>ManagedCode.LlmTck.Aspire</strong><span>AppHost integration</span></li>
+          <li><strong>ManagedCode.LlmTestServer</strong><span>Scenarios and assertions</span></li>
+          <li><strong>ManagedCode.LlmTestServer.Hosting</strong><span>Provider and control endpoints</span></li>
+          <li><strong>ManagedCode.LlmTestServer.Client</strong><span>Control and AI clients</span></li>
+          <li><strong>ManagedCode.LlmTestServer.Aspire</strong><span>AppHost integration</span></li>
         </ul>
       </section>
 
@@ -68,7 +68,7 @@
         <p class="eyebrow">Start</p>
         <h2>Add the Aspire resource and call the local endpoint.</h2>
         <pre><code>builder
-    .AddLlmTck()
+    .AddLlmTestServer()
     .WithApiKey("test-key");</code></pre>
       </section>
     </main>

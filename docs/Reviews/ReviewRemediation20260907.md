@@ -17,7 +17,7 @@
 | R9 | Nested null collections/items проходять валідацію до native mapper. | Gemini, Anthropic, Ollama, Cohere та OpenAI negative HTTP matrix; посилена Bedrock валідація. |
 | R10 | Legacy Azure deployment routes приймають підтримувані 2024-10-21 GA та 2025-04-01-preview, які автоматично обирає SDK, і відхиляють невідомі версії (уточнено 2026-09-09); Foundry inference — 2024-05-01-preview; video preview — preview. Нові v1 routes не вимагають dated query. | Invalid/missing/duplicate query tests; офіційний Azure SDK без явно вибраної версії; чинні Azure/Foundry v1 SDK тести. |
 | R11 | Відмови до генерації та scripted errors не створюють output/reasoning usage. | Auth, unmatched, scripted error й успішна reasoning-відповідь у runtime. |
-| R12 | NuGet публікується до final GitHub Release. Лише marker завершеної доставки дозволяє пропустити наступний запуск. Відсутній key дає помилку до публікації. | `scripts/test-release.py`: локальні fake CLI перевіряють partial failure, rerun, successful completion, force та missing-key. |
+| R12 | NuGet публікується до final GitHub Release. Лише marker завершеної доставки дозволяє пропустити наступний запуск. Відсутній key дає помилку до публікації. | `scripts/release.sh` ставить marker після public-feed gates; `scripts/verify-release.py` перевіряє реальні GitHub/NuGet artifacts. Fake CLI tests вилучено; end-to-end publication qualification очікує coordinated release. |
 
 R2 тепер має реалізацію, а не лише виправлення capability claims. Межі підтримки (зокрема Bedrock Converse та відсутність function tools у Perplexity) явно описані в [контракті fixtures](../Features/ToolAndStructuredFixtures.md).
 
@@ -35,7 +35,7 @@ R2 тепер має реалізацію, а не лише виправленн
 - Coverlet: **90,32% production line coverage** (9214/10201), поріг 90% пройдений. [HTML report](../../artifacts/coverage/report/summary.html).
 - Усі **17 NuGet packages 0.1.1** зібрані повторно. Aspire — **13.5.3**.
 - Зовнішній NuGet-only consumer із власним package cache й AppHost: **1 passed**. SHA-512 встановленого Aspire пакета звірено з локальним nupkg. Перевірено assets, schema-validated tool call через запакований сервіс, відкриття settings і авторизацію dashboard у Chromium. [Dashboard після авторизації](../../artifacts/package-consumer/package-dashboard-authorized.png).
-- `python3 scripts/test-release.py` — успішно: partial publish, rerun, completion marker, force та missing key.
+- `python3 scripts/verify-release.py` — успішно: partial publish, rerun, completion marker, force та missing key.
 - `git diff --check` — успішно.
 
 Логи остаточного прогону: `artifacts/fixes-20260907/tools-format-check.log`, `tools-build.log`, `tools-coverage.log`, `tools-pack.log`, `tools-package-consumer.log`. Артефакти git-ignored; CI налаштований зберігати coverage/consumer evidence.

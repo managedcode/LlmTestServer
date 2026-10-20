@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>ManagedCode.LlmTestServer.Ollama</PackageId>
+    <Description>Ollama compatibility profile and adapters for ManagedCode.LlmTestServer.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ManagedCode.LlmTestServer\ManagedCode.LlmTestServer.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../Shared/LlmTestServerJsonValidation.cs" Link="Validation/LlmTestServerJsonValidation.cs" />
+  </ItemGroup>
+</Project>

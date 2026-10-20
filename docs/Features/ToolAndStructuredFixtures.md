@@ -8,7 +8,7 @@ builder.AddChatScenario("weather", scenario => scenario
     .RespondsJson("""{"forecast":"sunny"}"""));
 ```
 
-`CallsTools(...)` configures multiple calls in one response. Each call carries its ID, function name and JSON arguments. Tool declarations and arguments flow through provider adapters into typed provider-neutral records. Assistant tool calls and tool results remain in conversation history, exact scenario matching, diagnostic retention, token accounting and prompt-cache identity. `LlmTckChatClient` maps `AIFunctionDeclaration`, tool modes, `FunctionCallContent`, `FunctionResultContent`, and `ChatResponseFormatJson`; it works with the standard `UseFunctionInvocation()` middleware.
+`CallsTools(...)` configures multiple calls in one response. Each call carries its ID, function name and JSON arguments. Tool declarations and arguments flow through provider adapters into typed provider-neutral records. Assistant tool calls and tool results remain in conversation history, exact scenario matching, diagnostic retention, token accounting and prompt-cache identity. `LlmTestServerChatClient` maps `AIFunctionDeclaration`, tool modes, `FunctionCallContent`, `FunctionResultContent`, and `ChatResponseFormatJson`; it works with the standard `UseFunctionInvocation()` middleware.
 
 ## Supported contracts
 
@@ -23,7 +23,7 @@ builder.AddChatScenario("weather", scenario => scenario
 | Bedrock Converse / ConverseStream | toolConfig, toolUse/toolResult blocks | outputConfig.textFormat.structure.jsonSchema.schema | [Converse](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_Converse.html), [Schema](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_JsonSchemaDefinition.html) |
 | Perplexity Sonar | Function tools are not claimed and are rejected | response_format: json_schema | [Structured output](https://docs.perplexity.ai/docs/sonar/features) |
 
-Legacy Azure deployment routes accept the SDK-selected `api-version` for the documented `2024-10-21` GA and `2025-04-01-preview` contracts and reject unknown versions; Foundry inference routes require `api-version=2024-05-01-preview`; OpenAI v1 routes do not require a dated version. The operation contracts retain these constraints. Provider/model availability restrictions in the upstream services still apply; the TCK proves the listed fixture wire contracts, not every provider-hosted tool or model feature. Bedrock InvokeModel retains its existing model-specific fixture contract and rejects tool/schema options; tool support is claimed on Converse only. Legacy `functions` / `function_call` request options and server-hosted tools are explicitly rejected.
+Legacy Azure deployment routes accept the SDK-selected `api-version` for the documented `2024-10-21` GA and `2025-04-01-preview` contracts and reject unknown versions; Foundry inference routes require `api-version=2024-05-01-preview`; OpenAI v1 routes do not require a dated version. The operation contracts retain these constraints. Provider/model availability restrictions in the upstream services still apply; the Test Server proves the listed fixture wire contracts, not every provider-hosted tool or model feature. Bedrock InvokeModel retains its existing model-specific fixture contract and rejects tool/schema options; tool support is claimed on Converse only. Legacy `functions` / `function_call` request options and server-hosted tools are explicitly rejected.
 
 ## Schema and streaming behavior
 
@@ -36,8 +36,8 @@ Streams carry provider-native tool events: OpenAI indexed tool-call deltas and t
 - `ToolFixtureEndpointTests`: positive full conversation and schema mismatch recovery for each claimed tool operation; native streaming events; mapped tool-result history.
 - `ToolFixtureClientTests`: OpenAI Chat and Responses SDK parsing, Azure SDK, Microsoft.Extensions.AI automatic function invocation in ordinary and streaming modes.
 - `ToolFixtureValidationTests`: malformed wire options, tool selection mismatch, argument validation, local/external schema references and inconsistent JSON chunks.
-- `ToolFixtureStateTests`: parallel calls, mixed text/tool output, configuration snapshot isolation, exact history matching and prompt-cache identity.
-- `ProviderApiContractTests`: capabilities must be represented in the doc-backed operation matrix, and every implemented operation retains behavior evidence.
+- HTTP/SDK state flows must cover parallel calls, mixed text/tool output, configuration isolation, exact history matching and prompt-cache identity; replacement of removed internal state tests is in progress.
+- `ProviderCapabilityEvidenceTests`: operation variants execute through HTTP with success, rejection and queue recovery; operation contracts retain official documentation references.
 
 ## Request constraints and diagnostics
 
@@ -49,7 +49,7 @@ Every fixture mismatch produces an `ErrorReturned` runtime event with request/sc
 
 `WithExactMatch` now compares tool-call IDs and the complete ordered tool-call collection, including null/empty values. Callers that used empty expected tool metadata as a wildcard must select Contains matching instead. Contains retains the existing optional tool metadata behavior.
 
-Wire tool validation lives in the corresponding provider package, returning `LlmTckRequestValidationResult`. Hosting selects a provider validator and maps invalid results to the provider's HTTP error shape. Provider-independent JSON primitives are linked from `src/Shared`; the neutral runtime has no provider DTO dependencies.
+Wire tool validation lives in the corresponding provider package, returning `LlmTestServerRequestValidationResult`. Hosting selects a provider validator and maps invalid results to the provider's HTTP error shape. Provider-independent JSON primitives are linked from `src/Shared`; the neutral runtime has no provider DTO dependencies.
 
 `ProviderCapabilityEvidenceTests` executes a positive and negative fixture for each `(provider, operation, Tools/StructuredOutput, JSON/stream)` case supported by the checked-in contracts. Its guard also requires executable provider arguments and named nullable/limit/anyOf and parallel-option regression cases. This supplements operation-level evidence; it is not a claim of exhaustive upstream API coverage.
 
@@ -57,4 +57,4 @@ Wire tool validation lives in the corresponding provider package, returning `Llm
 
 `WithVideoCapacity(maxJobs, maxBytes)` configures a shared runtime budget across stored provider video jobs. Defaults are 256 jobs and 64 MiB of retained payload bytes. Zero jobs disables storage. New jobs exceeding either bound return 409 / `llm_tck_video_capacity_exceeded`; existing jobs remain available and failed stores do not advance IDs. Delete releases capacity; reset/configure clear jobs and byte accounting. OpenAI and Azure video job endpoints propagate the failure. This budget applies to stored jobs, separately from configured modality fixture bytes and the event-journal budget.
 
-Schema validation uses the MIT-licensed JsonSchema.Net 8.0.5 package so installed TCK binaries do not introduce the separate binary maintenance terms from later releases. Keep fixture validation and external-reference rejection covered when changing this dependency.
+Schema validation uses the MIT-licensed JsonSchema.Net 8.0.5 package so installed Test Server binaries do not introduce the separate binary maintenance terms from later releases. Keep fixture validation and external-reference rejection covered when changing this dependency.

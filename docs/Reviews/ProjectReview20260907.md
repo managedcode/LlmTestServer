@@ -1,4 +1,4 @@
-# Review LlmTck — 2026-09-07
+# Review LlmTestServer — 2026-09-07
 
 > Подальші виправлення та перевірки: [ReviewRemediation20260907.md](ReviewRemediation20260907.md). Нижче збережені початкові знахідки до виправлень.
 
@@ -6,7 +6,7 @@
 
 Перевірено поточний checkout `fa6f6ef` разом із незакоміченими змінами версії `0.1.1`. Знайдено **12 конкретних проблем: 4 P1 і 8 P2**. Одинадцять підтверджено окремим виконуваним harness, HTTP або браузером; ризик відновлення релізу встановлено аналізом workflow. Виправлення в production-код у цьому review не внесені.
 
-Базовий повний прогін пройшов: **196/196**, без пропусків. Додатковий consumer поза репозиторієм встановив саме локальний `ManagedCode.LlmTck.Aspire.0.1.1.nupkg`, запустив власний AppHost і перевірив упакований сервіс. NuGet metadata підтверджує джерело `artifacts/packages`; source fallback для сервісу не використовувався. У браузері перевірено роботу Runtime settings цього consumer.
+Базовий повний прогін пройшов: **196/196**, без пропусків. Додатковий consumer поза репозиторієм встановив саме локальний `ManagedCode.LlmTestServer.Aspire.0.1.1.nupkg`, запустив власний AppHost і перевірив упакований сервіс. NuGet metadata підтверджує джерело `artifacts/packages`; source fallback для сервісу не використовувався. У браузері перевірено роботу Runtime settings цього consumer.
 
 Переглянуті runtime і конфігурація, provider DTO/мапери/маршрути, API-contract/evidence тести, клієнти Microsoft.Extensions.AI, admin state/HTTP diagnostics, Aspire locator/пакування, sample service, CI/release та структура UI. Це не live conformance тест зовнішніх LLM і не повний responsive/accessibility аудит сайту. Попередні 90,07% line coverage є доказом виконаних рядків, але не закривають наведені нижче поведінкові прогалини.
 
@@ -16,19 +16,19 @@
 
 ### R1. Dashboard із Aspire NuGet не отримує JavaScript
 
-**Місце:** `src/ManagedCode.LlmTck.Aspire/ManagedCode.LlmTck.Aspire.csproj:13–16`.
+**Місце:** `src/ManagedCode.LlmTestServer.Aspire/ManagedCode.LlmTestServer.Aspire.csproj:13–16`.
 
 Пакет бере сервіс із `bin/Release/net10.0` і виключає `*.staticwebassets.runtime.json`. Build output не містить фізичного `wwwroot`, на який покладаються static asset endpoints після видалення development manifest. У перевіреному nupkg взагалі **0 JavaScript-файлів**.
 
-**Відтворення:** чистий consumer із PackageReference на `0.1.1`, `builder.AddLlmTck().WithApiKey("test-key")`, старт через Aspire.Hosting.Testing. `/health`, `/` та `/admin-api/models` повертають 200. Водночас `/_framework/blazor.web.js` і Fluent module повертають **200 / 0 bytes**. Service log прямо повідомляє, що застосунок працює не з publish output і static web assets не ввімкнені. У браузері натискання Runtime settings залишає popup закритим; сторінка містить script `_framework/blazor.web.js`.
+**Відтворення:** чистий consumer із PackageReference на `0.1.1`, `builder.AddLlmTestServer().WithApiKey("test-key")`, старт через Aspire.Hosting.Testing. `/health`, `/` та `/admin-api/models` повертають 200. Водночас `/_framework/blazor.web.js` і Fluent module повертають **200 / 0 bytes**. Service log прямо повідомляє, що застосунок працює не з publish output і static web assets не ввімкнені. У браузері натискання Runtime settings залишає popup закритим; сторінка містить script `_framework/blazor.web.js`.
 
-**Наслідок:** користувач установлює пакет, бачить HTML dashboard, але не може скористатися інтерактивними контролами й авторизувати панель. Чинний Aspire integration test знаходить сервіс у source checkout через `LlmTckServiceLocator`, тому не перевіряє цю властивість nupkg.
+**Наслідок:** користувач установлює пакет, бачить HTML dashboard, але не може скористатися інтерактивними контролами й авторизувати панель. Чинний Aspire integration test знаходить сервіс у source checkout через `LlmTestServerServiceLocator`, тому не перевіряє цю властивість nupkg.
 
 **Виправлення:** пакувати service **publish output** зі статичними assets; додати NuGet-consumer тест поза solution, перевірку ненульового JS та браузерний сценарій відкриття settings/авторизації.
 
 ### R2. Tools і Structured Output заявлені, але не реалізовані
 
-**Місця:** `src/ManagedCode.LlmTck.OpenAI/OpenAiCompatibility.cs:27–28,61–62`; `OpenAiChatModels.cs:7–23`; `src/ManagedCode.LlmTck/Scenarios/LlmTckScenarioResponse.cs`.
+**Місця:** `src/ManagedCode.LlmTestServer.OpenAI/OpenAiCompatibility.cs:27–28,61–62`; `OpenAiChatModels.cs:7–23`; `src/ManagedCode.LlmTestServer/Scenarios/LlmTestServerScenarioResponse.cs`.
 
 Профілі й документація прямо включають `Tools` та `StructuredOutput` у підтримувані можливості. Request DTO не має `tools`, `tool_choice` чи `response_format`; сценарій уміє повертати лише текст/чанки/помилку. Поля мовчки губляться під час десеріалізації.
 
@@ -40,7 +40,7 @@
 
 ### R3. Video lifecycle не має стану і ніколи не завершує OpenAI polling
 
-**Місця:** `src/ManagedCode.LlmTck.OpenAI/OpenAiVideoModels.cs:33`; `OpenAiWireMapper.cs:361–373`; `src/ManagedCode.LlmTck.Hosting/LlmTckEndpointRouteBuilderExtensions.cs:2340–2375`.
+**Місця:** `src/ManagedCode.LlmTestServer.OpenAI/OpenAiVideoModels.cs:33`; `OpenAiWireMapper.cs:361–373`; `src/ManagedCode.LlmTestServer.Hosting/LlmTestServerEndpointRouteBuilderExtensions.cs:2340–2375`.
 
 `ToVideoResponse` не змінює початковий `Status="queued"`, хоча виставляє `completed_at`. GET генерує нову стандартну fixture і підставляє будь-який переданий ID. DELETE повертає `deleted=true`, не змінюючи стану.
 
@@ -52,7 +52,7 @@
 
 ### R4. Скасований chat може безповоротно спожити відповідь
 
-**Місця:** `src/ManagedCode.LlmTck/Runtime/LlmTckRuntime.cs:142,293–306,1124–1127`.
+**Місця:** `src/ManagedCode.LlmTestServer/Runtime/LlmTestServerRuntime.cs:142,293–306,1124–1127`.
 
 Cancellation перевіряється тільки через `Task.Delay`. Без затримки вже скасований token не зупиняє запит. Rollback повертає позицію лише коли після reservation жоден інший запит не пересунув курсор.
 
@@ -68,7 +68,7 @@ Cancellation перевіряється тільки через `Task.Delay`. Б
 
 ### R5. Однакові scenario ID у різних datasets ділять чергу
 
-**Місця:** `src/ManagedCode.LlmTck/Runtime/LlmTckRuntime.cs:33,255,898–902`; `src/ManagedCode.LlmTck/Scenarios/LlmTckScenarioDatasetBuilder.cs:20–23`.
+**Місця:** `src/ManagedCode.LlmTestServer/Runtime/LlmTestServerRuntime.cs:33,255,898–902`; `src/ManagedCode.LlmTestServer/Scenarios/LlmTestServerScenarioDatasetBuilder.cs:20–23`.
 
 Dataset builder забезпечує унікальність лише всередині dataset, тоді як runtime ключує позиції одним `scenario.Id` після злиття всіх datasets.
 
@@ -78,7 +78,7 @@ Dataset builder забезпечує унікальність лише всер�
 
 ### R6. Невдалий configure стирає trace journal
 
-**Місце:** `src/ManagedCode.LlmTck.Hosting/LlmTckEndpointRouteBuilderExtensions.cs:878–880`.
+**Місце:** `src/ManagedCode.LlmTestServer.Hosting/LlmTestServerEndpointRouteBuilderExtensions.cs:878–880`.
 
 `traceStore.Reset()` виконується до валідації/snapshot усієї конфігурації у runtime. Наприклад, `{"models":null}` десеріалізується, а потім кидає `ArgumentNullException`.
 
@@ -88,7 +88,7 @@ Dataset builder забезпечує унікальність лише всер�
 
 ### R7. Chat SSE не повертає запитаний usage
 
-**Місця:** `src/ManagedCode.LlmTck.OpenAI/OpenAiChatModels.cs:7–23,92–108`; `src/ManagedCode.LlmTck.Hosting/LlmTckEndpointRouteBuilderExtensions.cs:3203–3209`.
+**Місця:** `src/ManagedCode.LlmTestServer.OpenAI/OpenAiChatModels.cs:7–23,92–108`; `src/ManagedCode.LlmTestServer.Hosting/LlmTestServerEndpointRouteBuilderExtensions.cs:3203–3209`.
 
 Request DTO ігнорує `stream_options.include_usage`; chunk DTO не має `usage`. Потік завершується stop і [DONE] без фінальної usage події.
 
@@ -100,7 +100,7 @@ Request DTO ігнорує `stream_options.include_usage`; chunk DTO не має
 
 ### R8. Власний IChatClient губить usage і фінальний stream update
 
-**Місця:** `src/ManagedCode.LlmTck.Client/LlmTckChatClient.cs:42–49,104–114`; аналогічне відкидання usage є в `LlmTckEmbeddingGenerator.cs`.
+**Місця:** `src/ManagedCode.LlmTestServer.Client/LlmTestServerChatClient.cs:42–49,104–114`; аналогічне відкидання usage є в `LlmTestServerEmbeddingGenerator.cs`.
 
 Ordinary ChatResponse створюється без `Usage`, хоча HTTP DTO його має. Streaming повертає update лише за непорожнього text; фінальний chunk із finish reason та порожнім text відкидається.
 
@@ -110,7 +110,7 @@ Ordinary ChatResponse створюється без `Usage`, хоча HTTP DTO �
 
 ### R9. Валідний JSON із null у вкладених полях спричиняє exception
 
-**Місце:** `src/ManagedCode.LlmTck.Hosting/LlmTckEndpointRouteBuilderExtensions.cs:4114–4119`.
+**Місце:** `src/ManagedCode.LlmTestServer.Hosting/LlmTestServerEndpointRouteBuilderExtensions.cs:4114–4119`.
 
 Nullable runtime values можуть потрапити в non-nullable C# collection properties через JSON; initializer `=[]` не захищає від явного `null`. Gemini validation читає `content.Parts.Count` без перевірки null.
 
@@ -120,7 +120,7 @@ Nullable runtime values можуть потрапити в non-nullable C# colle
 
 ### R10. Legacy Azure api-version є лише metadata
 
-**Місця:** `src/ManagedCode.LlmTck.AzureOpenAI/AzureOpenAiCompatibility.cs:78`; `src/ManagedCode.LlmTck.Hosting/LlmTckEndpointRouteBuilderExtensions.cs:1003–1018`.
+**Місця:** `src/ManagedCode.LlmTestServer.AzureOpenAI/AzureOpenAiCompatibility.cs:78`; `src/ManagedCode.LlmTestServer.Hosting/LlmTestServerEndpointRouteBuilderExtensions.cs:1003–1018`.
 
 Deployment chat передає запит у спільний handler без читання api-version. У Hosting немає перевірки цього query parameter.
 
@@ -132,7 +132,7 @@ Deployment chat передає запит у спільний handler без ч�
 
 ### R11. Відхилений запит нараховує reasoning/output tokens
 
-**Місце:** `src/ManagedCode.LlmTck/Runtime/LlmTckRuntime.cs:1545–1547`.
+**Місце:** `src/ManagedCode.LlmTestServer/Runtime/LlmTestServerRuntime.cs:1545–1547`.
 
 `CreateChatUsage` завжди додає модельний ReasoningTokens, у тому числі коли його викликають auth/unmatched/fault error branches без генерації.
 
@@ -156,7 +156,7 @@ GitHub Release створюється перед `dotnet nuget push`. Якщо p
 
 1. **Перевіряти capability, а не лише існування route/test method.** `ProviderApiContractTests` звіряє metadata, множини маршрутів і наявність імен тестів. Звичайний chat test вважається evidence для route, який також заявляє tools/structured output. Потрібна матриця `(provider, operation, capability, transport, error behavior)` з незалежними assertions.
 2. **Перевіряти реальний NuGet consumer у CI.** Зараз source fallback приховує R1. Після pack варто створювати consumer за межами repository tree, запускати його через Aspire.Hosting.Testing і перевіряти SDK call, assets і UI action. Окремо корисний Linux consumer, бо нинішнє локальне відтворення виконувалось на macOS arm64.
-3. **Розділити великий Hosting файл.** `LlmTckEndpointRouteBuilderExtensions.cs` має 4602 рядки; runtime — 1760, AdminPage — 1538, AdminPanel — 1289. Винести provider route groups, validators і stream writers за відповідними межами відповідальності. Це полегшить окрему валідацію nullable JSON, API versions і usage.
+3. **Розділити великий Hosting файл.** `LlmTestServerEndpointRouteBuilderExtensions.cs` має 4602 рядки; runtime — 1760, AdminPage — 1538, AdminPanel — 1289. Винести provider route groups, validators і stream writers за відповідними межами відповідальності. Це полегшить окрему валідацію nullable JSON, API versions і usage.
 4. **Закріпити 90% coverage gate у CI.** Поріг описаний у AGENTS і перевірявся локально, але чинні workflows запускають звичайні тести без coverage threshold. Додати той самий include/exclude scope і збереження звіту; не підміняти цим behavior evidence.
 5. **Обмежити prompt cache для довгих load tests.** `_promptCacheEntries` не має capacity/eviction, хоча журнали обмежені. Це рекомендація для тривалих сесій з унікальними prompt keys, не виміряний у цьому review memory leak. Задати configurable capacity та deterministic eviction/reset policy.
 

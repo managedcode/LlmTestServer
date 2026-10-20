@@ -11,7 +11,9 @@
     <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="ManagedCode.LlmTck.Aspire" Version="__VERSION__" />
+    <PackageReference Include="ManagedCode.LlmTestServer.Aspire" Version="__VERSION__" />
+    <PackageReference Include="ManagedCode.LlmTestServer.Client" Version="__VERSION__" />
+    <PackageReference Include="OpenAI" Version="__OPENAI_VERSION__" />
     <PackageReference Include="Aspire.Hosting.Testing" Version="__ASPIRE_VERSION__" />
     <PackageReference Include="TUnit" Version="__TUNIT_VERSION__" />
     <PackageReference Include="Microsoft.Playwright" Version="__PLAYWRIGHT_VERSION__" />

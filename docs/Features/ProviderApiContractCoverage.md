@@ -4,13 +4,13 @@ Current review: [2026-09-07 provider and dependency refresh](ProviderApiReview20
 
 ## Goal
 
-LLM TCK provider packages must not claim provider compatibility from memory or from an OpenAI-compatible shortcut. Every claimed provider method, route, streaming mode, modality, and API-version/header requirement is represented in the package profile's `ApiContract`.
+LLM Test Server provider packages must not claim provider compatibility from memory or from an OpenAI-compatible shortcut. Every claimed provider method, route, streaming mode, modality, and API-version/header requirement is represented in the package profile's `ApiContract`.
 
 The current contract covers the generative API surface claimed by the provider profiles: chat/messages, streaming chat, embeddings, image generation or image inference, audio/speech, video generation where documented, model listing where claimed. Tool calls and structured output have [explicit fixture contracts and regression evidence](ToolAndStructuredFixtures.md); schema or tool-selection mismatches return 409 without consuming a scenario. Provider account administration, billing, files, fine-tuning, batches, and unrelated platform management APIs are outside the profile surface until a package explicitly claims them.
 
 ## Contract Shape
 
-Each `LlmTckProviderProfile` has:
+Each `LlmTestServerProviderProfile` has:
 
 - `Capabilities`: the provider capabilities this package claims.
 - `ApiContract.DocumentationUrl`: the official source used for the provider.
@@ -18,7 +18,7 @@ Each `LlmTckProviderProfile` has:
 - `ApiContract.DocumentationVersion`: the API version, preview marker, or required version header when the provider publishes one.
 - `ApiContract.Operations`: documented HTTP operations with method, path, docs URL, streaming support, required header or version, and `ImplementedByHosting`.
 
-`ImplementedByHosting` is deliberately separate from provider capability. It means `ManagedCode.LlmTck.Hosting` currently maps that exact method/path. For this supertest surface, every operation in a provider profile must be implemented. Do not add future or exploratory provider methods to `ApiContract.Operations` until `MapLlmTck()` exposes the route and a behavior test proves the shape.
+`ImplementedByHosting` is deliberately separate from provider capability. It means `ManagedCode.LlmTestServer.Hosting` currently maps that exact method/path. For this supertest surface, every operation in a provider profile must be implemented. Do not add future or exploratory provider methods to `ApiContract.Operations` until `MapLlmTestServer()` exposes the route and a behavior test proves the shape.
 
 ## Sync Rules
 
@@ -32,13 +32,12 @@ When provider docs change or a new route is added:
 6. Update the test inventory when the acceptance surface changes.
 7. Refresh `DocumentationRetrievedOn`; contract tests fail when the docs review is older than 180 days.
 
-## Guard Tests
+## Integration evidence
 
-`ProviderApiContractTests.ProviderApiContracts_AreDocBackedAndCoverClaimedCapabilitiesAsync` fails when a provider profile claims a capability without a documented operation, uses a non-official docs URL, omits a retrieval date or version, has docs older than 180 days, duplicates a method/path row, keeps an unimplemented operation in the profile, or marks streaming without a streaming capability.
-
-`ProviderApiContractTests.HostingProviderRoutes_AreCoveredByImplementedDocumentedOperationsAsync` fails when `MapLlmTck()` exposes a public provider route that is not represented by an implemented documented operation, or when a documented implemented operation has no matching route.
-
-`ProviderApiContractTests.ProviderApiContracts_UseExplicitProviderNamespacesAsync` fails when a provider profile exposes a hosted route outside its provider namespace, for example an OpenAI route outside `/openai`, an Anthropic route outside `/anthropic`, or an Azure OpenAI route outside `/azure-openai`.
+Provider support is verified by running the server and calling every claimed operation through HTTP and official
+SDKs. Cover supported parameters and streaming modes, version/auth validation, success/error envelopes and state
+transitions. Contract metadata and official documentation guide these tests; source/doc scans and reflection-based
+test guards are not used as evidence. See the [server integration inventory](../Testing/AcceptanceCriteriaTestInventory.md).
 
 `AnthropicEndpointTests` prove the first native non-OpenAI provider route: `/anthropic/v1/messages` accepts Anthropic text messages, requires `anthropic-version: 2023-06-01`, accepts the provider-owned `x-api-key` header, returns Anthropic message/error JSON with deterministic usage, and streams Anthropic-named SSE events with usage on `message_start` and cumulative output usage on `message_delta`.
 
@@ -46,7 +45,7 @@ When provider docs change or a new route is added:
 
 The same test class proves the OpenAI-compatible Responses API routes: OpenAI `/openai/v1/responses`, Groq `/groq/openai/v1/responses`, and OpenRouter `/openrouter/api/v1/responses`, including string input, structured message input with text and image parts, response output text shape, deterministic input/output usage, and Responses-style SSE streaming events.
 
-OpenAI image coverage now follows the current official image surface for this profile under the TCK provider namespace: `/openai/v1/images/generations`, `/openai/v1/images/edits`, and `/openai/v1/images/variations`. `OpenAiEndpointTests.ImageRoutes_ReturnDocumentedEditVariationAndStreamingShapesAsync` proves JSON generation streaming with `image_generation.partial_image` and `image_generation.completed`, multipart edit output and `image_edit.*` streaming, multipart variation input for the DALL-E 2 route, deterministic base64 fixture output, and documented option validation.
+OpenAI image coverage now follows the current official image surface for this profile under the Test Server provider namespace: `/openai/v1/images/generations`, `/openai/v1/images/edits`, and `/openai/v1/images/variations`. `OpenAiEndpointTests.ImageRoutes_ReturnDocumentedEditVariationAndStreamingShapesAsync` proves JSON generation streaming with `image_generation.partial_image` and `image_generation.completed`, multipart edit output and `image_edit.*` streaming, multipart variation input for the DALL-E 2 route, deterministic base64 fixture output, and documented option validation.
 
 OpenAI audio transcription is covered through `/openai/v1/audio/transcriptions` with multipart form input, JSON output, plain-text output, and documented `transcript.text.delta` / `transcript.text.done` SSE events for `stream=true`. Groq `/groq/openai/v1/audio/transcriptions` is covered with multipart input and Groq's `x_groq.id` response metadata. Azure OpenAI `/azure-openai/openai/deployments/{deployment}/audio/transcriptions?api-version=2024-10-21` is covered with deployment-owned model resolution, `api-key` auth, multipart input, and verbose JSON output. Audio translation is covered through OpenAI `/openai/v1/audio/translations`, Groq `/groq/openai/v1/audio/translations`, and Azure OpenAI `/azure-openai/openai/deployments/{deployment}/audio/translations?api-version=2024-10-21` with multipart input, JSON/text or verbose JSON output as documented, Groq metadata, Azure deployment-owned model resolution, and no unsupported streaming flag. Groq speech is covered through `/groq/openai/v1/audio/speech` with the documented `voice` requirement, Groq-specific response formats, and deterministic audio bytes.
 
@@ -72,4 +71,4 @@ Legacy Azure deployment routes accept exactly one supported `api-version`: `2024
 
 `AzureSdkCompatibilityTests.AzureOpenAiClient_CanUseDeploymentChatAndEmbeddingsAsync` proves chat, streaming and embeddings with the installed SDK default. `ReviewHttpRegressionTests.AzureLegacyVersion_AcceptsDocumentedStableAndPreviewVersionsAsync` covers the supported stable and preview contracts; the negative queue-preservation test covers invalid inputs and unknown date-shaped versions. The [official SDK options source](https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/openai/Azure.AI.OpenAI/src/Custom/AzureOpenAIClientOptions.cs) owns automatic service-version selection. Supported deployment contracts are documented in the [GA reference](https://learn.microsoft.com/en-us/azure/foundry/openai/reference) and [dated preview reference](https://learn.microsoft.com/en-us/azure/foundry/openai/reference-preview).
 
-The [OpenAI chat reference](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create) defines `stream_options.include_usage`: the final usage chunk has empty choices and precedes `[DONE]`. The TCK preserves provider-specific cache shapes in that chunk. See the [Azure version lifecycle](https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle) for the separate v1 contract.
+The [OpenAI chat reference](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create) defines `stream_options.include_usage`: the final usage chunk has empty choices and precedes `[DONE]`. The Test Server preserves provider-specific cache shapes in that chunk. See the [Azure version lifecycle](https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle) for the separate v1 contract.

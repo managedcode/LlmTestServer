@@ -4,7 +4,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Hosting;
 using Aspire.Hosting.Testing;
-using ManagedCode.LlmTck.Aspire;
+using ManagedCode.LlmTestServer.Aspire;
+using ManagedCode.LlmTestServer.Client;
 using Microsoft.Playwright;
 using TUnit.Core;
 using static Microsoft.Playwright.Assertions;
@@ -15,11 +16,7 @@ public sealed class PackageTests
     public async Task InstalledPackage_ServesAssetsAndInteractiveDashboard(CancellationToken cancellationToken)
     {
         var builder = DistributedApplicationTestingBuilder.Create([]);
-        var resource = builder.AddLlmTck("package-tck").WithApiKey("test-key");
-        if (!resource.Resource.WorkingDirectory.StartsWith(AppContext.BaseDirectory, StringComparison.Ordinal))
-            throw new InvalidOperationException("The service must come from the installed package output.");
-        if (Directory.GetFiles(resource.Resource.WorkingDirectory, "*.staticwebassets.runtime.json", SearchOption.AllDirectories).Length != 0)
-            throw new InvalidOperationException("Package contains a build-machine static assets manifest.");
+        var resource = builder.AddLlmTestServer("package-tck").WithApiKey("test-key");
         await using var app = await builder.BuildAsync(cancellationToken);
         await app.StartAsync(cancellationToken);
         await app.ResourceNotifications.WaitForResourceHealthyAsync("package-tck", cancellationToken);
@@ -77,6 +74,37 @@ public sealed class PackageTests
             if (!(await response.Content.ReadAsStringAsync(cancellationToken)).Contains("0.95", StringComparison.Ordinal))
                 throw new InvalidOperationException("Installed package lost the native decision fixture: " + model);
         }
+        var control = new LlmTestServerClient(http, "test-key");
+        await control.ConfigureAsync(config => config.RequireBearerToken("test-key").UseGpt41Mini()
+            .UseChatScenario("package-conversation", scenario => scenario.WhenUserContains("Paris")
+                .Responds("Paris: 18 °C and sunny. The next train leaves at 14:30. Your itinerary is ready.")), cancellationToken);
+        var sdk = new OpenAI.Chat.ChatClient("gpt-4.1-mini", new System.ClientModel.ApiKeyCredential("test-key"),
+            new OpenAI.OpenAIClientOptions { Endpoint = new Uri(http.BaseAddress!, "openai/v1") });
+        List<OpenAI.Chat.ChatMessage> history =
+        [
+            new OpenAI.Chat.SystemChatMessage(string.Concat(Enumerable.Repeat("Help the traveller plan a deterministic fixture itinerary. Keep supplied facts intact. ", 30))),
+            new OpenAI.Chat.UserChatMessage("Plan a visit to Paris."),
+            new OpenAI.Chat.AssistantChatMessage("Which day and transport do you prefer?"),
+            new OpenAI.Chat.UserChatMessage("Tomorrow by train; include weather and a walking route."),
+            new OpenAI.Chat.AssistantChatMessage("I will use the supplied timetable and weather fixtures."),
+            new OpenAI.Chat.UserChatMessage("Use the afternoon train and show the final Paris itinerary."),
+        ];
+        var reply = await sdk.CompleteChatAsync(history, cancellationToken: cancellationToken);
+        if (!reply.Value.Content[0].Text.Contains("18 °C", StringComparison.Ordinal))
+            throw new InvalidOperationException("The installed client and provider SDK lost the Unicode response fixture.");
+        var summary = await control.GetAssertionsAsync(cancellationToken);
+        if (summary.Matched != 1 || summary.InputTokens <= 0 || summary.OutputTokens <= 0)
+            throw new InvalidOperationException("The installed control client did not observe the SDK request and usage.");
+        await using (var session = await control.CreateSessionAsync(config => config.RequireBearerToken("test-key")
+            .UseChatScenario("package-session", scenario => scenario.Responds("isolated package response")), cancellationToken))
+        {
+            using var sessionChat = session.Control.CreateChatClient();
+            var sessionReply = await sessionChat.GetResponseAsync(
+                [new Microsoft.Extensions.AI.ChatMessage(Microsoft.Extensions.AI.ChatRole.User, "session request")], cancellationToken: cancellationToken);
+            if (sessionReply.Text != "isolated package response" || (await session.Control.GetAssertionsAsync(cancellationToken)).Matched != 1
+                || (await control.GetAssertionsAsync(cancellationToken)).Matched != 1)
+                throw new InvalidOperationException("Installed package sessions must isolate requests and assertions from the dashboard runtime.");
+        }
         using var playwright = await Playwright.CreateAsync();
         await using var browser = await playwright.Chromium.LaunchAsync(new() { Headless = true });
         var page = await browser.NewPageAsync();
@@ -85,7 +113,7 @@ public sealed class PackageTests
         await runtimeTrigger.ClickAsync();
         await Expect(page.GetByLabel("Bearer token", new() { Exact = true })).ToBeVisibleAsync();
         await Expect(runtimeTrigger).ToHaveAttributeAsync("aria-expanded", "true");
-        await Expect(page.GetByRole(AriaRole.Dialog, new() { Name = "Runtime state" })).ToBeVisibleAsync();
+        await Expect(page.GetByRole(AriaRole.Alertdialog, new() { Name = "Runtime state" })).ToBeVisibleAsync();
         await page.ScreenshotAsync(new() { Path = "package-dashboard.png", FullPage = true });
         await page.GetByLabel("Bearer token", new() { Exact = true }).FillAsync("test-key");
         await page.GetByRole(AriaRole.Button, new() { Name = "Close runtime settings", Exact = true }).ClickAsync();
@@ -100,16 +128,35 @@ public sealed class PackageTests
         await Expect(runtimeTrigger).ToBeFocusedAsync();
         await page.GetByRole(AriaRole.Button, new() { Name = "Refresh runtime state" }).ClickAsync();
         await Expect(page.GetByText("Unauthorized", new() { Exact = true })).ToHaveCountAsync(0);
+        await page.SetViewportSizeAsync(1440, 1000);
+        await Expect(page.GetByRole(AriaRole.Alertdialog, new() { Name = "Runtime state" })).Not.ToBeVisibleAsync();
+        var headerBounds = await page.Locator(".topbar").BoundingBoxAsync();
+        var workspaceBounds = await page.Locator(".mail-workspace").BoundingBoxAsync();
+        if (headerBounds is null || workspaceBounds is null || Math.Abs(workspaceBounds.Y - headerBounds.Y - headerBounds.Height) > 2)
+            throw new InvalidOperationException("Closed runtime dialog must not leave empty space above the request workspace.");
+        await page.GetByTestId("request-row").First.ClickAsync();
+        await Expect(page.GetByTestId("request-details")).ToBeVisibleAsync();
+        await page.ScreenshotAsync(new() { Path = "package-dashboard-overview.jpg", FullPage = true, Quality = 85 });
+        await page.ScreenshotAsync(new() { Path = "package-dashboard-token-usage.png", FullPage = true });
+        await page.GetByRole(AriaRole.Tab, new() { Name = "Conversation", Exact = false }).ClickAsync();
+        await page.ScreenshotAsync(new() { Path = "package-dashboard-conversation.jpg", FullPage = true, Quality = 85 });
+        await runtimeTrigger.ClickAsync();
+        await Expect(page.GetByRole(AriaRole.Alertdialog, new() { Name = "Runtime state" })).ToBeVisibleAsync();
+        await page.ScreenshotAsync(new() { Path = "package-dashboard-runtime.jpg", FullPage = true, Quality = 85 });
+        await page.Keyboard.PressAsync("Escape");
+        await Expect(page.GetByRole(AriaRole.Alertdialog, new() { Name = "Runtime state" })).Not.ToBeVisibleAsync();
         await page.ScreenshotAsync(new() { Path = "package-dashboard-authorized.png", FullPage = true });
         await page.SetViewportSizeAsync(390, 844);
         await runtimeTrigger.ClickAsync();
         await Expect(page.GetByLabel("Bearer token", new() { Exact = true })).ToBeVisibleAsync();
-        var dialogBounds = await page.GetByRole(AriaRole.Dialog, new() { Name = "Runtime state" }).BoundingBoxAsync();
+        var dialogBounds = await page.GetByRole(AriaRole.Alertdialog, new() { Name = "Runtime state" }).BoundingBoxAsync();
         if (dialogBounds is null || dialogBounds.X < 0 || dialogBounds.Y < 0 || dialogBounds.X + dialogBounds.Width > 390 || dialogBounds.Y + dialogBounds.Height > 844)
             throw new InvalidOperationException("Runtime settings must fit the mobile viewport.");
         await page.ScreenshotAsync(new() { Path = "package-dashboard-runtime-mobile.png", FullPage = true });
         await page.GetByRole(AriaRole.Button, new() { Name = "Close runtime settings", Exact = true }).ClickAsync();
         await Expect(runtimeTrigger).ToHaveAttributeAsync("aria-expanded", "false");
+        await Expect(page.GetByRole(AriaRole.Alertdialog, new() { Name = "Runtime state" })).Not.ToBeVisibleAsync();
         await page.ScreenshotAsync(new() { Path = "package-dashboard-authorized-mobile.png", FullPage = true });
+        await page.ScreenshotAsync(new() { Path = "package-dashboard-mobile-request-detail.png", FullPage = true });
     }
 }

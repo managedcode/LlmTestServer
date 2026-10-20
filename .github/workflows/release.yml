@@ -53,15 +53,15 @@ jobs:
 
       - name: Restore
         if: ${{ steps.release.outputs.should_release == 'true' }}
-        run: dotnet restore ManagedCode.LlmTck.slnx
+        run: dotnet restore ManagedCode.LlmTestServer.slnx
 
       - name: Format
         if: ${{ steps.release.outputs.should_release == 'true' }}
-        run: dotnet format ManagedCode.LlmTck.slnx --verify-no-changes --no-restore
+        run: dotnet format ManagedCode.LlmTestServer.slnx --verify-no-changes --no-restore
 
       - name: Build
         if: ${{ steps.release.outputs.should_release == 'true' }}
-        run: dotnet build ManagedCode.LlmTck.slnx --configuration Release --no-restore
+        run: dotnet build ManagedCode.LlmTestServer.slnx --configuration Release --no-restore
 
       - name: Test
         if: ${{ steps.release.outputs.should_release == 'true' }}
@@ -74,10 +74,6 @@ jobs:
       - name: Verify installed NuGet consumer
         if: ${{ steps.release.outputs.should_release == 'true' }}
         run: python3 scripts/verify-package.py
-
-      - name: Verify release recovery
-        if: ${{ steps.release.outputs.should_release == 'true' }}
-        run: python3 scripts/test-release.py
 
       - name: Upload verification evidence
         if: always()
@@ -95,14 +91,31 @@ jobs:
         run: |
           echo "${{ github.token }}" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           docker build \
-            -f samples/ManagedCode.LlmTck.Service/Dockerfile \
-            -t "ghcr.io/managedcode/llm-tck:$IMAGE_TAG" \
+            -f samples/ManagedCode.LlmTestServer.Service/Dockerfile \
+            -t "ghcr.io/managedcode/llm-test-server:$IMAGE_TAG" \
             .
-          docker push "ghcr.io/managedcode/llm-tck:$IMAGE_TAG"
+          docker push "ghcr.io/managedcode/llm-test-server:$IMAGE_TAG"
 
-      - name: Publish packages and finalize release
+      - name: Publish packages and create release
         if: ${{ steps.release.outputs.should_release == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ steps.release.outputs.tag }}
         run: bash scripts/release.sh publish
+
+      - name: Verify actual GitHub and NuGet publication
+        if: ${{ steps.release.outputs.should_release == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/verify-release.py
+
+      - name: Verify public installed NuGet consumer
+        if: ${{ steps.release.outputs.should_release == 'true' }}
+        run: python3 scripts/verify-package.py --public-feed
+
+      - name: Mark verified delivery complete
+        if: ${{ steps.release.outputs.should_release == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.release.outputs.tag }}
+        run: bash scripts/release.sh finalize

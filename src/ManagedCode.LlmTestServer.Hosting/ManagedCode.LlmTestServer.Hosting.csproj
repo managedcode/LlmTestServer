@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <PropertyGroup>
+    <PackageId>ManagedCode.LlmTestServer.Hosting</PackageId>
+    <Description>ASP.NET Core endpoint mapping for ManagedCode.LlmTestServer provider emulation and control APIs.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ManagedCode.LlmTestServer.Tests" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.AspNetCore.App.Internal.Assets" />
+    <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ManagedCode.LlmTestServer.Cloudflare\ManagedCode.LlmTestServer.Cloudflare.csproj" />
+    <ProjectReference Include="..\ManagedCode.LlmTestServer.SystemOne\ManagedCode.LlmTestServer.SystemOne.csproj" />
+    <ProjectReference Include="..\ManagedCode.LlmTestServer\ManagedCode.LlmTestServer.csproj" />
+    <ProjectReference Include="..\ManagedCode.LlmTestServer.Anthropic\ManagedCode.LlmTestServer.Anthropic.csproj" />
+    <ProjectReference Include="..\ManagedCode.LlmTestServer.Bedrock\ManagedCode.LlmTestServer.Bedrock.csproj" />
+    <ProjectReference Include="..\ManagedCode.LlmTestServer.Cohere\ManagedCode.LlmTestServer.Cohere.csproj" />
+    <ProjectReference Include="..\ManagedCode.LlmTestServer.Gemini\ManagedCode.LlmTestServer.Gemini.csproj" />
+    <ProjectReference Include="..\ManagedCode.LlmTestServer.Ollama\ManagedCode.LlmTestServer.Ollama.csproj" />
+    <ProjectReference Include="..\ManagedCode.LlmTestServer.OpenAI\ManagedCode.LlmTestServer.OpenAI.csproj" />
+  </ItemGroup>
+</Project>

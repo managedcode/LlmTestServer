@@ -25,7 +25,7 @@ reference-keyed PNG/JPEG assets, JSON or multipart, the explicit images header, 
 sides, 16 MiB per file and a 32 MiB physical body budget. Box needs Jev 1.14 or preview.
 Long-context opt-in remains an explicit per-call header.
 
-This deterministic TCK validates transport/file metadata and preserves scripted answers/usage.
+This deterministic Test Server validates transport/file metadata and preserves scripted answers/usage.
 It does not emulate provider inference, tokenization or image re-encoding; processed/expanded
 image-memory and context-limit failures use explicit scripted provider errors. Do not infer
 post-processing budgets from compressed input sizes. TypeSafe's GET models API is outside
@@ -42,5 +42,5 @@ confidence is retained by both scenario configuration/runtime validation and
 `SystemOneNativeJson.Options`, without adding confidence to Noul responses.
 
 Release delivery still requires a successful GitHub workflow and verified NuGet
-availability before any consuming package reference is changed. The TCK never
+availability before any consuming package reference is changed. The Test Server never
 contacts production Cloudflare/TypeSafe inference APIs during these tests.

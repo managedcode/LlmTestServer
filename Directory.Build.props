@@ -18,10 +18,10 @@
   <PropertyGroup>
     <Authors>ManagedCode</Authors>
     <Company>ManagedCode</Company>
-    <Product>ManagedCode.LlmTck</Product>
+    <Product>ManagedCode.LlmTestServer</Product>
     <RepositoryType>GitHub</RepositoryType>
-    <RepositoryUrl>https://github.com/managedcode/LlmTck</RepositoryUrl>
-    <PackageProjectUrl>https://github.com/managedcode/LlmTck</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/managedcode/LlmTestServer</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/managedcode/LlmTestServer</PackageProjectUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>llm;tck;testing;aspire;openai-compatible;azure-openai;anthropic;gemini;groq;mistral;foundry;ai;dotnet;jev;typesafe;system-one;decision-models;multimodal</PackageTags>

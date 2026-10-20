@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><PackageId>ManagedCode.LlmTestServer.SystemOne</PackageId><Description>Native SystemOne decision API compatibility for ManagedCode.LlmTestServer.</Description></PropertyGroup>
+  <ItemGroup><ProjectReference Include="..\ManagedCode.LlmTestServer\ManagedCode.LlmTestServer.csproj" /></ItemGroup>
+  <ItemGroup><PackageReference Include="MetadataExtractor" /></ItemGroup>
+</Project>

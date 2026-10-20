@@ -1,5 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><PackageId>ManagedCode.LlmTck.SystemOne</PackageId><Description>Native SystemOne decision API compatibility for ManagedCode.LlmTck.</Description></PropertyGroup>
-  <ItemGroup><ProjectReference Include="..\ManagedCode.LlmTck\ManagedCode.LlmTck.csproj" /></ItemGroup>
-  <ItemGroup><PackageReference Include="MetadataExtractor" /></ItemGroup>
-</Project>

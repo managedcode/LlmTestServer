@@ -1,8 +1,8 @@
-# LLM TCK Contributor Guide
+# LLM Test Server Contributor Guide
 
 ## Scope
 
-This repository builds `ManagedCode.LlmTck`, a deterministic Technology Compatibility Kit for LLM APIs. Treat the runtime, protocol adapters, clients, Aspire integration, docs, and samples as separate package surfaces.
+This repository builds `ManagedCode.LlmTestServer`, a deterministic LLM API mock server for LLM APIs. Treat the runtime, protocol adapters, clients, Aspire integration, docs, and samples as separate package surfaces.
 
 Follows [MCAF](https://mcaf.managed-code.com/).
 
@@ -60,16 +60,16 @@ Rule format:
 
 ## Commands
 
-- Restore: `dotnet restore ManagedCode.LlmTck.slnx`
-- Build: `dotnet build ManagedCode.LlmTck.slnx --configuration Release --no-restore`
-- Test: `dotnet test --project tests/ManagedCode.LlmTck.Tests/ManagedCode.LlmTck.Tests.csproj --configuration Release --no-build --verbosity normal`
+- Restore: `dotnet restore ManagedCode.LlmTestServer.slnx`
+- Build: `dotnet build ManagedCode.LlmTestServer.slnx --configuration Release --no-restore`
+- Test: `dotnet test --project tests/ManagedCode.LlmTestServer.Tests/ManagedCode.LlmTestServer.Tests.csproj --configuration Release --no-build --verbosity normal`
 - Pack: `for project in src/*/*.csproj; do dotnet pack "$project" --configuration Release --no-build --output artifacts/packages; done`
 - Release: pushing to `main` must start the release workflow; it reads the package version from `Directory.Build.props`, creates the matching `vX.Y.Z` tag and GitHub Release, attaches package artifacts, and publishes NuGet packages only when that version is not already released.
-- Format check: `dotnet format ManagedCode.LlmTck.slnx --verify-no-changes`
+- Format check: `dotnet format ManagedCode.LlmTestServer.slnx --verify-no-changes`
 - Tool restore: `dotnet tool restore`
 - Coverage gate: production code line coverage must stay at or above 90%; measure with coverlet/reportgenerator when coverage expectations change.
 - Coverage: `bash scripts/coverage.sh` (maps deterministic CI source paths before collection and enforces 90% total production line coverage).
-- Quality gate: `dotnet format ManagedCode.LlmTck.slnx --verify-no-changes --no-restore && dotnet build ManagedCode.LlmTck.slnx --configuration Release --no-restore && dotnet test --project tests/ManagedCode.LlmTck.Tests/ManagedCode.LlmTck.Tests.csproj --configuration Release --no-build --verbosity normal && git diff --check`
+- Quality gate: `dotnet format ManagedCode.LlmTestServer.slnx --verify-no-changes --no-restore && dotnet build ManagedCode.LlmTestServer.slnx --configuration Release --no-restore && dotnet test --project tests/ManagedCode.LlmTestServer.Tests/ManagedCode.LlmTestServer.Tests.csproj --configuration Release --no-build --verbosity normal && git diff --check`
 
 `global.json` opts `dotnet test` into `Microsoft.Testing.Platform`; do not add VSTest-specific logger arguments to normal test commands.
 
@@ -83,7 +83,9 @@ Rule format:
 
 ### Dislikes
 
-- Do not introduce real-LLM toggles, external project environment variable names, or WA.Storied-specific constants into this repository; LlmTck tests and samples must remain deterministic, repo-owned, and free of cross-project naming leaks.
+- Do not mention competing products in README, documentation, source, tests, or other repository artifacts; describe our own contracts and capabilities directly.
+- Keep only integration tests that start the server and verify real HTTP/provider SDK behavior. Do not add or retain unit tests, fake clients, source/document scans, reflection-based test guards, or assertions about implementation fragments. Exercise every supported API and parameter, streaming mode, error boundary, and complete tool/conversation flow through the running server.
+- Do not introduce real-LLM toggles, external project environment variable names, or WA.Storied-specific constants into this repository; LlmTestServer tests and samples must remain deterministic, repo-owned, and free of cross-project naming leaks.
 
 ## Code Quality Skills
 
@@ -101,20 +103,20 @@ Rule format:
 - Before claiming that all review findings are fixed, recheck every finding against final behavior and tests; report removed capability claims and temporary mitigations separately from implemented functionality.
 
 - Prefer official .NET packages and abstractions before writing custom protocol code.
-- Tests that fake `IChatClient` should use the dotnet/extensions pattern: a tiny fake class with delegate callbacks, not Moq or NSubstitute.
-- Keep provider wire formats in provider packages such as `ManagedCode.LlmTck.OpenAI`; keep deterministic scenario behavior in `ManagedCode.LlmTck`.
-- Keep the provider package matrix explicit. Do not ship the TCK as only OpenAI-compatible; maintain package surfaces for OpenAI, Azure OpenAI, Microsoft Foundry, Anthropic, Gemini, Groq, Mistral, Ollama, Cohere, Amazon Bedrock, OpenRouter, DeepSeek, and Perplexity.
+- Tests must call the running server through HTTP and real provider SDKs; do not substitute fake `IChatClient` implementations or direct runtime/builder calls for integration behavior.
+- Keep provider wire formats in provider packages such as `ManagedCode.LlmTestServer.OpenAI`; keep deterministic scenario behavior in `ManagedCode.LlmTestServer`.
+- Keep the provider package matrix explicit. Do not ship the Test Server as only OpenAI-compatible; maintain package surfaces for OpenAI, Azure OpenAI, Microsoft Foundry, Anthropic, Gemini, Groq, Mistral, Ollama, Cohere, Amazon Bedrock, OpenRouter, DeepSeek, and Perplexity.
 - Azure OpenAI and Microsoft Foundry compatibility must be proven with official Azure SDK clients, not only raw HTTP requests.
 - Azure SDK clients must select their own API version. Do not pin a dated version in consumers or SDK compatibility tests to satisfy the emulator; deployment routes must enforce their documented supported Azure versions and reject unknown versions, including syntactically valid future dates. Do not weaken server validation to make client tests pass.
-- Built-in defaults, samples, and scenario examples must use official provider model IDs such as `gpt-4.1-mini`, `text-embedding-3-small`, `gpt-image-1`, and `gpt-4o-mini-tts`; do not use synthetic `llm-tck-*` model IDs for normal fixtures.
+- Built-in defaults, samples, and scenario examples must use official provider model IDs such as `gpt-4.1-mini`, `text-embedding-3-small`, `gpt-image-1`, and `gpt-4o-mini-tts`; do not use synthetic `llm-test-server-*` model IDs for normal fixtures.
 - Keep custom `AddModel(...)` support, but expose typed convenience APIs for common official fixture models so callers do not have to hand-type model IDs for standard chat, embedding, image, and audio setup.
 - Reasoning-capable models must carry deterministic reasoning-token usage through runtime summaries and provider response usage details; do not flatten reasoning usage into ordinary visible output tokens only.
 - Prompt-cache accounting is provider-specific: expose cache read/write usage for every provider surface that has a documented cache contract, and report no cache usage for providers or operations without one.
 - Compatibility tag values in C# code must come from named constants everywhere they are assigned or asserted, so `CompatibilityTags` cannot drift through inline string literals.
-- Provider `ApiContract` operation id values and behavior-evidence operation ids in C# must come from `LlmTckProviderOperationIds`; do not type raw operation-id strings such as `videos.content.retrieve`.
-- The client package must expose a universal pre-test configuration API so tests can spawn a client, reset or configure the hosted TCK, load models, auth, datasets, scenarios, scripted errors, embeddings, images, and audio fixtures without hand-authoring raw DTOs.
+- Provider `ApiContract` operation id values and behavior-evidence operation ids in C# must come from `LlmTestServerProviderOperationIds`; do not type raw operation-id strings such as `videos.content.retrieve`.
+- The client package must expose a universal pre-test configuration API so tests can spawn a client, reset or configure the hosted Test Server, load models, auth, datasets, scenarios, scripted errors, embeddings, images, and audio fixtures without hand-authoring raw DTOs.
 - The browser admin panel must be served from `/`, and runtime control APIs must use `/admin-api/...` paths; do not add hidden or aliased admin/control routes for reset, configure, models, assertions, or operator UI.
-- The browser admin panel must be implemented as Blazor server-side components in `ManagedCode.LlmTck.Hosting`; do not serve it from a static HTML string endpoint, and use component state plus `StateHasChanged()` for refresh behavior instead of client-side polling fetch code.
+- The browser admin panel must be implemented as Blazor server-side components in `ManagedCode.LlmTestServer.Hosting`; do not serve it from a static HTML string endpoint, and use component state plus `StateHasChanged()` for refresh behavior instead of client-side polling fetch code.
 - The browser admin panel is a full-viewport debugging surface, not a narrow landing page; show models/fixtures, actions, calls/requests, responses, provider/control API endpoints, assertions, and runtime events as separate grouped, inspectable areas so users can inspect each part without digging through one collapsed feed.
 - The browser admin dashboard must be request-centric: use a scannable table with one entry per provider request, show provider and model at a glance, and let operators inspect the full request, response, multi-turn conversation, cache accounting, token usage, timing, status, and related metadata without reconstructing a call from separate feeds; keep retention explicitly bounded and visibly mark the exceptional payload that exceeds that diagnostic budget.
 - Keep the request inbox visually primary and easy to scan; do not compress it beside a narrow, endlessly tall inspector. Constrain long conversations and payloads to independent scroll regions, collapse oversized system/tool content by default while keeping it expandable, and validate the resulting hierarchy with realistic long multi-turn data at desktop, tablet, and mobile sizes.
@@ -122,15 +124,15 @@ Rule format:
 - Render JSON payloads as properly indented code with an SF Mono-style font and preserve readable Unicode characters instead of exposing serializer escape sequences such as `\u0027`.
 - Use Microsoft Fluent UI Blazor primitives for dashboard overlays and dismissible controls, but theme them to the dashboard's Apple-inspired visual language instead of adopting stock Fluent styling. Popovers must close on outside click, Escape, and completed actions. Blend Prostir.build's restrained glass, lime selection rail, and technical polish with managed-code.com's warm canvas, ink typography, and tiny coral-to-magenta accents without copying either site's branding or marketing-page layout.
 - The browser admin panel must auto-refresh by default every 15 seconds, but do not add visible countdown UI unless the user explicitly asks for it.
-- Provider APIs must be explicitly namespaced by provider, such as `/openai`, `/anthropic`, `/gemini`, or `/azure-openai`; do not expose generic root `/v1/*` provider routes that make the TCK look like only the OpenAI API.
+- Provider APIs must be explicitly namespaced by provider, such as `/openai`, `/anthropic`, `/gemini`, or `/azure-openai`; do not expose generic root `/v1/*` provider routes that make the Test Server look like only the OpenAI API.
 - Aspire examples must show endpoint retrieval from the Aspire resource (`GetEndpoint("http")` or `CreateHttpClient(...)`) and API key wiring so users see the complete integration path.
-- Aspire sample services must use `ManagedCode.LlmTck.Hosting` service-defaults methods such as `AddServiceDefaults()` and `MapDefaultEndpoints()` for health/liveness wiring; do not create a separate ServiceDefaults sample project, and do not hand-roll `app.MapGet("/health", ...)` or placeholder root status endpoints in sample `Program.cs` files.
-- Aspire integration must expose a package-owned `builder.AddLlmTck()` entry point so consumers can install the Aspire NuGet package and add the TCK without caller-supplied project paths or `Projects.*` metadata types.
-- `builder.AddLlmTck()` must be .NET/Aspire-first and must not require Docker or a container runtime by default; container-backed hosting may exist only as an explicit opt-in API.
+- Aspire sample services must use `ManagedCode.LlmTestServer.Hosting` service-defaults methods such as `AddServiceDefaults()` and `MapDefaultEndpoints()` for health/liveness wiring; do not create a separate ServiceDefaults sample project, and do not hand-roll `app.MapGet("/health", ...)` or placeholder root status endpoints in sample `Program.cs` files.
+- Aspire integration must expose a package-owned `builder.AddLlmTestServer()` entry point so consumers can install the Aspire NuGet package and add the Test Server without caller-supplied project paths or `Projects.*` metadata types.
+- `builder.AddLlmTestServer()` must be .NET/Aspire-first and must not require Docker or a container runtime by default; container-backed hosting may exist only as an explicit opt-in API.
 - Aspire integration must start an Aspire AppHost in tests before a change is considered covered, with the AppHost model built directly in test code or a test fixture.
 - Aspire test coverage should build the AppHost directly inside the test code or fixture; do not add a standalone `Obhost`/test AppHost file just to host Aspire for tests.
 - Aspire tests and samples must resolve service/provider URLs from the Aspire resource endpoint allocated by the AppHost; do not hard-code `127.0.0.1`, `localhost`, ports, or invented provider endpoints in configuration.
-- Do not add an Aspire provider-endpoint setter to `ManagedCode.LlmTck.Aspire`; consumers must use the endpoint exposed by the `LlmTckResource`.
+- Do not add an Aspire provider-endpoint setter to `ManagedCode.LlmTestServer.Aspire`; consumers must use the endpoint exposed by the `LlmTestServerResource`.
 - Do not add Aspire compatibility environment flags, sample-service config echoes, or fluent compatibility methods unless they drive real route/runtime behavior; prove compatibility through actual provider clients instead.
 - Provider API compatibility must be doc-backed: every claimed provider method, route, streaming mode, modality, and API-version constraint must be represented in a checked-in contract with official documentation links and covered by tests before the provider package claims support.
 - Provider API verification must cover the full claimed provider matrix: every implemented `ApiContract` operation for every provider needs behavior-test evidence, and fixes that touch provider compatibility must rerun the provider contract/evidence tests plus the full quality gate before closeout.
@@ -139,26 +141,26 @@ Rule format:
 
 ## Ownership Map
 
-- `src/ManagedCode.LlmTck`: provider-neutral runtime, scenarios, assertions, and model catalog.
-- `src/ManagedCode.LlmTck.SystemOne`: Jev/Kev native SystemOne decision contracts and compatibility profile.
-- `src/ManagedCode.LlmTck.Cloudflare`: Workers AI Clef/flash native decision envelopes, validation and compatibility profile.
-- `src/ManagedCode.LlmTck.OpenAI`: OpenAI-compatible request/response shapes and mapping.
-- `src/ManagedCode.LlmTck.AzureOpenAI`: Azure OpenAI compatibility profile and future Azure OpenAI wire contracts.
-- `src/ManagedCode.LlmTck.Foundry`: Microsoft Foundry compatibility profile and future Foundry wire contracts.
-- `src/ManagedCode.LlmTck.Anthropic`: Anthropic Messages compatibility profile and future Anthropic wire contracts.
-- `src/ManagedCode.LlmTck.Gemini`: Gemini compatibility profile and future Gemini wire contracts.
-- `src/ManagedCode.LlmTck.Groq`: Groq compatibility profile and future Groq wire contracts.
-- `src/ManagedCode.LlmTck.Mistral`: Mistral compatibility profile and future Mistral wire contracts.
-- `src/ManagedCode.LlmTck.Ollama`: Ollama compatibility profile and future Ollama wire contracts.
-- `src/ManagedCode.LlmTck.Cohere`: Cohere compatibility profile and future Cohere wire contracts.
-- `src/ManagedCode.LlmTck.Bedrock`: Amazon Bedrock compatibility profile and future Bedrock wire contracts.
-- `src/ManagedCode.LlmTck.OpenRouter`: OpenRouter compatibility profile and future OpenRouter wire contracts.
-- `src/ManagedCode.LlmTck.DeepSeek`: DeepSeek compatibility profile and future DeepSeek wire contracts.
-- `src/ManagedCode.LlmTck.Perplexity`: Perplexity compatibility profile and future Perplexity wire contracts.
-- `src/ManagedCode.LlmTck.Hosting`: ASP.NET Core provider and control endpoints.
-- `src/ManagedCode.LlmTck.Client`: control client and `Microsoft.Extensions.AI` clients.
-- `src/ManagedCode.LlmTck.Aspire`: Aspire AppHost extension methods.
+- `src/ManagedCode.LlmTestServer`: provider-neutral runtime, scenarios, assertions, and model catalog.
+- `src/ManagedCode.LlmTestServer.SystemOne`: Jev/Kev native SystemOne decision contracts and compatibility profile.
+- `src/ManagedCode.LlmTestServer.Cloudflare`: Workers AI Clef/flash native decision envelopes, validation and compatibility profile.
+- `src/ManagedCode.LlmTestServer.OpenAI`: OpenAI-compatible request/response shapes and mapping.
+- `src/ManagedCode.LlmTestServer.AzureOpenAI`: Azure OpenAI compatibility profile and future Azure OpenAI wire contracts.
+- `src/ManagedCode.LlmTestServer.Foundry`: Microsoft Foundry compatibility profile and future Foundry wire contracts.
+- `src/ManagedCode.LlmTestServer.Anthropic`: Anthropic Messages compatibility profile and future Anthropic wire contracts.
+- `src/ManagedCode.LlmTestServer.Gemini`: Gemini compatibility profile and future Gemini wire contracts.
+- `src/ManagedCode.LlmTestServer.Groq`: Groq compatibility profile and future Groq wire contracts.
+- `src/ManagedCode.LlmTestServer.Mistral`: Mistral compatibility profile and future Mistral wire contracts.
+- `src/ManagedCode.LlmTestServer.Ollama`: Ollama compatibility profile and future Ollama wire contracts.
+- `src/ManagedCode.LlmTestServer.Cohere`: Cohere compatibility profile and future Cohere wire contracts.
+- `src/ManagedCode.LlmTestServer.Bedrock`: Amazon Bedrock compatibility profile and future Bedrock wire contracts.
+- `src/ManagedCode.LlmTestServer.OpenRouter`: OpenRouter compatibility profile and future OpenRouter wire contracts.
+- `src/ManagedCode.LlmTestServer.DeepSeek`: DeepSeek compatibility profile and future DeepSeek wire contracts.
+- `src/ManagedCode.LlmTestServer.Perplexity`: Perplexity compatibility profile and future Perplexity wire contracts.
+- `src/ManagedCode.LlmTestServer.Hosting`: ASP.NET Core provider and control endpoints.
+- `src/ManagedCode.LlmTestServer.Client`: control client and `Microsoft.Extensions.AI` clients.
+- `src/ManagedCode.LlmTestServer.Aspire`: Aspire AppHost extension methods.
 - `samples`: runnable AppHost and service sample.
-- `tests`: TUnit unit, endpoint, client, and Aspire integration coverage.
+- `tests`: TUnit server API, client SDK, and Aspire integration coverage.
 - `docs`: architecture, feature specs, ADRs, and test inventory.
 - `site`: static public landing page.

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>ManagedCode.LlmTestServer.Foundry</PackageId>
+    <Description>Microsoft Foundry compatibility profile and adapters for ManagedCode.LlmTestServer.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ManagedCode.LlmTestServer\ManagedCode.LlmTestServer.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,62 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.6.1">
+  <PropertyGroup>
+    <!-- Keep AppHost discovery metadata, but let dotnet test run the test executable directly. -->
+    <ASPIRE_SUPPRESS_CLI_RUN_HOOK>true</ASPIRE_SUPPRESS_CLI_RUN_HOOK>
+    <AspireUseCliBundle>true</AspireUseCliBundle>
+    <AspireCliInvocationMode>DnxPinned</AspireCliInvocationMode>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <TreatProjectReferencesAsResources>false</TreatProjectReferencesAsResources>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <TUnitImplicitUsings>true</TUnitImplicitUsings>
+    <TUnitAssertionsImplicitUsings>true</TUnitAssertionsImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="AWSSDK.BedrockRuntime" />
+    <PackageReference Include="Azure.AI.Inference" />
+    <PackageReference Include="Azure.AI.OpenAI" />
+    <PackageReference Include="Azure.Core" />
+    <PackageReference Include="Aspire.Hosting.Testing" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="Microsoft.AspNetCore.App.Internal.Assets" />
+    <PackageReference Include="Microsoft.Extensions.AI" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="OpenAI" />
+    <PackageReference Include="System.ClientModel" />
+    <PackageReference Include="TUnit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ManagedCode.LlmTestServer.Cloudflare\ManagedCode.LlmTestServer.Cloudflare.csproj" />
+    <ProjectReference Include="..\..\src\ManagedCode.LlmTestServer.SystemOne\ManagedCode.LlmTestServer.SystemOne.csproj" />
+    <ProjectReference Include="..\..\src\ManagedCode.LlmTestServer\ManagedCode.LlmTestServer.csproj" />
+    <ProjectReference Include="..\..\src\ManagedCode.LlmTestServer.OpenAI\ManagedCode.LlmTestServer.OpenAI.csproj" />
+    <ProjectReference Include="..\..\src\ManagedCode.LlmTestServer.AzureOpenAI\ManagedCode.LlmTestServer.AzureOpenAI.csproj" />
+    <ProjectReference Include="..\..\src\ManagedCode.LlmTestServer.Foundry\ManagedCode.LlmTestServer.Foundry.csproj" />
+    <ProjectReference Include="..\..\src\ManagedCode.LlmTestServer.Anthropic\ManagedCode.LlmTestServer.Anthropic.csproj" />
+    <ProjectReference Include="..\..\src\ManagedCode.LlmTestServer.Gemini\ManagedCode.LlmTestServer.Gemini.csproj" />
+    <ProjectReference Include="..\..\src\ManagedCode.LlmTestServer.Groq\ManagedCode.LlmTestServer.Groq.csproj" />
+    <ProjectReference Include="..\..\src\ManagedCode.LlmTestServer.Mistral\ManagedCode.LlmTestServer.Mistral.csproj" />
+    <ProjectReference Include="..\..\src\ManagedCode.LlmTestServer.Ollama\ManagedCode.LlmTestServer.Ollama.csproj" />
+    <ProjectReference Include="..\..\src\ManagedCode.LlmTestServer.Cohere\ManagedCode.LlmTestServer.Cohere.csproj" />
+    <ProjectReference Include="..\..\src\ManagedCode.LlmTestServer.Bedrock\ManagedCode.LlmTestServer.Bedrock.csproj" />
+    <ProjectReference Include="..\..\src\ManagedCode.LlmTestServer.OpenRouter\ManagedCode.LlmTestServer.OpenRouter.csproj" />
+    <ProjectReference Include="..\..\src\ManagedCode.LlmTestServer.DeepSeek\ManagedCode.LlmTestServer.DeepSeek.csproj" />
+    <ProjectReference Include="..\..\src\ManagedCode.LlmTestServer.Perplexity\ManagedCode.LlmTestServer.Perplexity.csproj" />
+    <ProjectReference Include="..\..\src\ManagedCode.LlmTestServer.Hosting\ManagedCode.LlmTestServer.Hosting.csproj" />
+    <ProjectReference Include="..\..\src\ManagedCode.LlmTestServer.Client\ManagedCode.LlmTestServer.Client.csproj" />
+    <ProjectReference Include="..\..\src\ManagedCode.LlmTestServer.Aspire\ManagedCode.LlmTestServer.Aspire.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Azure.AI.OpenAI" />
+    <Using Include="Microsoft.AspNetCore.TestHost" />
+    <Using Include="TUnit.Assertions" />
+    <Using Include="TUnit.Assertions.Extensions" />
+    <Using Include="TUnit.Core" />
+  </ItemGroup>
+</Project>

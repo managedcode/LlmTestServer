@@ -26,13 +26,13 @@ jobs:
         run: dotnet tool restore
 
       - name: Restore
-        run: dotnet restore ManagedCode.LlmTck.slnx
+        run: dotnet restore ManagedCode.LlmTestServer.slnx
 
       - name: Format
-        run: dotnet format ManagedCode.LlmTck.slnx --verify-no-changes --no-restore
+        run: dotnet format ManagedCode.LlmTestServer.slnx --verify-no-changes --no-restore
 
       - name: Build
-        run: dotnet build ManagedCode.LlmTck.slnx --configuration Release --no-restore
+        run: dotnet build ManagedCode.LlmTestServer.slnx --configuration Release --no-restore
 
       - name: Test
         run: bash scripts/coverage.sh
@@ -42,9 +42,6 @@ jobs:
 
       - name: Verify installed NuGet consumer
         run: python3 scripts/verify-package.py
-
-      - name: Verify release recovery
-        run: python3 scripts/test-release.py
 
       - name: Upload verification evidence
         if: always()

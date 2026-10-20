@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>ManagedCode.LlmTestServer.Bedrock</PackageId>
+    <Description>Amazon Bedrock compatibility profile and adapters for ManagedCode.LlmTestServer.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.Core" />
+    <ProjectReference Include="..\ManagedCode.LlmTestServer\ManagedCode.LlmTestServer.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../Shared/LlmTestServerJsonValidation.cs" Link="Validation/LlmTestServerJsonValidation.cs" />
+  </ItemGroup>
+</Project>

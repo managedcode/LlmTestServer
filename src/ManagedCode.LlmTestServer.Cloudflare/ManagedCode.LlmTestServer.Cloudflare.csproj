@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><PackageId>ManagedCode.LlmTestServer.Cloudflare</PackageId><Description>Native Cloudflare decision API compatibility for ManagedCode.LlmTestServer.</Description></PropertyGroup>
+  <ItemGroup><ProjectReference Include="..\ManagedCode.LlmTestServer\ManagedCode.LlmTestServer.csproj" /><ProjectReference Include="..\ManagedCode.LlmTestServer.SystemOne\ManagedCode.LlmTestServer.SystemOne.csproj" /></ItemGroup>
+  <ItemGroup><PackageReference Include="MetadataExtractor" /></ItemGroup>
+</Project>

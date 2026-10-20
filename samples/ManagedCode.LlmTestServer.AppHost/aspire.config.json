@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "ManagedCode.LlmTestServer.AppHost.csproj"
+  }
+}

@@ -32,15 +32,12 @@ flowchart LR
   Output --> SDK
 ```
 
-Acceptance:
+Integration acceptance:
 
-1. An ordinary or streamed official SDK tool loop reaches its scripted final response and the runtime journal
-   contains the original text/image input plus the actual tool result (`LlmTckResponsesContinuationTests`).
-2. Another provider or credential cannot read a parent; reset/configure invalidates every parent
-   (`LlmTckChatHistoryTests`).
-3. Stored input snapshots survive caller mutation and do not carry old instructions into a new request
-   (`LlmTckChatHistoryTests`).
-4. Changing the model preserves original user and assistant messages and selects the new model in ordinary
-   and streaming official SDK calls (`LlmTckChatHistoryTests`, `LlmTckResponsesContinuationTests`).
-5. Disabled/full count or byte capacity fails visibly without consuming a fixture; `store=false` remains
-   stateless (`LlmTckChatHistoryTests`, existing OpenRouter provider regressions).
+1. Ordinary and streaming official SDK tool loops reach scripted final responses with the original input and
+   actual tool results visible through `/admin-api/assertions` (`LlmTestServerResponsesContinuationTests`).
+2. Model changes preserve history in ordinary and streaming official SDK calls
+   (`LlmTestServerResponsesContinuationTests`).
+3. Foreign provider/credential parents, unknown/reset identities, disabled/full count/byte capacity, instruction
+   replacement and `store=false` must be verified through server HTTP/SDK requests. Migration of these additional
+   former internal cases is still in progress; do not infer coverage from the removed internal tests.

@@ -1,0 +1,10 @@
+<Project>
+  <ItemGroup>
+    <LlmTestServerServiceContent Include="$(MSBuildThisFileDirectory)..\tools\llm-test-server-service\**\*" />
+    <None
+      Include="@(LlmTestServerServiceContent)"
+      Link="llm-test-server-service\%(RecursiveDir)%(Filename)%(Extension)"
+      CopyToOutputDirectory="PreserveNewest"
+      Visible="false" />
+  </ItemGroup>
+</Project>

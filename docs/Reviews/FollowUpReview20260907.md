@@ -8,7 +8,7 @@
 
 ### F1 — P2: отриманий snapshot дозволяє змінити внутрішній журнал
 
-Місця: `src/ManagedCode.LlmTck/Runtime/LlmTckRuntime.cs:920`, `:1450–1457`; `Scenarios/LlmTckMessage.cs:9`.
+Місця: `src/ManagedCode.LlmTestServer/Runtime/LlmTestServerRuntime.cs:920`, `:1450–1457`; `Scenarios/LlmTestServerMessage.cs:9`.
 
 `GetAssertionSummary()` копіює лише список подій. Вкладений `Messages[i].ToolCalls` залишається тим самим mutable `List`, який зберігається в журналі. У harness після `summary.Events[0].Messages[0].ToolCalls.Clear()` та додавання `Id="injected"` наступний незалежний `GetAssertionSummary()` повернув **injected** замість original.
 
@@ -16,7 +16,7 @@
 
 ### F2 — P2: `parallel_tool_calls=false` мовчки ігнорується
 
-Місця: `src/ManagedCode.LlmTck.OpenAI/OpenAiChatModels.cs:7–18`, `OpenAiToolModels.cs:44–57`.
+Місця: `src/ManagedCode.LlmTestServer.OpenAI/OpenAiChatModels.cs:7–18`, `OpenAiToolModels.cs:44–57`.
 
 Для fixture з двома викликами weather запит із `parallel_tool_calls:false` отримав **200 та два tool_calls**. Поля немає в wire DTO і neutral request. Поточні тести кількох викликів перевіряють їх перенесення, але не обмеження запиту.
 
@@ -24,7 +24,7 @@
 
 ### F3 — P2: адаптер Gemini не повністю перетворює OpenAPI Schema
 
-Місце: `src/ManagedCode.LlmTck.Gemini/GeminiWireMapper.cs:98–130`.
+Місце: `src/ManagedCode.LlmTestServer.Gemini/GeminiWireMapper.cs:98–130`.
 
 `NormalizeSchemaNode` лише переводить назви типів у lowercase, після чого OpenAPI Schema оцінюється як JSON Schema Draft 2020-12. Два коректні wire contracts відтворили помилку:
 
@@ -35,7 +35,7 @@
 
 ### F4 — P2: fixture mismatch невидимий у runtime assertion summary
 
-Місце: `src/ManagedCode.LlmTck/Runtime/LlmTckRuntime.cs:312–316`.
+Місце: `src/ManagedCode.LlmTestServer/Runtime/LlmTestServerRuntime.cs:312–316`.
 
 Для текстової fixture `not json` і `RequireJson=true` runtime повернув **409 / llm_tck_fixture_mismatch**, але summary містив **TotalEvents=0, ErrorsReturned=0, Events=[]**. Early return обходить AddEvent та облік usage.
 
@@ -43,7 +43,7 @@ HTTP trace може показати помилку, але користувач
 
 ### F5 — P2: HTTP chat без обов'язкової моделі проходить успішно
 
-Місце: `src/ManagedCode.LlmTck.OpenAI/OpenAiChatModels.cs:18`.
+Місце: `src/ManagedCode.LlmTestServer.OpenAI/OpenAiChatModels.cs:18`.
 
 Запит `{"messages":[{"role":"user","content":"hello"}]}` на `/openai/v1/chat/completions` повернув **200**, підставив gpt-4.1-mini та спожив fixture. Default model у wire DTO приховує відсутнє поле ще до ValidateChatRequest.
 
@@ -51,7 +51,7 @@ HTTP trace може показати помилку, але користувач
 
 ### F6 — P2: Exact matching не може вимагати відсутність tool calls
 
-Місце: `src/ManagedCode.LlmTck/Runtime/LlmTckRuntime.cs:1298–1304`.
+Місце: `src/ManagedCode.LlmTestServer/Runtime/LlmTestServerRuntime.cs:1298–1304`.
 
 `WithExactMatch` для порожнього assistant message без tool calls зіставився з assistant message, що містить **додатковий weather tool call**, і повернув 200 / `matched empty assistant`. Порожній expected.ToolCalls завжди працює як wildcard; null ToolCallId має аналогічну поведінку.
 
@@ -60,8 +60,8 @@ HTTP trace може показати помилку, але користувач
 ## Що покращити після цих виправлень
 
 1. **Прив'язати evidence до capability і режиму.** `ProviderApiContractTests:238–303` перевіряє operation, streaming flag, існування test method та згадку в inventory. Він не доводить, що конкретна capability має positive/negative cases. Варто використовувати `(provider, operation, capability, transport, outcome)` та конкретні case IDs. Критерій успіху: видалення тесту заборонених parallel calls або nullable schema ламає відповідний guard.
-2. **Перенести tool wire validation до provider packages.** `LlmTckToolRequestValidation` централізує поля OpenAI, Anthropic, Gemini, Cohere, Ollama і Bedrock через `typeof(T)`. Це дублює знання mapper-ів у Hosting. Provider-owned validation має повертати нейтральний validation result, а Hosting — лише оформляти HTTP відповідь.
-3. **Обмежити video store за кількістю та байтами.** `LlmTckRuntime.Videos.cs:5–33` зберігає всі jobs і копії bytes до delete/reset. Це не виміряний memory leak, але явна відсутність capacity на відміну від журналу й prompt cache. Додати configurable MaxVideoJobs/MaxVideoBytes та детерміновану політику переповнення; перевірити на великих fixtures без time-based sleeps.
+2. **Перенести tool wire validation до provider packages.** `LlmTestServerToolRequestValidation` централізує поля OpenAI, Anthropic, Gemini, Cohere, Ollama і Bedrock через `typeof(T)`. Це дублює знання mapper-ів у Hosting. Provider-owned validation має повертати нейтральний validation result, а Hosting — лише оформляти HTTP відповідь.
+3. **Обмежити video store за кількістю та байтами.** `LlmTestServerRuntime.Videos.cs:5–33` зберігає всі jobs і копії bytes до delete/reset. Це не виміряний memory leak, але явна відсутність capacity на відміну від журналу й prompt cache. Додати configurable MaxVideoJobs/MaxVideoBytes та детерміновану політику переповнення; перевірити на великих fixtures без time-based sleeps.
 
 Рекомендований порядок: F1 та F4 для надійності доказів; F2, F3, F5 для protocol conformance; F6 як уточнення matching contract. Потім посилення capability evidence, щоб нові крайові випадки не знову проходили повз перевірки.
 
@@ -103,7 +103,7 @@ Harness посилається на реальні project references і вик�
 
 Перевірки поточного checkout:
 
-- `dotnet format ManagedCode.LlmTck.slnx --verify-no-changes --no-restore` — пройдено.
+- `dotnet format ManagedCode.LlmTestServer.slnx --verify-no-changes --no-restore` — пройдено.
 - Release build — пройдено; два наявні попередження ASPIRE010 про AspireUseCliBundle=false, помилок немає.
 - Повний набір, включно з provider contract/evidence, Azure SDK, Bedrock SDK та Aspire tests: **379/379**, повторено під coverage.
 - `bash scripts/coverage.sh`: Coverlet total line **90.58%**, поріг 90% пройдено. ReportGenerator HTML: `artifacts/coverage/report/summary.html`.

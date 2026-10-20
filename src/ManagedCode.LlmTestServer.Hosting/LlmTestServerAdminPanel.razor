@@ -1,0 +1,1305 @@
+@namespace ManagedCode.LlmTestServer.Hosting
+@using System.Globalization
+@using System.Text
+@using System.Text.Encodings.Web
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components.Web
+@using ManagedCode.LlmTestServer.Control
+@using ManagedCode.LlmTestServer.Models
+@using ManagedCode.LlmTestServer.Providers
+@using ManagedCode.LlmTestServer.Runtime
+@using ManagedCode.LlmTestServer.Scenarios
+@using Microsoft.Extensions.Options
+@using Microsoft.FluentUI.AspNetCore.Components
+@implements IAsyncDisposable
+@inject ILlmTestServerRuntime Runtime
+@inject ILlmTestServerProviderHttpTraceStore TraceStore
+@inject IOptions<LlmTestServerProviderHttpTraceOptions> TraceOptions
+
+@{
+  var visibleTraces = FilterTraces();
+  var providerOptions = GetProviderOptions();
+  var modelOptions = GetModelOptions();
+}
+
+<div class="@WorkspaceCss">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">T</div>
+      <div class="brand-copy">
+        <div class="eyebrow">Deterministic provider lab</div>
+        <h1><span class="brand-full">LLM Test Server request dashboard</span><span class="brand-short">LLM Test Server</span></h1>
+      </div>
+    </div>
+
+    <div class="command-bar" aria-label="Runtime controls">
+      <div class="@StatusCss" role="status" aria-live="polite" aria-label="@_statusText">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span>@_statusText</span>
+      </div>
+      <label class="auto-toggle" title="Refresh runtime state every 15 seconds">
+        <input type="checkbox" aria-label="Live auto-refresh" checked="@_autoRefresh" @onchange="SetAutoRefreshAsync">
+        <span>Live</span>
+      </label>
+      <button class="toolbar-button accent" type="button" aria-label="Refresh runtime state" @onclick="RefreshAsync"><span aria-hidden="true">↻</span><span>Refresh</span></button>
+
+      <button class="toolbar-button runtime-dialog-trigger" type="button" aria-label="Runtime settings" disabled="@(!_interactive)" aria-haspopup="dialog" aria-controls="runtime-dialog" aria-expanded="@(_runtimeDialogHidden ? "false" : "true")" @ref="_runtimeDialogTrigger" @onclick="OpenRuntimeDialogAsync"><span>Runtime</span><span aria-hidden="true">•••</span></button>
+    </div>
+  </header>
+
+  <FluentDialog Id="runtime-dialog" Class="runtime-fluent-dialog" @ref="_runtimeDialog" @ondialogtoggle="RuntimeDialogToggled" Modal="true" role="dialog" aria-label="Runtime state">
+        <div class="diagnostics-sheet">
+          <header class="diagnostics-header">
+            <div>
+              <div class="eyebrow">Runtime setup & diagnostics</div>
+              <h2 id="runtime-dialog-title">Runtime state</h2>
+            </div>
+            <div class="dialog-header-actions">
+              <span class="retention-note">@FormatBytes(TraceStore.RetainedByteCount) retained</span>
+              <button class="dialog-close" type="button" aria-label="Close runtime settings" @onclick="CloseRuntimeDialogAsync">×</button>
+            </div>
+          </header>
+          <div class="runtime-settings">
+            <label class="settings-token">
+              <span>Bearer token</span>
+              <input type="password" placeholder="Optional runtime token" autocomplete="off" spellcheck="false" @bind="_bearerToken" @bind:event="oninput">
+            </label>
+            <button class="toolbar-button danger" type="button" disabled="@_resetting" @onclick="ResetAsync">@(_resetting ? "Resetting…" : "Reset runtime")</button>
+          </div>
+          <div class="diagnostics-grid">
+            <section class="diagnostic-card">
+              <h3><span>Fixtures / models</span><span class="count-pill">@_models.Count</span></h3>
+              <div class="diagnostic-body">
+                @if (_models.Count == 0)
+                {
+                  <div class="diagnostic-empty">No models loaded.</div>
+                }
+                else
+                {
+                  <ul class="diagnostic-list">
+                    @foreach (var model in _models)
+                    {
+                      <li class="diagnostic-row"><span class="diagnostic-primary mono">@model.Id</span><span class="diagnostic-secondary">@model.Kind · @model.OwnedBy</span></li>
+                    }
+                  </ul>
+                }
+              </div>
+            </section>
+
+            <section class="diagnostic-card">
+              <h3><span>Provider APIs</span><span class="count-pill">@_providerRoutes.Count</span></h3>
+              <div class="diagnostic-body">
+                <ul class="diagnostic-list">
+                  @foreach (var route in _providerRoutes)
+                  {
+                    <li class="diagnostic-row"><span class="diagnostic-primary">@route.Name</span><span class="diagnostic-secondary mono">@route.Route</span></li>
+                  }
+                </ul>
+              </div>
+            </section>
+
+            <section class="diagnostic-card">
+              <h3><span>Runtime actions</span><span class="count-pill">4</span></h3>
+              <div class="diagnostic-body">
+                <ul class="diagnostic-list">
+                  <li class="diagnostic-row"><span class="diagnostic-primary">Refresh state</span><span class="diagnostic-secondary mono">GET @LlmTestServerControlRoutes.Assertions</span></li>
+                  <li class="diagnostic-row"><span class="diagnostic-primary">List fixtures</span><span class="diagnostic-secondary mono">GET @LlmTestServerControlRoutes.Models</span></li>
+                  <li class="diagnostic-row"><span class="diagnostic-primary">Configure runtime</span><span class="diagnostic-secondary mono">POST @LlmTestServerControlRoutes.Configure</span></li>
+                  <li class="diagnostic-row"><span class="diagnostic-primary">Reset runtime</span><span class="diagnostic-secondary mono">POST @LlmTestServerControlRoutes.Reset</span></li>
+                </ul>
+              </div>
+            </section>
+
+            <section class="diagnostic-card">
+              <h3><span>Assertions</span><span class="count-pill">@_summary.TotalEvents</span></h3>
+              <div class="diagnostic-body">
+                <ul class="diagnostic-list">
+                  <li class="diagnostic-row"><span class="diagnostic-primary">Matched</span><span class="diagnostic-secondary">@_summary.Matched</span></li>
+                  <li class="diagnostic-row"><span class="diagnostic-primary">Unmatched</span><span class="diagnostic-secondary">@_summary.Unmatched</span></li>
+                  <li class="diagnostic-row"><span class="diagnostic-primary">Model not found</span><span class="diagnostic-secondary">@_summary.ModelNotFound</span></li>
+                  <li class="diagnostic-row"><span class="diagnostic-primary">Auth failed</span><span class="diagnostic-secondary">@_summary.AuthFailed</span></li>
+                  <li class="diagnostic-row"><span class="diagnostic-primary">Scenario exhausted</span><span class="diagnostic-secondary">@_summary.ScenarioExhausted</span></li>
+                  <li class="diagnostic-row"><span class="diagnostic-primary">Errors returned</span><span class="diagnostic-secondary">@_summary.ErrorsReturned</span></li>
+                </ul>
+              </div>
+            </section>
+
+            <section class="diagnostic-card">
+              <h3><span>Runtime events</span><span class="count-pill">@_events.Count</span></h3>
+              <div class="diagnostic-body">
+                @if (_events.Count == 0)
+                {
+                  <div class="diagnostic-empty">No runtime events yet.</div>
+                }
+                else
+                {
+                  <ul class="diagnostic-list">
+                    @foreach (var runtimeEvent in _events.AsEnumerable().Reverse())
+                    {
+                      <li class="diagnostic-row">
+                        <span class="event-line"><span class="status-chip @EventTone(runtimeEvent.Kind)">@runtimeEvent.Kind</span><span class="diagnostic-primary">@runtimeEvent.Message</span></span>
+                        <span class="diagnostic-secondary mono">@runtimeEvent.ModelId · @runtimeEvent.Timestamp.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture)</span>
+                      </li>
+                    }
+                  </ul>
+                }
+              </div>
+            </section>
+          </div>
+        </div>
+  </FluentDialog>
+
+  <div class="@BannerCss" role="@BannerRole" aria-live="assertive">@_bannerText</div>
+
+  <main class="mail-workspace">
+    <nav class="nav-rail" aria-label="Request navigation">
+      <div class="rail-scroll">
+        <section class="rail-section" aria-labelledby="request-summary-title">
+          <h2 class="rail-heading" id="request-summary-title">Request summary</h2>
+          <button class="@RailFilterCss(string.Empty)" type="button" aria-pressed="@AriaBoolean(IsOutcomeFilter(string.Empty))" @onclick="() => SetOutcomeFilter(string.Empty)">
+            <span class="rail-icon all" aria-hidden="true">≡</span>
+            <span>All requests</span>
+            <strong>@_traces.Count</strong>
+          </button>
+          <button class='@RailFilterCss("success")' type="button" aria-pressed='@AriaBoolean(IsOutcomeFilter("success"))' @onclick='() => SetOutcomeFilter("success")'>
+            <span class="rail-icon success" aria-hidden="true">✓</span>
+            <span>Successful</span>
+            <strong>@SuccessfulTraceCount</strong>
+          </button>
+          <button class='@RailFilterCss("error")' type="button" aria-pressed='@AriaBoolean(IsOutcomeFilter("error"))' @onclick='() => SetOutcomeFilter("error")'>
+            <span class="rail-icon error" aria-hidden="true">!</span>
+            <span>Errors</span>
+            <strong>@FailedTraceCount</strong>
+          </button>
+          <button class='@RailFilterCss("stream")' type="button" aria-pressed='@AriaBoolean(IsOutcomeFilter("stream"))' @onclick='() => SetOutcomeFilter("stream")'>
+            <span class="rail-icon stream" aria-hidden="true">↝</span>
+            <span>Streaming</span>
+            <strong>@StreamingTraceCount</strong>
+          </button>
+          <button class='@RailFilterCss("cache")' type="button" aria-pressed='@AriaBoolean(IsOutcomeFilter("cache"))' @onclick='() => SetOutcomeFilter("cache")'>
+            <span class="rail-icon cache" aria-hidden="true">◇</span>
+            <span>Cache activity</span>
+            <strong>@CacheTraceCount</strong>
+          </button>
+        </section>
+
+        <section class="rail-section" aria-labelledby="providers-title">
+          <div class="rail-section-title">
+            <h2 class="rail-heading" id="providers-title">Providers</h2>
+            @if (!string.IsNullOrWhiteSpace(_providerFilter))
+            {
+              <button class="rail-clear" type="button" @onclick="() => SetProviderFilter(string.Empty)">Clear</button>
+            }
+          </div>
+          @foreach (var provider in providerOptions)
+          {
+            <button class="@ProviderFilterCss(provider)" type="button" aria-pressed="@AriaBoolean(IsProviderFilter(provider))" @onclick="() => SetProviderFilter(provider)">
+              <span class="provider-dot" aria-hidden="true"></span>
+              <span>@ProviderName(provider)</span>
+              <strong>@ProviderTraceCount(provider)</strong>
+            </button>
+          }
+          @if (providerOptions.Count == 0)
+          {
+            <div class="rail-empty">Providers appear after the first call.</div>
+          }
+        </section>
+
+        <section class="rail-section">
+          <label class="rail-select">
+            <span class="rail-heading">Model</span>
+            <select @bind="_modelFilter">
+              <option value="">All models</option>
+              @foreach (var model in modelOptions)
+              {
+                <option value="@model">@model</option>
+              }
+            </select>
+          </label>
+          @if (HasActiveFilters)
+          {
+            <button class="clear-filters" type="button" @onclick="ClearFilters">Clear all filters</button>
+          }
+        </section>
+      </div>
+
+      <footer class="rail-footer">
+        <span>@_models.Count model fixtures</span>
+        <span>@FormatBytes(TraceStore.RetainedByteCount) journal</span>
+      </footer>
+    </nav>
+
+    <section class="request-inbox" aria-labelledby="request-table-title">
+      <header class="inbox-header">
+        <div>
+          <h2 id="request-table-title">Provider requests</h2>
+          <p>@visibleTraces.Count of @_traces.Count · newest first</p>
+        </div>
+        <span class="count-pill" aria-label="Visible request count">@visibleTraces.Count</span>
+      </header>
+
+      <div class="inbox-tools" aria-label="Request filters">
+        <label class="search-field">
+          <span class="sr-only">Search requests</span>
+          <input type="search" placeholder="Search requests…" @bind="_search" @bind:event="oninput">
+        </label>
+        <div class="compact-filters">
+          <select aria-label="Provider" @bind="_providerFilter">
+            <option value="">All providers</option>
+            @foreach (var provider in providerOptions)
+            {
+              <option value="@provider">@ProviderName(provider)</option>
+            }
+          </select>
+          <select aria-label="Model" @bind="_modelFilter">
+            <option value="">All models</option>
+            @foreach (var model in modelOptions)
+            {
+              <option value="@model">@model</option>
+            }
+          </select>
+          <select aria-label="Outcome" @bind="_outcomeFilter">
+            <option value="">All outcomes</option>
+            <option value="success">Successful</option>
+            <option value="error">Errors</option>
+            <option value="stream">Streaming</option>
+            <option value="cache">Cache activity</option>
+          </select>
+          <button class="toolbar-button" type="button" @onclick="ClearFilters">Clear</button>
+        </div>
+      </div>
+
+      <div class="inbox-columns" aria-hidden="true"><span>Request</span><span>Result</span></div>
+
+      @if (visibleTraces.Count == 0)
+      {
+        <div class="empty-state" data-testid="request-empty-state">
+          <div>
+            <strong>@(_traces.Count == 0 ? "No provider requests yet" : "No requests match these filters")</strong>
+            <span>@(_traces.Count == 0 ? "Call a namespaced provider endpoint to start the inbox." : "Clear or change filters to see more calls.")</span>
+          </div>
+        </div>
+      }
+      else
+      {
+        <div class="inbox-list" role="list" aria-label="Captured provider requests">
+          @foreach (var trace in visibleTraces)
+          {
+            var usage = UsageFor(trace);
+            var messages = MessagesFor(trace);
+            var messageCount = messages.Count;
+            <button @key="trace.RequestId" class="@InboxItemCss(trace)" type="button" role="listitem" aria-current="@(IsSelected(trace) ? "true" : null)" aria-label="Inspect @ProviderName(trace.ProviderId) request to @ModelName(trace)" data-testid="request-row" data-request-id="@trace.RequestId" @onclick="() => SelectTrace(trace.RequestId)">
+              <span class="inbox-item-top">
+                <span class="provider-avatar" aria-hidden="true">@ProviderInitial(trace.ProviderId)</span>
+                <span class="inbox-identity">
+                  <strong>@ProviderName(trace.ProviderId)</strong>
+                  <span class="inbox-model" title="@ModelName(trace)">@ModelName(trace)</span>
+                </span>
+                <time datetime="@trace.StartedAt.ToString("O", CultureInfo.InvariantCulture)">@trace.StartedAt.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture)</time>
+              </span>
+              <span class="inbox-preview" title="@RequestPreview(trace)">@RequestPreview(trace)</span>
+              <span class="inbox-meta-row">
+                <span class="inbox-endpoint" title="@trace.Path">
+                  <span class="method-chip">@trace.Method</span>
+                  <span class="mono">@trace.Path</span>
+                </span>
+                <span class="inbox-item-bottom">
+                  <span class="@StatusCssFor(trace)">@InboxStatusText(trace)</span>
+                  <span class="inbox-stat">@FormatDuration(trace.DurationMilliseconds)</span>
+                  @if (usage is not null)
+                  {
+                    <span class="inbox-stat">@usage.TotalTokens.ToString("N0", CultureInfo.InvariantCulture) tok</span>
+                    @if (usage.CachedInputTokens > 0 || usage.CacheCreationInputTokens > 0)
+                    {
+                      <span class="inbox-stat cache">cache @usage.CachedInputTokens.ToString("N0", CultureInfo.InvariantCulture)/@usage.CacheCreationInputTokens.ToString("N0", CultureInfo.InvariantCulture)</span>
+                    }
+                  }
+                  @if (trace.IsStreaming)
+                  {
+                    <span class="mode-chip">stream</span>
+                  }
+                  @if (messageCount > 1)
+                  {
+                    <span class="inbox-stat">@messageCount turns</span>
+                  }
+                </span>
+              </span>
+            </button>
+          }
+        </div>
+      }
+    </section>
+
+    <aside class="reading-pane" aria-label="Selected request details" data-testid="request-details">
+      @if (SelectedTrace is not { } selected)
+      {
+        <div class="reading-empty">
+          <div class="reading-empty-icon" aria-hidden="true">↳</div>
+          <strong>Select a request</strong>
+          <span>Conversation, wire payloads, Total tokens, Cache read and Cache write open here.</span>
+        </div>
+      }
+      else
+      {
+        var selectedUsage = UsageFor(selected);
+        var selectedMessages = MessagesFor(selected);
+        var selectedChunks = ChunksFor(selected);
+        var selectedEvent = RuntimeEventFor(selected);
+
+        <header class="reading-header">
+          <button class="mobile-back" type="button" @onclick="BackToRequests">← Requests</button>
+          <div class="reading-title">
+            <div class="reading-eyebrow">
+              <span class="provider-chip">@ProviderName(selected.ProviderId)</span>
+              <span class="method-chip">@selected.Method</span>
+              <span class="@StatusCssFor(selected)">@StatusText(selected)</span>
+              @if (selected.IsStreaming)
+              {
+                <span class="mode-chip">stream</span>
+              }
+            </div>
+            <h2>@ModelName(selected)</h2>
+            <div class="reading-route mono">@selected.Path</div>
+          </div>
+          <div class="reading-id mono" data-testid="selected-request-id">@selected.RequestId</div>
+        </header>
+
+        <section class="facts-strip" aria-labelledby="metadata-title">
+          <h3 class="sr-only" id="metadata-title">Request metadata</h3>
+          <span class="sr-only" id="usage-title">Tokens & cache</span>
+          <div class="fact"><span>Latency</span><strong>@FormatDuration(selected.DurationMilliseconds)</strong></div>
+          <div class="fact"><span>Total tokens</span><strong>@(selectedUsage?.TotalTokens.ToString("N0", CultureInfo.InvariantCulture) ?? "—")</strong></div>
+          <div class="fact"><span>Cache read / Cache write</span><strong>@(selectedUsage is null ? "—" : $"{selectedUsage.CachedInputTokens:N0} / {selectedUsage.CacheCreationInputTokens:N0}")</strong></div>
+          <div class="fact fact-grow"><span>Scenario</span><strong>@Empty(selected.ScenarioId)</strong></div>
+          <div class="fact"><span>Started</span><strong>@selected.StartedAt.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture)</strong></div>
+        </section>
+
+        <nav class="detail-tabs" role="tablist" aria-label="Request detail views">
+          <button id="overview-tab" class="@DetailTabCss(_overviewTab)" type="button" role="tab" aria-controls="overview-panel" aria-selected="@AriaBoolean(IsDetailTab(_overviewTab))" @onclick="() => SetDetailTab(_overviewTab)">Overview</button>
+          <button id="conversation-tab" class="@DetailTabCss(_conversationTab)" type="button" role="tab" aria-controls="conversation-panel" aria-selected="@AriaBoolean(IsDetailTab(_conversationTab))" @onclick="() => SetDetailTab(_conversationTab)">Conversation <span>@selectedMessages.Count</span></button>
+          <button id="wire-tab" class="@DetailTabCss(_wireTab)" type="button" role="tab" aria-controls="wire-panel" aria-selected="@AriaBoolean(IsDetailTab(_wireTab))" @onclick="() => SetDetailTab(_wireTab)">Wire</button>
+          @if (selectedChunks.Count > 0)
+          {
+            <button id="stream-tab" class="@DetailTabCss(_streamTab)" type="button" role="tab" aria-controls="stream-panel" aria-selected="@AriaBoolean(IsDetailTab(_streamTab))" @onclick="() => SetDetailTab(_streamTab)">Stream <span>@selectedChunks.Count</span></button>
+          }
+          <button id="runtime-tab" class="@DetailTabCss(_runtimeTab)" type="button" role="tab" aria-controls="runtime-panel" aria-selected="@AriaBoolean(IsDetailTab(_runtimeTab))" @onclick="() => SetDetailTab(_runtimeTab)">Runtime</button>
+        </nav>
+
+        <div class="detail-panels">
+          <section id="overview-panel" class="@DetailPanelCss(_overviewTab)" role="tabpanel" aria-labelledby="overview-tab" hidden="@(!IsDetailTab(_overviewTab))">
+            <h3 class="sr-only" id="overview-title">Request and response overview</h3>
+            <div class="overview-grid">
+              <section class="overview-card request-overview">
+                <header class="overview-card-header">
+                  <div><span class="overview-kicker">Request</span><strong>@selectedMessages.Count message@(selectedMessages.Count == 1 ? string.Empty : "s")</strong></div>
+                  <span class="mono">@selected.Method</span>
+                </header>
+                <div class="overview-card-body request-thread">
+                  @foreach (var message in selectedMessages)
+                  {
+                    @if (ShouldCollapseTurn(message.Role, message.Content))
+                    {
+                      <details class="overview-message collapsed-message">
+                        <summary><span class="message-role">@message.Role</span><span class="message-preview">@TurnPreview(message.Content)</span><span class="message-size">@FormatCharacterCount(message.Content)</span></summary>
+                        <div class="message-content">@message.Content</div>
+                      </details>
+                    }
+                    else
+                    {
+                      <article class="overview-message">
+                        <span class="message-role">@message.Role</span>
+                        <div class="message-content">@message.Content</div>
+                      </article>
+                    }
+                  }
+                </div>
+              </section>
+
+              <section class="overview-card response-overview">
+                <header class="overview-card-header">
+                  <div><span class="overview-kicker">Response</span><strong>@StatusText(selected)</strong></div>
+                  <span>@FormatBytes(selected.ResponseByteCount)</span>
+                </header>
+                <div class="overview-card-body response-body">
+                  <span class="message-role">@RuntimeResponseRole(selected)</span>
+                  @if (!string.IsNullOrWhiteSpace(selected.RuntimeResponse))
+                  {
+                    <div class="response-copy">@selected.RuntimeResponse</div>
+                  }
+                  else
+                  {
+                    <pre class="response-copy response-json" data-testid="overview-response-json">@PrettyPayload(selected.ResponsePreview, selected.ResponsePreviewTruncated)</pre>
+                  }
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <section id="conversation-panel" class="@DetailPanelCss(_conversationTab)" role="tabpanel" aria-labelledby="conversation-tab" hidden="@(!IsDetailTab(_conversationTab))">
+            <div class="panel-heading">
+              <div><h3 id="conversation-title">Conversation</h3><span>@selectedMessages.Count input turn@(selectedMessages.Count == 1 ? string.Empty : "s")</span></div>
+            </div>
+            @if (selected.RuntimePayloadTruncated || selected.RetentionTruncated || selectedEvent?.PayloadTruncated is true)
+            {
+              <div class="retention-warning">This exceptionally large payload was shortened by the bounded in-memory journal.</div>
+            }
+            <div class="conversation-scroll">
+              <div class="conversation" data-testid="conversation">
+                @if (!string.IsNullOrWhiteSpace(selected.RuntimeResponse))
+                {
+                  <article class="@RuntimeResponseTurnCss(selected)" data-response-card="true" data-testid="conversation-turn">
+                    <header class="response-card-header">
+                      <div><div class="turn-role">@RuntimeResponseRole(selected)</div><span>Provider response</span></div>
+                      <span class="@StatusCssFor(selected)">@StatusText(selected)</span>
+                    </header>
+                    <div class="turn-content">@selected.RuntimeResponse</div>
+                  </article>
+                }
+
+                <div class="thread-heading"><strong>Request context</strong><span>@selectedMessages.Count input turn@(selectedMessages.Count == 1 ? string.Empty : "s") · chronological</span></div>
+                @foreach (var message in selectedMessages)
+                {
+                  @if (ShouldCollapseTurn(message.Role, message.Content))
+                  {
+                    <details class="@TurnCss(message.Role) turn-disclosure" data-testid="conversation-turn" data-collapsed-by-default="true">
+                      <summary><span class="turn-role">@message.Role</span><span class="turn-preview">@TurnPreview(message.Content)</span><span class="turn-size">@FormatCharacterCount(message.Content)</span></summary>
+                      <div class="turn-content">@message.Content</div>
+                    </details>
+                  }
+                  else
+                  {
+                    <article class="@TurnCss(message.Role)" data-testid="conversation-turn">
+                      <div class="turn-role">@message.Role</div>
+                      <div class="turn-content">@message.Content</div>
+                    </article>
+                  }
+                }
+              </div>
+            </div>
+          </section>
+
+          <section id="wire-panel" class="@DetailPanelCss(_wireTab)" role="tabpanel" aria-labelledby="wire-tab" hidden="@(!IsDetailTab(_wireTab))">
+            <div class="panel-heading">
+              <div><h3 id="payload-title">Wire payloads</h3><span>Sanitized · @PreviewLimitLabel</span></div>
+            </div>
+            <div class="wire-grid">
+              <article class="payload-card">
+                <div class="payload-head"><span>Request</span><span>@Empty(selected.RequestContentType)</span></div>
+                <pre class="payload-content" data-testid="request-payload">@PrettyPayload(selected.RequestPreview, selected.RequestPreviewTruncated)</pre>
+              </article>
+              <article class="payload-card">
+                <div class="payload-head"><span>Response</span><span>@Empty(selected.ResponseContentType)</span></div>
+                <pre class="payload-content" data-testid="response-payload">@PrettyPayload(selected.ResponsePreview, selected.ResponsePreviewTruncated)</pre>
+              </article>
+            </div>
+          </section>
+
+          @if (selectedChunks.Count > 0)
+          {
+            <section id="stream-panel" class="@DetailPanelCss(_streamTab)" role="tabpanel" aria-labelledby="stream-tab" hidden="@(!IsDetailTab(_streamTab))">
+              <div class="panel-heading">
+                <div><h3 id="chunks-title">Stream chunks</h3><span>@selectedChunks.Count ordered chunk@(selectedChunks.Count == 1 ? string.Empty : "s")</span></div>
+              </div>
+              <ol class="chunk-list">
+                @for (var index = 0; index < selectedChunks.Count; index++)
+                {
+                  <li class="chunk"><span class="chunk-index">#@(index + 1)</span><span class="chunk-content">@selectedChunks[index]</span></li>
+                }
+              </ol>
+            </section>
+          }
+
+          <section id="runtime-panel" class="@DetailPanelCss(_runtimeTab)" role="tabpanel" aria-labelledby="runtime-tab" hidden="@(!IsDetailTab(_runtimeTab))">
+            <div class="panel-heading"><div><h3 id="runtime-title">Runtime detail</h3><span>Correlation and transport metadata</span></div></div>
+            <div class="runtime-grid">
+              <div class="meta-card"><div class="meta-label">Operation</div><div class="meta-value mono">@Empty(selected.OperationId)</div></div>
+              <div class="meta-card"><div class="meta-label">Transport</div><div class="meta-value">@selected.TransportState</div></div>
+              <div class="meta-card"><div class="meta-label">Request content</div><div class="meta-value mono">@Empty(selected.RequestContentType)</div></div>
+              <div class="meta-card"><div class="meta-label">Response content</div><div class="meta-value mono">@Empty(selected.ResponseContentType)</div></div>
+              <div class="meta-card"><div class="meta-label">Error code</div><div class="meta-value mono">@Empty(selected.ErrorCode)</div></div>
+              <div class="meta-card"><div class="meta-label">Retention</div><div class="meta-value">@FormatBytes(selected.RetainedByteCount)</div></div>
+              <div class="meta-card"><div class="meta-label">Bytes</div><div class="meta-value">@FormatBytes(selected.RequestByteCount) → @FormatBytes(selected.ResponseByteCount)</div></div>
+              <div class="meta-card"><div class="meta-label">Prompt cache</div><div class="meta-value">@(selectedEvent?.PromptCachePolicy.ToString() ?? "Not reported")</div></div>
+              @if (selectedUsage is not null)
+              {
+                <div class="meta-card"><div class="meta-label">Input / output</div><div class="meta-value">@selectedUsage.InputTokens.ToString("N0", CultureInfo.InvariantCulture) / @selectedUsage.OutputTokens.ToString("N0", CultureInfo.InvariantCulture) tokens</div></div>
+                <div class="meta-card"><div class="meta-label">Reasoning</div><div class="meta-value">@selectedUsage.ReasoningTokens.ToString("N0", CultureInfo.InvariantCulture) tokens</div></div>
+              }
+            </div>
+            @if (!string.IsNullOrWhiteSpace(selected.RuntimeMessage))
+            {
+              <section class="runtime-note">
+                <h4>Runtime note</h4>
+                <p>@selected.RuntimeMessage</p>
+              </section>
+            }
+          </section>
+        </div>
+      }
+    </aside>
+  </main>
+
+  <footer class="sr-only">Served by MapLlmTestServer(); the request journal is bounded and never records authorization headers.</footer>
+</div>
+@code {
+    private const string _overviewTab = "overview";
+    private const string _conversationTab = "conversation";
+    private const string _wireTab = "wire";
+    private const string _streamTab = "stream";
+    private const string _runtimeTab = "runtime";
+    private const int _collapsedTurnThreshold = 420;
+    private const int _turnPreviewLimit = 132;
+    private static readonly TimeSpan _autoRefreshInterval = TimeSpan.FromSeconds(15);
+    private static readonly JsonSerializerOptions _prettyJsonOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        WriteIndented = true,
+    };
+    private static readonly IReadOnlyList<ProviderRoute> _providerRoutes =
+    [
+        new("OpenAI", LlmTestServerProviderRouteNamespaces.OpenAI),
+        new("Azure OpenAI", LlmTestServerProviderRouteNamespaces.AzureOpenAI),
+        new("Microsoft Foundry", LlmTestServerProviderRouteNamespaces.MicrosoftFoundry),
+        new("Anthropic", LlmTestServerProviderRouteNamespaces.Anthropic),
+        new("Gemini", LlmTestServerProviderRouteNamespaces.Gemini),
+        new("Groq", LlmTestServerProviderRouteNamespaces.Groq),
+        new("Mistral", LlmTestServerProviderRouteNamespaces.Mistral),
+        new("Ollama", LlmTestServerProviderRouteNamespaces.Ollama),
+        new("Cohere", LlmTestServerProviderRouteNamespaces.Cohere),
+        new("Amazon Bedrock", LlmTestServerProviderRouteNamespaces.Bedrock),
+        new("OpenRouter", LlmTestServerProviderRouteNamespaces.OpenRouter),
+        new("DeepSeek", LlmTestServerProviderRouteNamespaces.DeepSeek),
+        new("Perplexity", LlmTestServerProviderRouteNamespaces.Perplexity),
+    ];
+
+    private IReadOnlyList<LlmTestServerModel> _models = [];
+    private IReadOnlyList<LlmTestServerProviderHttpTrace> _traces = [];
+    private IReadOnlyList<LlmTestServerRuntimeEvent> _events = [];
+    private IReadOnlyDictionary<string, LlmTestServerRuntimeEvent> _eventsByRequestId =
+        new Dictionary<string, LlmTestServerRuntimeEvent>(StringComparer.Ordinal);
+    private LlmTestServerAssertionSummary _summary = new();
+    private string _bearerToken = string.Empty;
+    private string _search = string.Empty;
+    private string _providerFilter = string.Empty;
+    private string _modelFilter = string.Empty;
+    private string _outcomeFilter = string.Empty;
+    private string _activeDetailTab = _overviewTab;
+    private string? _selectedRequestId;
+    private bool _mobileDetailsOpen;
+    private bool _autoRefresh = true;
+    private bool _resetting;
+    private bool _runtimeDialogHidden = true;
+    private bool _interactive;
+    private bool _restoreRuntimeTriggerFocus;
+    private ElementReference _runtimeDialogTrigger;
+    private FluentDialog _runtimeDialog = default!;
+    private const string ClosedDialogState = "closed";
+    private string _statusText = "Connecting…";
+    private string _statusClass = string.Empty;
+    private string? _bannerKind;
+    private string? _bannerText;
+    private CancellationTokenSource? _autoRefreshCancellation;
+
+    private string WorkspaceCss => _mobileDetailsOpen ? "shell mobile-reading" : "shell mobile-list";
+    private string StatusCss => string.IsNullOrWhiteSpace(_statusClass)
+        ? "connection"
+        : $"connection {_statusClass}";
+    private string BannerCss => string.IsNullOrWhiteSpace(_bannerText)
+        ? "notice"
+        : $"notice show {_bannerKind}";
+    private string BannerRole => string.Equals(_bannerKind, "err", StringComparison.Ordinal)
+        ? "alert"
+        : "status";
+    private string? AccessToken => string.IsNullOrWhiteSpace(_bearerToken)
+        ? null
+        : _bearerToken.Trim();
+    private string PreviewLimitLabel => $"{FormatBytes(TraceOptions.Value.MaxPreviewBytes)} preview";
+    private int SuccessfulTraceCount => _traces.Count(trace => trace.IsSuccess is true);
+    private int FailedTraceCount => _traces.Count(trace => trace.IsSuccess is false);
+    private int StreamingTraceCount => _traces.Count(trace => trace.IsStreaming);
+    private int CacheTraceCount => _traces.Count(HasCacheActivity);
+    private bool HasActiveFilters => !string.IsNullOrWhiteSpace(_search)
+        || !string.IsNullOrWhiteSpace(_providerFilter)
+        || !string.IsNullOrWhiteSpace(_modelFilter)
+        || !string.IsNullOrWhiteSpace(_outcomeFilter);
+    private LlmTestServerProviderHttpTrace? SelectedTrace => _selectedRequestId is null
+        ? null
+        : _traces.FirstOrDefault(trace =>
+            string.Equals(trace.RequestId, _selectedRequestId, StringComparison.Ordinal)
+        );
+    private IReadOnlyList<string> GetProviderOptions() => _traces
+        .Select(trace => trace.ProviderId)
+        .Where(provider => !string.IsNullOrWhiteSpace(provider))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .Order(StringComparer.OrdinalIgnoreCase)
+        .ToList();
+    private IReadOnlyList<string> GetModelOptions() => _traces
+        .Select(ModelName)
+        .Where(model => model != "—")
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .Order(StringComparer.OrdinalIgnoreCase)
+        .ToList();
+
+    protected override void OnInitialized()
+    {
+        RefreshState();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _interactive = true;
+            StateHasChanged();
+            StartAutoRefresh();
+        }
+
+        if (_restoreRuntimeTriggerFocus)
+        {
+            _restoreRuntimeTriggerFocus = false;
+            await _runtimeDialogTrigger.FocusAsync();
+        }
+    }
+
+    private Task RefreshAsync()
+    {
+        RefreshState();
+        return Task.CompletedTask;
+    }
+
+    private async Task ResetAsync()
+    {
+        if (!Runtime.IsBearerTokenAccepted(AccessToken))
+        {
+            SetUnauthorizedState();
+            return;
+        }
+
+        _resetting = true;
+        try
+        {
+            TraceStore.Reset();
+            await Runtime.ResetAsync();
+            RefreshState();
+            await CloseRuntimeDialogAsync();
+            SetBanner("warn", "Runtime reset · scenarios, events and provider request traces were cleared.");
+        }
+        catch (Exception exception)
+        {
+            _statusClass = "err";
+            _statusText = "Server error";
+            SetBanner("err", $"Reset failed: {exception.Message}");
+        }
+        finally
+        {
+            _resetting = false;
+        }
+    }
+
+    private Task SetAutoRefreshAsync(ChangeEventArgs args)
+    {
+        _autoRefresh = args.Value is true
+            || string.Equals(args.Value?.ToString(), "true", StringComparison.OrdinalIgnoreCase);
+        if (_autoRefresh)
+        {
+            StartAutoRefresh();
+        }
+        else
+        {
+            StopAutoRefresh();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task OpenRuntimeDialogAsync()
+    {
+        await _runtimeDialog.ShowAsync();
+        _runtimeDialogHidden = false;
+    }
+
+    private async Task CloseRuntimeDialogAsync()
+    {
+        await _runtimeDialog.HideAsync();
+        _runtimeDialogHidden = true;
+        _restoreRuntimeTriggerFocus = true;
+    }
+
+    private void RuntimeDialogToggled(DialogToggleEventArgs args)
+    {
+        if (args.Id == _runtimeDialog.Id && string.Equals(args.NewState, ClosedDialogState, StringComparison.Ordinal))
+        {
+            _runtimeDialogHidden = true;
+            _restoreRuntimeTriggerFocus = true;
+        }
+    }
+
+    private void RefreshState()
+    {
+        _statusText = "Loading…";
+        if (!Runtime.IsBearerTokenAccepted(AccessToken))
+        {
+            SetUnauthorizedState();
+            return;
+        }
+
+        _models = Runtime.GetModels();
+        _summary = Runtime.GetAssertionSummary();
+        _events = _summary.Events;
+        var eventsByRequestId = new Dictionary<string, LlmTestServerRuntimeEvent>(StringComparer.Ordinal);
+        foreach (var runtimeEvent in _events)
+        {
+            if (!string.IsNullOrWhiteSpace(runtimeEvent.RequestId))
+            {
+                eventsByRequestId[runtimeEvent.RequestId] = runtimeEvent;
+            }
+        }
+
+        _eventsByRequestId = eventsByRequestId;
+        _traces = TraceStore.GetSnapshot();
+        if (_selectedRequestId is null
+            || !_traces.Any(trace =>
+                string.Equals(trace.RequestId, _selectedRequestId, StringComparison.Ordinal)
+            ))
+        {
+            _selectedRequestId = _traces.FirstOrDefault()?.RequestId;
+            _activeDetailTab = _overviewTab;
+            if (_selectedRequestId is null)
+            {
+                _mobileDetailsOpen = false;
+            }
+        }
+
+        _statusClass = "ok";
+        _statusText = _traces.Any(trace => !trace.IsCompleted) ? "Requests in flight" : "Ready";
+        ClearBanner();
+    }
+
+    private void SetUnauthorizedState()
+    {
+        _models = [];
+        _traces = [];
+        _events = [];
+        _eventsByRequestId = new Dictionary<string, LlmTestServerRuntimeEvent>(StringComparer.Ordinal);
+        _summary = new LlmTestServerAssertionSummary();
+        _selectedRequestId = null;
+        _mobileDetailsOpen = false;
+        _statusClass = "err";
+        _statusText = "Unauthorized";
+        SetBanner("err", "Enter the configured bearer token to load runtime state and request traces.");
+    }
+
+    private void StartAutoRefresh()
+    {
+        StopAutoRefresh();
+        if (!_autoRefresh)
+        {
+            return;
+        }
+
+        var cancellation = new CancellationTokenSource();
+        _autoRefreshCancellation = cancellation;
+        _ = RunAutoRefreshAsync(cancellation.Token);
+    }
+
+    private void StopAutoRefresh()
+    {
+        var cancellation = _autoRefreshCancellation;
+        _autoRefreshCancellation = null;
+        if (cancellation is null)
+        {
+            return;
+        }
+
+        cancellation.Cancel();
+        cancellation.Dispose();
+    }
+
+    private async Task RunAutoRefreshAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(_autoRefreshInterval);
+            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+            {
+                await InvokeAsync(() =>
+                {
+                    RefreshState();
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
+
+    private IReadOnlyList<LlmTestServerProviderHttpTrace> FilterTraces()
+    {
+        IEnumerable<LlmTestServerProviderHttpTrace> query = _traces;
+        if (!string.IsNullOrWhiteSpace(_search))
+        {
+            var search = _search.Trim();
+            query = query.Where(trace => TraceContains(trace, search));
+        }
+
+        if (!string.IsNullOrWhiteSpace(_providerFilter))
+        {
+            query = query.Where(trace =>
+                string.Equals(trace.ProviderId, _providerFilter, StringComparison.OrdinalIgnoreCase)
+            );
+        }
+
+        if (!string.IsNullOrWhiteSpace(_modelFilter))
+        {
+            query = query.Where(trace =>
+                string.Equals(ModelName(trace), _modelFilter, StringComparison.OrdinalIgnoreCase)
+            );
+        }
+
+        query = _outcomeFilter switch
+        {
+            "success" => query.Where(trace => trace.IsSuccess is true),
+            "error" => query.Where(trace => trace.IsSuccess is false),
+            "stream" => query.Where(trace => trace.IsStreaming),
+            "cache" => query.Where(HasCacheActivity),
+            _ => query,
+        };
+        return query.ToList();
+    }
+
+    private static bool TraceContains(LlmTestServerProviderHttpTrace trace, string search)
+    {
+        return Contains(trace.ProviderId, search)
+            || Contains(trace.Path, search)
+            || Contains(trace.OperationId, search)
+            || Contains(trace.ModelId, search)
+            || Contains(trace.RequestPreview, search)
+            || Contains(trace.ResponsePreview, search)
+            || Contains(trace.RuntimeResponse, search)
+            || Contains(trace.RuntimeMessage, search);
+    }
+
+    private static bool Contains(string? value, string search)
+    {
+        return value?.Contains(search, StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    private void ClearFilters()
+    {
+        _search = string.Empty;
+        _providerFilter = string.Empty;
+        _modelFilter = string.Empty;
+        _outcomeFilter = string.Empty;
+    }
+
+    private void SetOutcomeFilter(string filter)
+    {
+        _outcomeFilter = filter;
+    }
+
+    private bool IsOutcomeFilter(string filter)
+    {
+        return string.Equals(_outcomeFilter, filter, StringComparison.Ordinal);
+    }
+
+    private string RailFilterCss(string filter)
+    {
+        return IsOutcomeFilter(filter) ? "rail-item selected" : "rail-item";
+    }
+
+    private void SetProviderFilter(string provider)
+    {
+        _providerFilter = provider;
+    }
+
+    private bool IsProviderFilter(string provider)
+    {
+        return string.Equals(_providerFilter, provider, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string ProviderFilterCss(string provider)
+    {
+        return IsProviderFilter(provider) ? "rail-item provider selected" : "rail-item provider";
+    }
+
+    private int ProviderTraceCount(string provider)
+    {
+        return _traces.Count(trace =>
+            string.Equals(trace.ProviderId, provider, StringComparison.OrdinalIgnoreCase)
+        );
+    }
+
+    private void SelectTrace(string requestId)
+    {
+        _selectedRequestId = requestId;
+        _activeDetailTab = _overviewTab;
+        _mobileDetailsOpen = true;
+    }
+
+    private void BackToRequests()
+    {
+        _mobileDetailsOpen = false;
+    }
+
+    private bool IsSelected(LlmTestServerProviderHttpTrace trace)
+    {
+        return string.Equals(trace.RequestId, _selectedRequestId, StringComparison.Ordinal);
+    }
+
+    private string InboxItemCss(LlmTestServerProviderHttpTrace trace)
+    {
+        return IsSelected(trace) ? "inbox-item selected" : "inbox-item";
+    }
+
+    private static bool HasCacheActivity(LlmTestServerProviderHttpTrace trace)
+    {
+        return trace.Usage is { } usage
+            && (usage.CachedInputTokens > 0 || usage.CacheCreationInputTokens > 0);
+    }
+
+    private bool IsDetailTab(string tab)
+    {
+        return string.Equals(_activeDetailTab, tab, StringComparison.Ordinal);
+    }
+
+    private string DetailTabCss(string tab)
+    {
+        return IsDetailTab(tab) ? "detail-tab selected" : "detail-tab";
+    }
+
+    private string DetailPanelCss(string tab)
+    {
+        return IsDetailTab(tab) ? "detail-panel active" : "detail-panel";
+    }
+
+    private void SetDetailTab(string tab)
+    {
+        _activeDetailTab = tab;
+    }
+
+    private LlmTestServerRuntimeEvent? RuntimeEventFor(LlmTestServerProviderHttpTrace trace)
+    {
+        return _eventsByRequestId.GetValueOrDefault(trace.RequestId);
+    }
+
+    private LlmTestServerTokenUsage? UsageFor(LlmTestServerProviderHttpTrace trace)
+    {
+        return trace.Usage ?? RuntimeEventFor(trace)?.Usage;
+    }
+
+    private IReadOnlyList<LlmTestServerMessage> MessagesFor(LlmTestServerProviderHttpTrace trace)
+    {
+        return trace.Messages.Count > 0
+            ? trace.Messages
+            : RuntimeEventFor(trace)?.Messages ?? [];
+    }
+
+    private IReadOnlyList<string> ChunksFor(LlmTestServerProviderHttpTrace trace)
+    {
+        return trace.StreamChunks.Count > 0
+            ? trace.StreamChunks
+            : RuntimeEventFor(trace)?.StreamChunks ?? [];
+    }
+
+    private string ModelName(LlmTestServerProviderHttpTrace trace)
+    {
+        return string.IsNullOrWhiteSpace(trace.ModelId)
+            ? RuntimeEventFor(trace)?.ModelId ?? "—"
+            : trace.ModelId;
+    }
+
+    private string RequestPreview(LlmTestServerProviderHttpTrace trace)
+    {
+        var messages = MessagesFor(trace);
+        var message = messages.LastOrDefault(candidate =>
+                string.Equals(candidate.Role, "user", StringComparison.OrdinalIgnoreCase)
+            )
+            ?? messages.LastOrDefault();
+        if (message is not null && !string.IsNullOrWhiteSpace(message.Content))
+        {
+            return TurnPreview(message.Content);
+        }
+
+        return !string.IsNullOrWhiteSpace(trace.OperationId)
+            ? trace.OperationId
+            : trace.Path;
+    }
+
+    private static string ProviderInitial(string providerId)
+    {
+        return ProviderName(providerId) switch
+        {
+            "Azure OpenAI" => "Az",
+            "Microsoft Foundry" => "M",
+            "Amazon Bedrock" => "B",
+            "OpenRouter" => "Or",
+            "DeepSeek" => "D",
+            "Perplexity" => "P",
+            { Length: > 0 } name => name[..1],
+            _ => "?",
+        };
+    }
+
+    private static bool ShouldCollapseTurn(string role, string content)
+    {
+        return content.Length > _collapsedTurnThreshold
+            && (string.Equals(role, "system", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(role, "tool", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string TurnPreview(string content)
+    {
+        var builder = new StringBuilder(Math.Min(content.Length, _turnPreviewLimit + 1));
+        var pendingSpace = false;
+        var truncated = false;
+        foreach (var character in content)
+        {
+            if (char.IsWhiteSpace(character))
+            {
+                pendingSpace = builder.Length > 0;
+                continue;
+            }
+
+            if (pendingSpace)
+            {
+                if (builder.Length >= _turnPreviewLimit)
+                {
+                    truncated = true;
+                    break;
+                }
+
+                builder.Append(' ');
+                pendingSpace = false;
+            }
+
+            if (builder.Length >= _turnPreviewLimit)
+            {
+                truncated = true;
+                break;
+            }
+
+            builder.Append(character);
+        }
+
+        return truncated ? builder.Append('…').ToString() : builder.ToString();
+    }
+
+    private static string FormatCharacterCount(string content)
+    {
+        return $"{content.Length.ToString("N0", CultureInfo.InvariantCulture)} chars";
+    }
+
+    private static string ProviderName(string providerId)
+    {
+        return providerId switch
+        {
+            LlmTestServerCompatibilityTags.OpenAI => "OpenAI",
+            LlmTestServerCompatibilityTags.AzureOpenAI => "Azure OpenAI",
+            LlmTestServerCompatibilityTags.MicrosoftFoundry => "Microsoft Foundry",
+            LlmTestServerCompatibilityTags.Anthropic => "Anthropic",
+            LlmTestServerCompatibilityTags.Gemini => "Gemini",
+            LlmTestServerCompatibilityTags.Groq => "Groq",
+            LlmTestServerCompatibilityTags.Mistral => "Mistral",
+            LlmTestServerCompatibilityTags.Ollama => "Ollama",
+            LlmTestServerCompatibilityTags.Cohere => "Cohere",
+            LlmTestServerCompatibilityTags.Bedrock => "Amazon Bedrock",
+            LlmTestServerCompatibilityTags.OpenRouter => "OpenRouter",
+            LlmTestServerCompatibilityTags.DeepSeek => "DeepSeek",
+            LlmTestServerCompatibilityTags.Perplexity => "Perplexity",
+            _ => string.IsNullOrWhiteSpace(providerId) ? "Unknown" : providerId,
+        };
+    }
+
+    private static string StatusCssFor(LlmTestServerProviderHttpTrace trace)
+    {
+        if (!trace.IsCompleted)
+        {
+            return "status-chip warning";
+        }
+
+        if (trace.TransportState != LlmTestServerProviderHttpTraceTransportState.Completed)
+        {
+            return "status-chip error";
+        }
+
+        return trace.StatusCode switch
+        {
+            null => "status-chip error",
+            < 400 => "status-chip success",
+            >= 400 => "status-chip error",
+        };
+    }
+
+    private static string StatusText(LlmTestServerProviderHttpTrace trace)
+    {
+        if (!trace.IsCompleted)
+        {
+            return "Running";
+        }
+
+        if (trace.TransportState != LlmTestServerProviderHttpTraceTransportState.Completed)
+        {
+            return trace.TransportState.ToString();
+        }
+
+        return trace.StatusCode switch
+        {
+            null => "No status",
+            200 => "200 OK",
+            201 => "201 Created",
+            202 => "202 Accepted",
+            204 => "204 Empty",
+            400 => "400 Invalid",
+            401 => "401 Auth",
+            404 => "404 Missing",
+            405 => "405 Method",
+            409 => "409 Conflict",
+            429 => "429 Limited",
+            >= 500 => $"{trace.StatusCode} Server",
+            _ => trace.StatusCode.Value.ToString(CultureInfo.InvariantCulture),
+        };
+    }
+
+    private static string InboxStatusText(LlmTestServerProviderHttpTrace trace)
+    {
+        if (!trace.IsCompleted)
+        {
+            return "Live";
+        }
+
+        return trace.StatusCode?.ToString(CultureInfo.InvariantCulture)
+            ?? trace.TransportState.ToString();
+    }
+
+    private static string FormatDuration(double? milliseconds)
+    {
+        if (milliseconds is null)
+        {
+            return "running";
+        }
+
+        return milliseconds < 1
+            ? "<1 ms"
+            : $"{milliseconds.Value:N0} ms";
+    }
+
+    private static string FormatBytes(long? bytes)
+    {
+        if (bytes is null)
+        {
+            return "unknown";
+        }
+
+        if (bytes < 1024)
+        {
+            return $"{bytes.Value:N0} B";
+        }
+
+        return $"{bytes.Value / 1024d:N1} KiB";
+    }
+
+    private static string TurnCss(string role)
+    {
+        if (string.Equals(role, "system", StringComparison.OrdinalIgnoreCase))
+        {
+            return "turn system";
+        }
+
+        if (string.Equals(role, "user", StringComparison.OrdinalIgnoreCase))
+        {
+            return "turn user";
+        }
+
+        if (string.Equals(role, "assistant", StringComparison.OrdinalIgnoreCase))
+        {
+            return "turn assistant";
+        }
+
+        return string.Equals(role, "tool", StringComparison.OrdinalIgnoreCase)
+            ? "turn tool"
+            : "turn";
+    }
+
+    private static string RuntimeResponseTurnCss(LlmTestServerProviderHttpTrace trace)
+    {
+        return trace.RuntimeEventKind == LlmTestServerEventKind.ErrorReturned
+            ? "turn error"
+            : "turn assistant";
+    }
+
+    private static string RuntimeResponseRole(LlmTestServerProviderHttpTrace trace)
+    {
+        if (trace.IsSuccess is false || trace.RuntimeEventKind == LlmTestServerEventKind.ErrorReturned)
+        {
+            return "provider error";
+        }
+
+        return string.IsNullOrWhiteSpace(trace.RuntimeResponse)
+            ? "provider response"
+            : "assistant";
+    }
+
+    private static string AriaBoolean(bool value)
+    {
+        return value ? "true" : "false";
+    }
+
+    private static string EventTone(LlmTestServerEventKind kind)
+    {
+        return kind switch
+        {
+            LlmTestServerEventKind.Matched => "success",
+            LlmTestServerEventKind.Unmatched
+                or LlmTestServerEventKind.ScenarioExhausted => "warning",
+            _ => "error",
+        };
+    }
+
+    private static string PrettyPayload(string? payload, bool truncated)
+    {
+        if (string.IsNullOrWhiteSpace(payload))
+        {
+            return "No body captured.";
+        }
+
+        var suffix = truncated ? "\n\n[preview truncated]" : string.Empty;
+        try
+        {
+            using var document = JsonDocument.Parse(payload);
+            return JsonSerializer.Serialize(document.RootElement, _prettyJsonOptions) + suffix;
+        }
+        catch (JsonException)
+        {
+            return payload + suffix;
+        }
+    }
+
+    private static string Empty(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "—" : value;
+    }
+
+    private void SetBanner(string kind, string text)
+    {
+        _bannerKind = kind;
+        _bannerText = text;
+    }
+
+    private void ClearBanner()
+    {
+        _bannerKind = null;
+        _bannerText = null;
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        StopAutoRefresh();
+        return ValueTask.CompletedTask;
+    }
+
+    private sealed record ProviderRoute(string Name, string Route);
+}

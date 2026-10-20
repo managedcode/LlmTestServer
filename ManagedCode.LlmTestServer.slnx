@@ -1,0 +1,30 @@
+<Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/ManagedCode.LlmTestServer.AppHost/ManagedCode.LlmTestServer.AppHost.csproj" />
+    <Project Path="samples/ManagedCode.LlmTestServer.Service/ManagedCode.LlmTestServer.Service.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/ManagedCode.LlmTestServer.Cloudflare/ManagedCode.LlmTestServer.Cloudflare.csproj" />
+    <Project Path="src/ManagedCode.LlmTestServer.SystemOne/ManagedCode.LlmTestServer.SystemOne.csproj" />
+    <Project Path="src/ManagedCode.LlmTestServer.Anthropic/ManagedCode.LlmTestServer.Anthropic.csproj" />
+    <Project Path="src/ManagedCode.LlmTestServer.Aspire/ManagedCode.LlmTestServer.Aspire.csproj" />
+    <Project Path="src/ManagedCode.LlmTestServer.AzureOpenAI/ManagedCode.LlmTestServer.AzureOpenAI.csproj" />
+    <Project Path="src/ManagedCode.LlmTestServer.Bedrock/ManagedCode.LlmTestServer.Bedrock.csproj" />
+    <Project Path="src/ManagedCode.LlmTestServer.Client/ManagedCode.LlmTestServer.Client.csproj" />
+    <Project Path="src/ManagedCode.LlmTestServer.Cohere/ManagedCode.LlmTestServer.Cohere.csproj" />
+    <Project Path="src/ManagedCode.LlmTestServer.DeepSeek/ManagedCode.LlmTestServer.DeepSeek.csproj" />
+    <Project Path="src/ManagedCode.LlmTestServer.Foundry/ManagedCode.LlmTestServer.Foundry.csproj" />
+    <Project Path="src/ManagedCode.LlmTestServer.Gemini/ManagedCode.LlmTestServer.Gemini.csproj" />
+    <Project Path="src/ManagedCode.LlmTestServer.Groq/ManagedCode.LlmTestServer.Groq.csproj" />
+    <Project Path="src/ManagedCode.LlmTestServer.Hosting/ManagedCode.LlmTestServer.Hosting.csproj" />
+    <Project Path="src/ManagedCode.LlmTestServer.Mistral/ManagedCode.LlmTestServer.Mistral.csproj" />
+    <Project Path="src/ManagedCode.LlmTestServer.Ollama/ManagedCode.LlmTestServer.Ollama.csproj" />
+    <Project Path="src/ManagedCode.LlmTestServer.OpenAI/ManagedCode.LlmTestServer.OpenAI.csproj" />
+    <Project Path="src/ManagedCode.LlmTestServer.OpenRouter/ManagedCode.LlmTestServer.OpenRouter.csproj" />
+    <Project Path="src/ManagedCode.LlmTestServer.Perplexity/ManagedCode.LlmTestServer.Perplexity.csproj" />
+    <Project Path="src/ManagedCode.LlmTestServer/ManagedCode.LlmTestServer.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ManagedCode.LlmTestServer.Tests/ManagedCode.LlmTestServer.Tests.csproj" />
+  </Folder>
+</Solution>
