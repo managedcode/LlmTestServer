@@ -1,9 +1,9 @@
 # Output policy fixtures
 
-Status: the initial E6 text output-policy slice passed **57/57 focused running-server SDK integration cases**.
-This checkpoint covers the mappings below with OpenAI 2.14.0, Anthropic 12.58.0 with strict response
-validation, Google.GenAI 1.26.1 and the package's `Microsoft.Extensions.AI` client. The combined full run passed **1,416/1,416 integration cases** with **92.57% production line
-coverage**. These results do not close the remaining E6 catalogue or qualify other provider surfaces.
+The qualified text output-policy mappings below passed **79/79 focused running-server SDK cases**
+and **1,438/1,438 full integration cases**, with **92.58% production line coverage**. Tests use
+OpenAI 2.14.0, Anthropic 12.58.0 with strict response validation, Google.GenAI 1.26.1 and the
+package's `Microsoft.Extensions.AI` client. Other E6 outcomes and provider families remain open.
 
 ## Configure an explicit output outcome
 
@@ -80,6 +80,7 @@ from the policy outcome alone.
 | Exact provider route | `Filtered` | `Refused` |
 | --- | --- | --- |
 | `/openai/v1/chat/completions` | Final `finish_reason: content_filter`; explicit content/prefix | `message.refusal`, null ordinary content; streamed `delta.refusal`, then normal stop/terminal sequence |
+| `/deepseek/v1/chat/completions` | Final `finish_reason: content_filter`; explicit content/prefix | Unsupported pairing: fixture mismatch |
 | `/openai/v1/responses` | `status: incomplete`, `incomplete_details.reason: content_filter`; SSE ends with `response.incomplete` | Typed `refusal` content part; refusal delta/done events; completed response |
 | `/anthropic/v1/messages` | Unsupported pairing: fixture mismatch | `stop_reason: refusal` and `stop_details` with type `refusal` and required nullable category/explanation; final `message_stop` |
 | `/gemini/v1beta/models/{model}:generateContent` and `:streamGenerateContent` | Terminal candidate `finishReason: SAFETY`; terminal content omitted | Unsupported pairing: fixture mismatch |
@@ -99,6 +100,25 @@ transport also accepts this policy outcome; its separate post-header delivery-fa
 prefix. Runtime usage describes the configured generated fixture text; omitted final JSON content
 does not retroactively erase generated prefix tokens. This is deterministic fixture accounting,
 not a claim of upstream billing or inference equivalence.
+
+## DeepSeek Chat streaming
+
+The exact `/deepseek/v1/chat/completions` route accepts `Filtered`; it does not accept `Refused`.
+The original OpenAI SDK verifies its compatible JSON/SSE responses against the running server.
+The [DeepSeek Chat contract](https://api-docs.deepseek.com/api/create-chat-completion/) specifies
+`content_filter` as a native finish reason and a distinct usage layout: the final chunk always has one
+choice, a non-null finish reason and usage, followed by `[DONE]`. No separate usage-only chunk is emitted.
+With `include_usage: true`, intermediate chunks carry `usage: null`; false or omitted leaves that
+field absent until the final chunk. This applies to both ordinary and filtered DeepSeek completions.
+Other provider routes retain their own streaming behavior.
+
+Nineteen additional real-server cases cover empty and prefix output, the three usage options,
+unsupported refusal admission without consumption, recovery, graph replay and cache evidence.
+Non-streaming requests with a non-null `stream_options` object return HTTP 400 before fixture
+consumption, including explicit false and omitted `stream`. Together with the initial policy slice,
+the focused result is **79/79**, including three successful raw JSON configuration cases.
+The full integration result is **1,438/1,438**; a fresh installed-package consumer passed **16/16**, and the .NET SDK-built linux/arm64
+container passed native DeepSeek JSON/SSE, usage, invalid-options and recovery acceptance.
 
 ## Policy completion, input rejection and broken delivery
 
@@ -172,15 +192,16 @@ HTTP/SDK behavior: typed JSON/SSE outcomes, valid terminal evidence, empty/prefi
 details, explicit recovery, graph replay, session/cache isolation, manual/stored canonical history,
 metadata bounds, unsupported combinations and the existing input-filter distinction. Raw HTTP
 supplements configuration and Gemini array boundaries. SDK automatic retries are disabled; Google
-automatic continuation is also disabled. The current focused result is 57/57, including malformed refusal-history admission and bounded
-diagnostic retention. The combined run passed 1,416/1,416 with 92.57% line coverage; a fresh independent
-NuGet consumer passed 15/15 cases, including six policy/recovery cases through installed packages,
-Aspire and the original provider SDKs. All 19 packages were packed, and the .NET SDK-built linux/arm64
-container passed standalone health, dashboard, authorization, management, JSON/SSE and native-tool checks.
+automatic continuation is also disabled. The focused result is 79/79, including malformed refusal-history admission, bounded diagnostic
+retention, native DeepSeek usage and successful named-enum JSON configuration. The full suite passed
+1,438/1,438 with 92.58% line coverage. All 19 packages were packed; a fresh
+installed-package consumer passed 16/16, and the .NET SDK-built linux/arm64 container passed
+standalone health, dashboard, authorization, management, JSON/SSE, native-tool and DeepSeek
+policy/options/recovery acceptance.
 
 The larger E6 objective remains open for additional provider-specific outcomes and transports,
 including in-stream API error events and separately qualified semantics for other provider families.
 This document does not claim output-policy support for Azure OpenAI, Foundry, Bedrock, Groq, Mistral,
-Ollama, Cohere, OpenRouter, DeepSeek, Perplexity, System One decision profiles, Cloudflare decision
+Ollama, Cohere, OpenRouter, Perplexity, System One decision profiles, Cloudflare decision
 profiles or media/native-tool/structured-output combinations. Shared mapper code alone is not
 qualification. See [the delivery plan](LlmTestServerDeliveryPlan.md) for the remaining work.

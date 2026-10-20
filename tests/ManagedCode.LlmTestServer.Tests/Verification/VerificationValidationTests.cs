@@ -109,25 +109,37 @@ public sealed partial class VerificationIntegrationTests
         await using var app = builder.Build();
         app.MapLlmTestServer();
         await app.StartAsync();
-        var server = app.Services.GetRequiredService<Microsoft.AspNetCore.Hosting.Server.IServer>();
-        var address = new Uri(server.Features.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>()!.Addresses.Single());
-        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        using var socket = new System.Net.Sockets.TcpClient();
-        await socket.ConnectAsync(address.Host, address.Port, cancellation.Token);
-        const string body = """{"model":"gpt-4.1-mini","messages":[{"role":"user","content":"hello"}]}""";
-        var wire = $"POST /openai/v1/chat/completions HTTP/1.1\r\nHost: {address.Authority}\r\nContent-Type: application/json\r\nContent-Length: {System.Text.Encoding.UTF8.GetByteCount(body)}\r\n{headerName}: \r\nConnection: close\r\n\r\n{body}";
-        await socket.GetStream().WriteAsync(System.Text.Encoding.UTF8.GetBytes(wire), cancellation.Token);
-        using var reader = new StreamReader(socket.GetStream());
-        var response = await reader.ReadToEndAsync(cancellation.Token);
-        await Assert.That(response.StartsWith("HTTP/1.1 400", StringComparison.Ordinal)).IsTrue();
-        using var http = new HttpClient { BaseAddress = address };
-        var rejectedTrace = await new LlmTestServerClient(http).GetRequestsAsync(new() { Status = 400 });
-        await Assert.That(rejectedTrace.TotalMatched).IsEqualTo(1);
-        var unaccounted = await new LlmTestServerClient(http).VerifyAsync(new() { NoUnexpectedCalls = true });
-        await Assert.That(unaccounted.Passed).IsFalse();
-        using var actual = await ChatAsync(http, "/openai/v1/chat/completions");
-        actual.EnsureSuccessStatusCode();
-        await Assert.That(await actual.Content.ReadAsStringAsync()).Contains("still available");
+        try
+        {
+            var server = app.Services.GetRequiredService<Microsoft.AspNetCore.Hosting.Server.IServer>();
+            var address = new Uri(server.Features.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>()!.Addresses.Single());
+            using var http = new HttpClient { BaseAddress = address };
+            var control = new LlmTestServerClient(http);
+            // Complete lazy endpoint initialization before measuring the raw provider exchange.
+            var initialEvidence = await control.GetRequestsAsync(new());
+            await Assert.That(initialEvidence.TotalObserved).IsEqualTo(0);
+            using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            using var socket = new System.Net.Sockets.TcpClient();
+            await socket.ConnectAsync(address.Host, address.Port, cancellation.Token);
+            const string body = """{"model":"gpt-4.1-mini","messages":[{"role":"user","content":"hello"}]}""";
+            var wire = $"POST /openai/v1/chat/completions HTTP/1.1\r\nHost: {address.Authority}\r\nContent-Type: application/json\r\nContent-Length: {System.Text.Encoding.UTF8.GetByteCount(body)}\r\n{headerName}: \r\nConnection: close\r\n\r\n{body}";
+            await socket.GetStream().WriteAsync(System.Text.Encoding.UTF8.GetBytes(wire), cancellation.Token);
+            using var reader = new StreamReader(socket.GetStream());
+            var response = await reader.ReadToEndAsync(cancellation.Token);
+            await Assert.That(response.StartsWith("HTTP/1.1 400", StringComparison.Ordinal)).IsTrue();
+            var rejectedTrace = await new LlmTestServerClient(http).GetRequestsAsync(new() { Status = 400 });
+            await Assert.That(rejectedTrace.TotalMatched).IsEqualTo(1);
+            var unaccounted = await new LlmTestServerClient(http).VerifyAsync(new() { NoUnexpectedCalls = true });
+            await Assert.That(unaccounted.Passed).IsFalse();
+            using var actual = await ChatAsync(http, "/openai/v1/chat/completions");
+            actual.EnsureSuccessStatusCode();
+            await Assert.That(await actual.Content.ReadAsStringAsync()).Contains("still available");
+        }
+        finally
+        {
+            // Drain active requests before the application service provider is disposed.
+            await app.StopAsync();
+        }
     }
 
     [Test]

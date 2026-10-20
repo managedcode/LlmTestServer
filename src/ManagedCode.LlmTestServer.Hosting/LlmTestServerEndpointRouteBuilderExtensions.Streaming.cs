@@ -25,27 +25,35 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         context.Response.ContentType = "text/event-stream";
         var responseId = OpenAiWireMapper.CreateResponseId(result.WireMetadata);
         var created = (result.WireMetadata ?? WireMetadata(context)).CreatedAt.ToUnixTimeSeconds();
+        var isDeepSeek = context.Request.Path.Equals("/deepseek/v1/chat/completions", StringComparison.Ordinal);
 
         LlmTestServerStreamDeliveryEvidence.Begin(context, result.StreamDelivery);
         foreach (var chunk in result.ToolCalls.Count > 0 ? new List<string> { result.Content } : result.StreamChunks)
         {
-            var payload = JsonSerializer.Serialize(
-                OpenAiWireMapper.ToChatChunk(result, chunk, responseId, created),
-                _jsonOptions
-            );
+            var contentChunk = OpenAiWireMapper.ToChatChunk(result, chunk, responseId, created);
+            var payload = JsonSerializer.Serialize(contentChunk, _jsonOptions);
+            if (isDeepSeek && !includeUsage)
+            {
+                var frame = JsonSerializer.SerializeToNode(contentChunk, _jsonOptions)!.AsObject();
+                frame.Remove("usage");
+                payload = frame.ToJsonString(_jsonOptions);
+            }
             await context.Response.WriteAsync($"data: {payload}\n\n", cancellationToken)
                 .ConfigureAwait(false);
             await context.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
             if (!await LlmTestServerStreamDeliveryEvidence.AfterContentFrameAsync(context, chunk, cancellationToken).ConfigureAwait(false)) { return; }
         }
 
-        var finalPayload = JsonSerializer.Serialize(
-            OpenAiWireMapper.ToChatChunk(result, string.Empty, responseId, created, result.OutputDisposition?.Kind == LlmTestServerOutputDispositionKind.Filtered ? "content_filter" : result.ToolCalls.Count > 0 ? "tool_calls" : "stop"),
-            _jsonOptions
-        );
+        var finalChunk = OpenAiWireMapper.ToChatChunk(result, string.Empty, responseId, created,
+            result.OutputDisposition?.Kind == LlmTestServerOutputDispositionKind.Filtered ? "content_filter" : result.ToolCalls.Count > 0 ? "tool_calls" : "stop");
+        if (isDeepSeek)
+        {
+            finalChunk = finalChunk with { Usage = OpenAiWireMapper.ToChatResponse(result, cacheUsageShape).Usage };
+        }
+        var finalPayload = JsonSerializer.Serialize(finalChunk, _jsonOptions);
         await context.Response.WriteAsync($"data: {finalPayload}\n\n", cancellationToken)
             .ConfigureAwait(false);
-        if (includeUsage)
+        if (includeUsage && !isDeepSeek)
         {
             var usageChunk = new OpenAiChatCompletionChunk
             {
@@ -554,6 +562,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         {
             "/openai/v1/chat/completions" => LlmTestServerOutputDispositionSurface.OpenAiChatCompletions,
             "/openai/v1/responses" => LlmTestServerOutputDispositionSurface.OpenAiResponses,
+            "/deepseek/v1/chat/completions" => LlmTestServerOutputDispositionSurface.DeepSeekChatCompletions,
             "/anthropic/v1/messages" => LlmTestServerOutputDispositionSurface.AnthropicMessages,
             var path when context.Request.RouteValues["model"] is string model
                 && (path == "/gemini/v1beta/models/" + model + ":generateContent"

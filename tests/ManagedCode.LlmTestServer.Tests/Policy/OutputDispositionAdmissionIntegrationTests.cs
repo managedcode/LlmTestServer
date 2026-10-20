@@ -26,7 +26,14 @@ public sealed partial class OutputDispositionIntegrationTests
     {
         await using var host = await StartAsync(config => config.AddChatScenario("preserved", scenario => scenario.Responds(_recovery)));
         using var http = host.Client();
-        var response = JsonNode.Parse("""{"content":"visible","outputDisposition":{"kind":"filtered"}}""")!.AsObject();
+        var baseline = new
+        {
+            models = new[] { new { id = LlmTestServerKnownModelIds.Gpt41Mini, kind = "chat" } },
+            chatScenarios = new[] { new { id = "preserved", responses = new[] { new { content = _recovery, outputDisposition = new { kind = "Filtered" } } } } },
+        };
+        using (var configured = await http.PostAsJsonAsync("/admin-api/configure", baseline))
+        { await Assert.That(configured.StatusCode).IsEqualTo(HttpStatusCode.OK); }
+        var response = JsonNode.Parse("""{"content":"visible","outputDisposition":{"kind":"Filtered"}}""")!.AsObject();
         var disposition = response["outputDisposition"]!.AsObject();
         switch (defect)
         {
@@ -35,7 +42,7 @@ public sealed partial class OutputDispositionIntegrationTests
             case "category": disposition["category"] = new string('x', 257); break;
             case "explanation": disposition["explanation"] = new string('x', 4097); break;
             case "error": response["error"] = JsonNode.Parse("""{"statusCode":500,"code":"fixture-error","message":"explicit"}"""); break;
-            case "delivery": response["streamDelivery"] = JsonNode.Parse("""{"mode":"earlyCleanEnd"}"""); break;
+            case "delivery": response["streamDelivery"] = JsonNode.Parse("""{"mode":1}"""); break;
             case "tools": response["toolCalls"] = JsonNode.Parse("""[{"id":"call_policy","name":"weather","argumentsJson":"{}"}]"""); break;
             case "items": response["content"] = ""; response["outputItems"] = JsonNode.Parse("""[{"kind":"message","id":"msg_policy","content":"visible"}]"""); break;
             case "chunks": response["streamChunks"] = JsonNode.Parse("""["different"]"""); break;
@@ -47,9 +54,49 @@ public sealed partial class OutputDispositionIntegrationTests
         };
         using var rejected = await http.PostAsJsonAsync("/admin-api/configure", body);
         await Assert.That(rejected.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        var error = await rejected.Content.ReadFromJsonAsync<JsonElement>();
+        await Assert.That(error.GetProperty("error").GetProperty("message").GetString()).IsEqualTo("Invalid runtime configuration.");
         var recovered = (await ChatSdk(http).CompleteChatAsync([new UserChatMessage("preserved")])).Value;
         await Assert.That(recovered.Content.Single().Text).IsEqualTo(_recovery);
+        await Assert.That(recovered.FinishReason).IsEqualTo(ChatFinishReason.ContentFilter);
         await Assert.That((await new LlmTestServerClient(http).GetAssertionsAsync()).Matched).IsEqualTo(1);
+    }
+
+    [Test]
+    [Arguments("openai", "Filtered")]
+    [Arguments("openai", "Refused")]
+    [Arguments("deepseek", "Filtered")]
+    public async Task RawConfigurationAcceptsDocumentedPolicyKindNamesAndOriginalSdkObservesOutcomeAsync(string provider, string kind)
+    {
+        var model = provider == "deepseek" ? _deepSeekModel : LlmTestServerKnownModelIds.Gpt41Mini;
+        await using var host = await StartAsync(_ => { });
+        using var http = host.Client(); var control = new LlmTestServerClient(http);
+        var body = new JsonObject
+        {
+            ["models"] = new JsonArray(new JsonObject { ["id"] = model, ["kind"] = "chat" }),
+            ["chatScenarios"] = new JsonArray(new JsonObject
+            {
+                ["id"] = "raw-policy-name",
+                ["modelId"] = model,
+                ["responses"] = new JsonArray(
+                    new JsonObject { ["content"] = _text, ["outputDisposition"] = new JsonObject { ["kind"] = kind } },
+                    new JsonObject { ["content"] = _recovery }),
+            }),
+        };
+        using var configured = await http.PostAsJsonAsync("/admin-api/configure", body);
+        await Assert.That(configured.StatusCode).IsEqualTo(HttpStatusCode.OK);
+        var sdk = ChatSdk(http, provider, model);
+        var first = (await sdk.CompleteChatAsync([new UserChatMessage("policy")])).Value;
+        var filtered = kind == "Filtered";
+        await Assert.That(first.FinishReason).IsEqualTo(filtered ? ChatFinishReason.ContentFilter : ChatFinishReason.Stop);
+        if (filtered) { await Assert.That(first.Content.Single().Text).IsEqualTo(_text); }
+        else { await Assert.That(first.Refusal).IsEqualTo(_text); }
+        await EvidenceAsync(control, filtered ? LlmTestServerOutputDispositionKind.Filtered : LlmTestServerOutputDispositionKind.Refused, false);
+        var trace = await CompletedAsync(control, 1);
+        await Assert.That(trace.Path).IsEqualTo(provider == "deepseek" ? "/deepseek/v1/chat/completions" : "/openai/v1/chat/completions");
+        var next = (await sdk.CompleteChatAsync([new UserChatMessage("next")])).Value;
+        await Assert.That(next.Content.Single().Text).IsEqualTo(_recovery);
+        await RecoveredAsync(control);
     }
 
     [Test]

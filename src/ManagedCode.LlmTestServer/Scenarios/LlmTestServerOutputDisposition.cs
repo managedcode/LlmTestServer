@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace ManagedCode.LlmTestServer.Scenarios;
 
+[JsonConverter(typeof(JsonStringEnumConverter<LlmTestServerOutputDispositionKind>))]
 public enum LlmTestServerOutputDispositionKind
 {
     Filtered = 1,
@@ -14,6 +15,7 @@ public enum LlmTestServerOutputDispositionSurface
     OpenAiResponses = 2,
     AnthropicMessages = 3,
     GeminiGenerateContent = 4,
+    DeepSeekChatCompletions = 5,
 }
 
 /// <summary>A provider policy outcome; fixture Content supplies generated text or refusal text for its native mapping.</summary>

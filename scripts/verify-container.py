@@ -314,6 +314,37 @@ def main():
         assert trace["responseOutputItems"][0]["kind"] == "server_tool_use"
         assert trace["responseOutputItems"][1]["kind"] == "server_tool_result"
         results.append("Anthropic native search call/result, opaque citations, cumulative usage, JSON/SSE and terminal evidence")
+        deepseek_model = "deepseek-flash"
+        filtered = {"content": "Visible fixture", "streamChunks": ["Visible ", "fixture"],
+                    "outputDisposition": {"kind": "Filtered"}}
+        configuration = {"requiredBearerToken": token,
+            "models": [{"id": deepseek_model, "kind": "chat"}],
+            "chatScenarios": [{"id": "container-deepseek-policy", "modelId": deepseek_model,
+                "responses": [filtered, filtered, {"content": "Recovered"}]}]}
+        assert request("/admin-api/configure", body=configuration)[0] == 200
+        deepseek_request = {"model": deepseek_model, "messages": [{"role": "user", "content": "policy"}]}
+        path = "/deepseek/v1/chat/completions"
+        assert request(path, body=deepseek_request | {"stream_options": {"include_usage": True}})[0] == 400
+        status, response, _ = request(path, body=deepseek_request)
+        payload = json.loads(response)
+        assert status == 200 and payload["choices"][0]["finish_reason"] == "content_filter"
+        assert payload["choices"][0]["message"]["content"] == "Visible fixture"
+        status, response, _ = request(path, body=deepseek_request | {"stream": True})
+        wire = response.decode()
+        assert status == 200 and wire.endswith("data: [DONE]\n\n")
+        frames = [json.loads(line[6:]) for line in wire.splitlines()
+                  if line.startswith("data: ") and line != "data: [DONE]"]
+        assert all(len(frame["choices"]) == 1 for frame in frames)
+        assert all("usage" not in frame for frame in frames[:-1])
+        assert frames[-1]["choices"][0]["finish_reason"] == "content_filter"
+        assert isinstance(frames[-1]["usage"], dict)
+        assert "".join(frame["choices"][0]["delta"].get("content", "") for frame in frames) == "Visible fixture"
+        status, response, _ = request(path, body=deepseek_request)
+        payload = json.loads(response)
+        assert status == 200 and payload["choices"][0]["message"]["content"] == "Recovered"
+        assert payload["choices"][0]["finish_reason"] == "stop"
+        assert json.loads(request("/admin-api/assertions")[1])["matched"] == 3
+        results.append("DeepSeek native filtered JSON/SSE, mandatory final usage, invalid options without fixture consumption and recovery")
         assert request("/admin-api/reset", method="POST")[0] == 200
         assert json.loads(request("/admin-api/assertions")[1])["totalEvents"] == 0
         results.append("management reset")

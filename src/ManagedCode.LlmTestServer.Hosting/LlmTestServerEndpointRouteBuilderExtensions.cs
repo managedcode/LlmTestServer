@@ -1770,6 +1770,11 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
             request = request with { SessionId = sessionId.ToString() };
         }
 
+        if (promptCachePolicy == LlmTestServerPromptCachePolicy.DeepSeek && !request.Stream && request.StreamOptions is not null)
+        {
+            return InvalidRequest("DeepSeek stream_options requires stream: true.");
+        }
+
         var validationError = ValidateChatRequest(request);
         if (validationError is not null)
         {
