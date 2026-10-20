@@ -472,6 +472,9 @@ public sealed class LlmTestServerProviderHttpTraceFilter(
                         CompletedMonotonicSeconds = (double)Stopwatch.GetTimestamp() / Stopwatch.Frequency,
                         RetryAfter = context.Response.Headers.RetryAfter.FirstOrDefault(),
                         TerminalMarkerObserved = context.HasLlmTestServerTerminalMarker(),
+                        StreamDelivery = LlmTestServerStreamDeliveryEvidence.Read(context)?.Plan,
+                        StreamDeliveryApplied = LlmTestServerStreamDeliveryEvidence.Read(context)?.Applied ?? false,
+                        EmittedContentFrames = LlmTestServerStreamDeliveryEvidence.Read(context)?.EmittedContentFrames ?? 0,
                         DurationMilliseconds = Stopwatch
                             .GetElapsedTime(_startedTimestamp)
                             .TotalMilliseconds,
@@ -614,6 +617,9 @@ public sealed class LlmTestServerProviderHttpTraceFilter(
                         CompletedMonotonicSeconds = (double)Stopwatch.GetTimestamp() / Stopwatch.Frequency,
                         RetryAfter = context.Response.Headers.RetryAfter.FirstOrDefault(),
                         TerminalMarkerObserved = context.HasLlmTestServerTerminalMarker(),
+                        StreamDelivery = LlmTestServerStreamDeliveryEvidence.Read(context)?.Plan,
+                        StreamDeliveryApplied = LlmTestServerStreamDeliveryEvidence.Read(context)?.Applied ?? false,
+                        EmittedContentFrames = LlmTestServerStreamDeliveryEvidence.Read(context)?.EmittedContentFrames ?? 0,
                         DurationMilliseconds = Stopwatch
                             .GetElapsedTime(_startedTimestamp)
                             .TotalMilliseconds,

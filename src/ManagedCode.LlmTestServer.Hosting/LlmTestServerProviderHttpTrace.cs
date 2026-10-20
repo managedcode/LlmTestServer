@@ -8,6 +8,10 @@ public sealed record LlmTestServerProviderHttpTraceCompletion
 {
     public string? RetryAfter { get; init; }
 
+    public LlmTestServerStreamDelivery? StreamDelivery { get; init; }
+    public bool StreamDeliveryApplied { get; init; }
+    public int EmittedContentFrames { get; init; }
+
     public bool? TerminalMarkerObserved { get; init; }
 
     public double? CompletedMonotonicSeconds { get; init; }

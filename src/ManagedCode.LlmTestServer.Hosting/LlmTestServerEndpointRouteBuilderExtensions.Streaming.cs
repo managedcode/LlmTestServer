@@ -26,6 +26,9 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         var responseId = OpenAiWireMapper.CreateResponseId(result.WireMetadata);
         var created = (result.WireMetadata ?? WireMetadata(context)).CreatedAt.ToUnixTimeSeconds();
 
+        var emittedContentFrames = 0;
+        var deliveryApplied = false;
+        if (result.StreamDelivery is { } configuredDelivery) { LlmTestServerStreamDeliveryEvidence.Record(context, configuredDelivery, 0, false); }
         foreach (var chunk in result.ToolCalls.Count > 0 ? new List<string> { result.Content } : result.StreamChunks)
         {
             var payload = JsonSerializer.Serialize(
@@ -35,6 +38,27 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
             await context.Response.WriteAsync($"data: {payload}\n\n", cancellationToken)
                 .ConfigureAwait(false);
             await context.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+            emittedContentFrames++;
+            if (result.StreamDelivery is { } delivery)
+            {
+                var atBoundary = !deliveryApplied && emittedContentFrames == delivery.AfterContentFrames;
+                deliveryApplied |= atBoundary;
+                LlmTestServerStreamDeliveryEvidence.Record(context, delivery, emittedContentFrames, deliveryApplied);
+                if (atBoundary)
+                {
+                    switch (delivery.Mode)
+                    {
+                        case LlmTestServerStreamDeliveryMode.EarlyCleanEnd:
+                            return;
+                        case LlmTestServerStreamDeliveryMode.DelayThenContinue:
+                            await Task.Delay(delivery.DelayMilliseconds, cancellationToken).ConfigureAwait(false);
+                            break;
+                        case LlmTestServerStreamDeliveryMode.AbortConnection:
+                            context.Abort();
+                            throw new Microsoft.AspNetCore.Connections.ConnectionAbortedException("Configured stream delivery aborted the connection after a content frame.");
+                    }
+                }
+            }
         }
 
         var finalPayload = JsonSerializer.Serialize(
@@ -530,6 +554,8 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         return request with
         {
             RequestId = context.GetLlmTestServerProviderHttpTraceId() ?? context.TraceIdentifier,
+            StreamDeliverySurface = string.Equals(context.Request.Path.Value, "/openai/v1/chat/completions", StringComparison.Ordinal)
+                ? LlmTestServerStreamDeliverySurface.OpenAiChatCompletions : null,
         };
     }
 

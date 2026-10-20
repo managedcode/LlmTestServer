@@ -649,7 +649,7 @@ public sealed partial class LlmTestServerConfigurationBuilder
         ArgumentNullException.ThrowIfNull(response.OutputItems);
         if (response.OutputItems.Count > 0 && (response.Content.Length > 0 || response.ToolCalls.Count > 0 || response.StreamChunks.Count > 0 || response.Error is not null))
         { throw new ArgumentException("An ordered output plan cannot also specify legacy output fields or an error.", nameof(response)); }
-        return response with { StreamChunks = [.. response.StreamChunks], ToolCalls = [.. response.ToolCalls], OutputItems = LlmTestServerResponseItems.Snapshot(response.OutputItems, validateChunks: true) };
+        return response with { StreamDelivery = LlmTestServerStreamDelivery.Snapshot(response), StreamChunks = [.. response.StreamChunks], ToolCalls = [.. response.ToolCalls], OutputItems = LlmTestServerResponseItems.Snapshot(response.OutputItems, validateChunks: true) };
     }
 
     private static LlmTestServerScenarioDataset SnapshotDataset(LlmTestServerScenarioDataset dataset)

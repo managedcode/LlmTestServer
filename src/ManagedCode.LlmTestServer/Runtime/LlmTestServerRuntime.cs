@@ -403,7 +403,7 @@ public sealed partial class LlmTestServerRuntime
             {
                 completed = RetainChatResponse(request, LlmTestServerChatResult.Success(request.ModelId, scenario.Id,
                     response.Content, successfulStreamChunks) with
-                { ToolCalls = [.. response.ToolCalls], OutputItems = LlmTestServerResponseItems.Snapshot(response.OutputItems), WireMetadata = GetResponseMetadata() }, bearerToken);
+                { StreamDelivery = response.StreamDelivery, ToolCalls = [.. response.ToolCalls], OutputItems = LlmTestServerResponseItems.Snapshot(response.OutputItems), WireMetadata = GetResponseMetadata() }, bearerToken);
                 if (!completed.IsSuccess)
                 {
                     RollBackResponse(scenario, responsePosition, generation, conversationLease);
@@ -435,7 +435,7 @@ public sealed partial class LlmTestServerRuntime
                 responseToolCalls: response.Error is null ? response.ToolCalls : null,
                 retryAfterSeconds: response.Error?.RetryAfterSeconds,
                 wireMetadata: finalResult.WireMetadata,
-                responseOutputItems: finalResult.OutputItems
+                responseOutputItems: finalResult.OutputItems, streamDelivery: finalResult.StreamDelivery
             );
 
             if (response.Error is not null)
@@ -1403,7 +1403,8 @@ public sealed partial class LlmTestServerRuntime
         IReadOnlyList<LlmTestServerToolCall>? responseToolCalls = null,
         int? retryAfterSeconds = null,
         ManagedCode.LlmTestServer.Determinism.LlmTestServerResponseMetadata? wireMetadata = null,
-        IReadOnlyList<LlmTestServerResponseItem>? responseOutputItems = null
+        IReadOnlyList<LlmTestServerResponseItem>? responseOutputItems = null,
+        LlmTestServerStreamDelivery? streamDelivery = null
     )
     {
         var activeRequest = _activeRequest.Value;
@@ -1424,6 +1425,7 @@ public sealed partial class LlmTestServerRuntime
             IsReplay = isReplay,
             ResponseToolCalls = responseToolCalls ?? [],
             ResponseOutputItems = responseOutputItems ?? [],
+            StreamDelivery = streamDelivery,
             RetryAfterSeconds = retryAfterSeconds,
             WireMetadata = wireMetadata ?? activeRequest?.WireMetadata,
             ModelId = modelId,

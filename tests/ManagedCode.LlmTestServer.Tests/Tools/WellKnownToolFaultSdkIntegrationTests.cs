@@ -119,7 +119,20 @@ public sealed partial class WellKnownToolFaultIntegrationTests
         var options = new ChatOptions { Tools = [AIFunctionFactory.Create(Invoke, "cancellable_tool")] };
         using var cancellation = new CancellationTokenSource();
         var pending = client.GetResponseAsync("run cancellable tool", options, cancellation.Token);
-        try { await entered.Task.WaitAsync(TimeSpan.FromSeconds(10)); }
+        try
+        {
+            // This bounds startup under instrumentation; cancellation is triggered only after the real invocation enters.
+            var started = await Task.WhenAny(entered.Task, pending).WaitAsync(TimeSpan.FromSeconds(60));
+            if (started == pending) { await pending; }
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(60));
+        }
+        catch
+        {
+            cancellation.Cancel();
+            try { await pending; }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+            throw;
+        }
         finally { cancellation.Cancel(); }
         var cancelled = false;
         try { await pending; }

@@ -135,6 +135,14 @@ public sealed class LlmTestServerScenarioBuilder(string id)
         return this;
     }
 
+    public LlmTestServerScenarioBuilder WithStreamDelivery(LlmTestServerStreamDelivery delivery)
+    {
+        ArgumentNullException.ThrowIfNull(delivery);
+        if (_scenario.Responses.Count == 0) { throw new InvalidOperationException("Stream delivery requires a preceding response."); }
+        _scenario.Responses[^1] = _scenario.Responses[^1] with { StreamDelivery = delivery with { } };
+        return this;
+    }
+
     public LlmTestServerScenario Build()
     {
         if (_scenario.Responses.Count == 0)

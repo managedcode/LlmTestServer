@@ -12,5 +12,7 @@ public sealed record LlmTestServerScenarioResponse
 
     public LlmTestServerScenarioError? Error { get; init; }
 
+    public LlmTestServerStreamDelivery? StreamDelivery { get; init; }
+
     public int DelayMilliseconds { get; init; }
 }

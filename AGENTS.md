@@ -108,6 +108,8 @@ Rule format:
 
 ## Design Rules
 
+- Identify TypeSafe as the provider and Jev as its model family in user-facing documentation; name System One as the native API/protocol and make its package, route and typed client discoverable instead of hiding TypeSafe behind the protocol name.
+
 - Tool fixtures must explicitly simulate distinct errors, timeouts, internal failures or connection crashes, literal null, empty/no result, and content-filter refusals. Keep tool-result failures distinct from provider/transport failures, expose the observed outcome in diagnostics, and verify recovery plus conversation/cache state through real server integrations; expected faults must not be rejected as invalid mock configuration.
 
 - Before claiming that all review findings are fixed, recheck every finding against final behavior and tests; report removed capability claims and temporary mitigations separately from implemented functionality.

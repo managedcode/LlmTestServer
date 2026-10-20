@@ -6,6 +6,8 @@ public sealed record LlmTestServerRuntimeEvent
 {
     public ManagedCode.LlmTestServer.Determinism.LlmTestServerResponseMetadata? WireMetadata { get; init; }
 
+    public LlmTestServerStreamDelivery? StreamDelivery { get; init; }
+
     public IReadOnlyList<LlmTestServerNativeToolDeclaration> NativeTools { get; init; } = [];
 
     public IReadOnlyList<LlmTestServerResponseItem> ResponseOutputItems { get; init; } = [];

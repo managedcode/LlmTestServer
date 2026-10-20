@@ -131,6 +131,9 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
                     CompletedMonotonicSeconds = completion.CompletedMonotonicSeconds,
                     RetryAfter = completion.RetryAfter,
                     TerminalMarkerObserved = completion.TerminalMarkerObserved,
+                    StreamDelivery = completion.StreamDelivery,
+                    StreamDeliveryApplied = completion.StreamDeliveryApplied,
+                    EmittedContentFrames = completion.EmittedContentFrames,
                     DurationMilliseconds = completion.DurationMilliseconds,
                     StatusCode = completion.StatusCode,
                     IsCompleted = true,
@@ -252,6 +255,12 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
     {
         var remaining = _maxRetainedBytes - _traceOverheadBytes;
         var retentionTruncated = trace.RetentionTruncated;
+        var streamDelivery = trace.StreamDelivery;
+        if (streamDelivery is not null)
+        {
+            if (remaining >= 64) { remaining -= 64; }
+            else { streamDelivery = null; retentionTruncated = true; }
+        }
         var requestId = RetainRequiredText(
             trace.RequestId,
             _maxMetadataBytes,
@@ -413,6 +422,7 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
             ResponseToolCalls = responseToolCalls,
             NativeTools = nativeTools,
             ResponseOutputItems = responseOutputItems,
+            StreamDelivery = streamDelivery,
             RetryGroupId = retryGroupId,
             WireClockMode = wireClockMode,
             RetryAfter = retryAfter,

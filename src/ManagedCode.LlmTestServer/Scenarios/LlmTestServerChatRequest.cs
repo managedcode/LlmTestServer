@@ -24,6 +24,8 @@ public sealed record LlmTestServerChatRequest
     public LlmTestServerNativeToolContract? RequiredNativeTool { get; init; }
     public List<LlmTestServerNativeToolInclude> NativeIncludes { get; init; } = [];
 
+    public LlmTestServerStreamDeliverySurface? StreamDeliverySurface { get; init; }
+
     public bool Stream { get; init; }
     public List<LlmTestServerToolDefinition> Tools { get; init; } = [];
     public LlmTestServerToolChoice ToolChoice { get; init; }
