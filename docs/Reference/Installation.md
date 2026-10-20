@@ -10,19 +10,15 @@ How to install the packages, run the standalone container, embed the server in A
 | **Standalone Docker** | `managedcode/llm-test-server:local`, built with the .NET SDK | Run the dashboard, management API and provider routes together for applications in any language. |
 | **ASP.NET Core library** | `ManagedCode.LlmTestServer.Hosting` | Embed the server in your own host with `AddLlmTestServer(...)` and `MapLlmTestServer()`. |
 
-**v1.0.0 publication is pending.** NuGet links below identify the intended packages; they do not establish
-public availability. Build and [pack the source](#build-and-test) to use the local `artifacts/packages` feed now.
-The current source package version is `1.0.0` from `Directory.Build.props`. Run these in your consumer
-project, replacing the feed path with your checkout (use the canonical version if it changes):
+The [v1.0.0 release](https://github.com/managedcode/LlmTestServer/releases/tag/v1.0.0)
+contains all 19 packages accepted by NuGet. Install the packages in your consumer project:
 
 ```sh
-dotnet add package ManagedCode.LlmTestServer.Aspire --version 1.0.0 --no-restore
-dotnet add package ManagedCode.LlmTestServer.Client --version 1.0.0 --no-restore
-dotnet restore --source /absolute/path/to/LlmTestServer/artifacts/packages \
-  --source https://api.nuget.org/v3/index.json
+dotnet add package ManagedCode.LlmTestServer.Aspire --version 1.0.0
+dotnet add package ManagedCode.LlmTestServer.Client --version 1.0.0
 ```
 
-For an existing ASP.NET Core application, install `ManagedCode.LlmTestServer.Hosting` from the same feed
+For an existing ASP.NET Core application, install `ManagedCode.LlmTestServer.Hosting` from NuGet
 and follow [ASP.NET Core startup](#aspnet-core-startup). The core package owns scenarios and model configuration;
 provider packages own their wire contracts, and the client package owns management and typed client APIs.
 
@@ -56,7 +52,8 @@ curl --fail-with-body http://localhost:8080/openai/v1/chat/completions \
 
 The API key is a local fixture credential; production provider credentials are unnecessary. Provider routes
 and `/admin-api/*` use it. The intended public release image is
-`ghcr.io/managedcode/llm-test-server:1.0.0`; public pulling remains pending release and anonymous-pull verification.
+`ghcr.io/managedcode/llm-test-server:1.0.0`; the multi-platform image has been pushed, but public pulling remains pending GHCR visibility
+configuration and anonymous-pull verification.
 See [Docker distribution](../Features/DockerDistribution.md) for both architectures, authentication,
 health checks and release requirements.
 
@@ -137,7 +134,7 @@ app.Run();
 ## Aspire AppHost
 
 Install `ManagedCode.LlmTestServer.Aspire` in the AppHost using the versioned
-[local-feed installation commands](#choose-how-to-run) above while public publication is pending.
+[NuGet installation commands](#choose-how-to-run) above.
 
 Then add the package-owned Test Server resource directly:
 

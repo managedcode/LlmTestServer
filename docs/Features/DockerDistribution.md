@@ -1,7 +1,8 @@
 # Standalone Docker distribution
 
-Status: Distribution code and verification are being prepared for the complete v1.0.0 release. Public GHCR
-availability must be established by the release workflow; these commands do not assert that a release is already published.
+Status: The .NET SDK published the multi-platform v1.0.0 image to GHCR. Anonymous pulling returned
+`unauthorized`; public distribution awaits the package visibility change and a successful verification rerun.
+The NuGet packages and GitHub Release v1.0.0 have been published independently.
 Canonical image: `ghcr.io/managedcode/llm-test-server`.
 
 The image runs the complete HTTP backend: provider routes, authenticated management API, Blazor dashboard,
@@ -95,15 +96,22 @@ This is API/container verification; it does not establish interactive browser qu
 On 2026-10-20 the installed .NET SDK 10.0.401 generated and loaded a combined Linux amd64/arm64 OCI index
 with `PublishContainer`; both architecture variants passed the listed HTTP checks (amd64 through Docker Desktop
 emulation). SDK publish logs are under `artifacts/container-sdk`; runtime evidence is under
-`artifacts/container-verification`. Public pull and registry publication remain pending owner-merged release.
+`artifacts/container-verification`. Registry publication has succeeded; anonymous public pull remains pending package visibility configuration.
 
 ## CI, publication and public access
 
-PR CI builds and runs the image without pushing it. The release workflow is restricted to `main`, follows the
-owner's merge, and uses the canonical package version. Its order is existing quality/package gates → local
-SDK container HTTP acceptance → version-tagged multi-platform SDK publish → anonymous pull and HTTP acceptance → NuGet
-publication and public-consumer verification → delivery marker. Publication does not run from this branch.
-A failed gate keeps delivery incomplete; retry the same version rather than creating an intermediate release.
+`Build and Test` runs on `main` and pull requests. It builds and runs a local SDK container,
+executes the full integration and coverage gates, packs all 19 libraries and verifies an installed
+NuGet consumer. Successful validation of current `main` triggers two independent workflows:
+
+- `NuGet Release` downloads the packages from that exact successful CI run, pushes them to NuGet,
+  verifies GitHub Release assets, adds the publication receipt and publishes the release. It does not
+  wait for NuGet indexing or public-feed restore.
+- `Container Release` publishes the version-tagged multi-platform SDK image, then verifies anonymous
+  pull, both architectures and real HTTP behavior. Existing published version tags are preserved.
+
+Website changes independently trigger the `Website` workflow. A container verification failure does
+not roll back or hide a successful NuGet release. Fix the specific failure and rerun the same version.
 
 The release job grants `packages: write`, authenticates with `GITHUB_TOKEN`, and calls `dotnet publish
 /t:PublishContainer -p:ContainerRegistry=ghcr.io` with both configured RIDs. It links the image to its source
