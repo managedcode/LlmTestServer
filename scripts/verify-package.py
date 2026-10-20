@@ -29,7 +29,7 @@ consumer = Path(tempfile.mkdtemp(prefix="consumer-", dir=evidence)).resolve()
 package_cache = Path(tempfile.mkdtemp(prefix="cache-", dir=evidence)).resolve()
 print(f"Consumer: {consumer}", flush=True)
 project = (root / "scripts/package-consumer/Consumer.csproj.template").read_text()
-for key, value in {"__VERSION__": version, "__ASPIRE_VERSION__": versions["Aspire.Hosting.Testing"], "__TUNIT_VERSION__": versions["TUnit"], "__PLAYWRIGHT_VERSION__": versions["Microsoft.Playwright"], "__OPENAI_VERSION__": versions["OpenAI"], "__ANTHROPIC_VERSION__": versions["Anthropic"]}.items():
+for key, value in {"__VERSION__": version, "__ASPIRE_VERSION__": versions["Aspire.Hosting.Testing"], "__TUNIT_VERSION__": versions["TUnit"], "__PLAYWRIGHT_VERSION__": versions["Microsoft.Playwright"], "__OPENAI_VERSION__": versions["OpenAI"], "__ANTHROPIC_VERSION__": versions["Anthropic"], "__GOOGLE_GENAI_VERSION__": versions["Google.GenAI"]}.items():
     project = project.replace(key, value)
 (consumer / "Consumer.csproj").write_text(project)
 for source in sorted((root / "scripts/package-consumer").glob("*.cs")):

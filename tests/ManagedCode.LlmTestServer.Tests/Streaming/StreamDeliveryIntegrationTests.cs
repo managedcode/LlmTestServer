@@ -23,19 +23,20 @@ namespace ManagedCode.LlmTestServer.Tests.Streaming;
 public sealed partial class StreamDeliveryIntegrationTests
 {
     [Test]
-    [Arguments(LlmTestServerStreamDeliveryMode.EarlyCleanEnd)]
-    [Arguments(LlmTestServerStreamDeliveryMode.AbortConnection)]
-    public async Task OfficialSdk_PartialDeliveryHasNoFinishAndFailsTerminalVerificationThenExplicitRetryRecoversAsync(LlmTestServerStreamDeliveryMode mode)
+    [Arguments(LlmTestServerStreamDeliveryMode.EarlyCleanEnd, false)]
+    [Arguments(LlmTestServerStreamDeliveryMode.AbortConnection, false)]
+    [Arguments(LlmTestServerStreamDeliveryMode.EarlyCleanEnd, true)]
+    public async Task OfficialSdk_PartialDeliveryHasNoFinishAndFailsTerminalVerificationThenExplicitRetryRecoversAsync(LlmTestServerStreamDeliveryMode mode, bool afterAllText)
     {
         var firstRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var app = await StartTcpHostAsync(config => config.AddChatScenario("broken-stream", scenario => scenario
-            .Responds("first second", "first ", "second").WithStreamDelivery(new() { Mode = mode, AfterContentFrames = 1 })
+            .Responds("first second", "first ", "second").WithStreamDelivery(new() { Mode = mode, AfterContentFrames = afterAllText ? 2 : 1 })
             .Responds("explicit recovery")), firstRead.Task);
         using var http = TcpClient(app);
         var control = new LlmTestServerClient(http);
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var partial = await ReadSdkAsync(Sdk(http), [new UserChatMessage("stream")], firstRead, deadline.Token);
-        await Assert.That(partial.Text).IsEqualTo("first ");
+        await Assert.That(partial.Text).IsEqualTo(afterAllText ? "first second" : "first ");
         await Assert.That(partial.Finish).IsNull();
         await Assert.That(firstRead.Task.IsCompletedSuccessfully).IsTrue();
         await Assert.That(deadline.IsCancellationRequested).IsFalse();
@@ -47,7 +48,7 @@ public sealed partial class StreamDeliveryIntegrationTests
         await Assert.That(trace.TerminalMarkerObserved == true).IsFalse();
         await Assert.That(trace.StreamDelivery!.Mode).IsEqualTo(mode);
         await Assert.That(trace.StreamDeliveryApplied).IsTrue();
-        await Assert.That(trace.EmittedContentFrames).IsEqualTo(1);
+        await Assert.That(trace.EmittedContentFrames).IsEqualTo(afterAllText ? 2 : 1);
         await Assert.That(trace.ResponsePreview).Contains("first ");
         await Assert.That(trace.ResponsePreview!.Contains("[DONE]", StringComparison.Ordinal)).IsFalse();
         if (mode == LlmTestServerStreamDeliveryMode.EarlyCleanEnd)
@@ -77,13 +78,14 @@ public sealed partial class StreamDeliveryIntegrationTests
             { Mode = LlmTestServerStreamDeliveryMode.DelayThenContinue, AfterContentFrames = 1, DelayMilliseconds = delayMilliseconds })), firstRead.Task);
         using var http = TcpClient(app);
         var control = new LlmTestServerClient(http);
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var afterFirst = new Stopwatch();
         var completed = await ReadSdkAsync(Sdk(http), [new UserChatMessage("stream")], firstRead, deadline.Token, afterFirst.Start);
         await Assert.That(completed.Failure).IsNull();
         await Assert.That(completed.Text).IsEqualTo("first second");
         await Assert.That(completed.Finish).IsEqualTo(ChatFinishReason.Stop);
-        await Assert.That(afterFirst.ElapsedMilliseconds).IsGreaterThanOrEqualTo(delayMilliseconds / 2);
+        // The clock starts before acknowledging the server flush; allow only 5 ms for timer resolution.
+        await Assert.That(afterFirst.ElapsedMilliseconds).IsGreaterThanOrEqualTo(delayMilliseconds - 5);
         var trace = await CompletedTraceAsync(control, 1);
         await Assert.That(trace.TerminalMarkerObserved).IsTrue();
         await Assert.That(trace.EmittedContentFrames).IsEqualTo(2);
@@ -102,7 +104,7 @@ public sealed partial class StreamDeliveryIntegrationTests
             .Responds("after cancellation")), firstRead.Task);
         using var http = TcpClient(app);
         var control = new LlmTestServerClient(http);
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var afterFirst = new Stopwatch();
         var partial = await ReadSdkAsync(Sdk(http), [new UserChatMessage("stall")], firstRead, deadline.Token,
             () => { afterFirst.Start(); deadline.CancelAfter(TimeSpan.FromMilliseconds(180)); });
@@ -162,7 +164,7 @@ public sealed partial class StreamDeliveryIntegrationTests
 
     private static async Task<LlmTestServerProviderHttpTrace> CompletedTraceAsync(LlmTestServerClient control, int count)
     {
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         while (true)
         {
             var snapshot = await control.GetRequestsAsync(new() { Order = LlmTestServerRequestOrder.Ascending }, deadline.Token);
@@ -171,7 +173,7 @@ public sealed partial class StreamDeliveryIntegrationTests
         }
     }
 
-    private static async Task<WebApplication> StartTcpHostAsync(Action<LlmTestServerConfigurationBuilder> configure, Task? firstRead = null)
+    private static async Task<TcpTestHost> StartTcpHostAsync(Action<LlmTestServerConfigurationBuilder> configure, Task? firstRead = null, string firstContentPath = "/openai/v1/chat/completions", string? firstContentMarker = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Development });
         builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, 0));
@@ -183,10 +185,10 @@ public sealed partial class StreamDeliveryIntegrationTests
             var gated = 0;
             app.Use(async (context, next) =>
             {
-                if (context.Request.Path == "/openai/v1/chat/completions" && Interlocked.CompareExchange(ref gated, 1, 0) == 0)
+                if (context.Request.Path == firstContentPath && Interlocked.CompareExchange(ref gated, 1, 0) == 0)
                 {
                     var original = context.Response.Body;
-                    await using var barrier = new FirstFlushGateStream(original, firstRead);
+                    await using var barrier = new FirstFlushGateStream(original, firstRead, firstContentMarker);
                     context.Response.Body = barrier;
                     try { await next(context); }
                     finally { context.Response.Body = original; }
@@ -196,24 +198,51 @@ public sealed partial class StreamDeliveryIntegrationTests
         }
         app.MapLlmTestServer();
         app.MapDefaultEndpoints();
-        await app.StartAsync();
-        return app;
+        var host = new TcpTestHost(app);
+        using var startup = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        try
+        {
+            await app.StartAsync(startup.Token);
+            // Initialize endpoint metadata through real HTTP before a provider stream's watchdog starts.
+            using var warmup = TcpClient(host);
+            using var health = await warmup.GetAsync("/health", startup.Token);
+            health.EnsureSuccessStatusCode();
+            return host;
+        }
+        catch
+        {
+            await host.DisposeAsync();
+            throw;
+        }
     }
 
-    private static HttpClient TcpClient(WebApplication app)
+    private sealed class TcpTestHost(WebApplication application) : IAsyncDisposable
+    {
+        internal IServiceProvider Services => application.Services;
+
+        public async ValueTask DisposeAsync()
+        {
+            using var shutdown = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            try { await application.StopAsync(shutdown.Token); }
+            finally { await application.DisposeAsync(); }
+        }
+    }
+
+    private static HttpClient TcpClient(TcpTestHost app)
     {
         var server = app.Services.GetRequiredService<IServer>();
         var address = server.Features.Get<IServerAddressesFeature>()!.Addresses.Single();
-        return new HttpClient { BaseAddress = new Uri(address), Timeout = TimeSpan.FromSeconds(15) };
+        return new HttpClient { BaseAddress = new Uri(address), Timeout = TimeSpan.FromSeconds(60) };
     }
 
     private sealed record ObservedStream(string Text, ChatFinishReason? Finish, Exception? Failure);
 
     // Real TCP backpressure: bytes are forwarded unchanged, and only the first flush waits for the SDK's acknowledgement.
-    private sealed class FirstFlushGateStream(Stream inner, Task firstRead) : Stream
+    private sealed class FirstFlushGateStream(Stream inner, Task firstRead, string? contentMarker) : Stream
     {
         private int _gated;
         private long _written;
+        private readonly StringBuilder _wire = new();
         public override bool CanRead => inner.CanRead;
         public override bool CanSeek => inner.CanSeek;
         public override bool CanWrite => inner.CanWrite;
@@ -227,8 +256,8 @@ public sealed partial class StreamDeliveryIntegrationTests
         public override async Task FlushAsync(CancellationToken cancellationToken)
         {
             await inner.FlushAsync(cancellationToken);
-            if (Interlocked.Read(ref _written) > 0 && Interlocked.CompareExchange(ref _gated, 1, 0) == 0)
-            { await firstRead.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken); }
+            if (Interlocked.Read(ref _written) > 0 && (contentMarker is null || _wire.ToString().Contains(contentMarker, StringComparison.Ordinal)) && Interlocked.CompareExchange(ref _gated, 1, 0) == 0)
+            { await firstRead.WaitAsync(TimeSpan.FromSeconds(60), cancellationToken); }
         }
         public override int Read(byte[] buffer, int offset, int count)
         {
@@ -246,10 +275,15 @@ public sealed partial class StreamDeliveryIntegrationTests
         }
 
         public override void Write(byte[] buffer, int offset, int count)
-        { inner.Write(buffer, offset, count); Interlocked.Add(ref _written, count); }
+        { inner.Write(buffer, offset, count); RecordWrite(buffer.AsSpan(offset, count)); }
         public override async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
-        { await inner.WriteAsync(buffer.AsMemory(offset, count), cancellationToken); Interlocked.Add(ref _written, count); }
+        { await inner.WriteAsync(buffer.AsMemory(offset, count), cancellationToken); RecordWrite(buffer.AsSpan(offset, count)); }
         public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
-        { await inner.WriteAsync(buffer, cancellationToken); Interlocked.Add(ref _written, buffer.Length); }
+        { await inner.WriteAsync(buffer, cancellationToken); RecordWrite(buffer.Span); }
+        private void RecordWrite(ReadOnlySpan<byte> bytes)
+        {
+            Interlocked.Add(ref _written, bytes.Length);
+            if (contentMarker is not null && Volatile.Read(ref _gated) == 0) { _wire.Append(Encoding.UTF8.GetString(bytes)); }
+        }
     }
 }

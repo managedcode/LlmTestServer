@@ -9,12 +9,15 @@ public sealed partial class LlmTestServerRuntime
     private static string? ValidateFixture(LlmTestServerChatRequest request, LlmTestServerScenarioResponse response)
     {
         if (response.StreamDelivery is not null && (!request.Stream
-            || request.StreamDeliverySurface != LlmTestServerStreamDeliverySurface.OpenAiChatCompletions
-            || request.Tools is not { Count: 0 } || request.NativeTools is not { Count: 0 } || request.NativeToolSurface is not null
+            || request.StreamDeliverySurface is not (LlmTestServerStreamDeliverySurface.OpenAiChatCompletions
+                or LlmTestServerStreamDeliverySurface.OpenAiResponses or LlmTestServerStreamDeliverySurface.AnthropicMessages
+                or LlmTestServerStreamDeliverySurface.GeminiGenerateContent)
+            || request.Tools is not { Count: 0 } || request.NativeTools is not { Count: 0 }
+            || request.NativeIncludes is not { Count: 0 } || request.RequiredNativeTool is not null
             || request.RequireJson || request.ResponseSchemaJson is not null
             || request.Messages is null || request.Messages.Any(message => message is null || message.Role == "tool"
                 || message.ToolCalls is not { Count: 0 } || message.OutputItems is not { Count: 0 })))
-        { return "This stream delivery fixture requires OpenAI Chat Completions text SSE without tools or structured output."; }
+        { return "This stream delivery fixture requires a qualified OpenAI, Anthropic or Gemini text SSE route without tools or structured output."; }
         if (response.Error is not null)
         {
             return null;

@@ -51,48 +51,73 @@ public sealed partial class WellKnownToolFaultIntegrationTests
     [Test]
     public async Task ProviderDelay_CancellationRollsBackQueuedToolAndCacheBeforeExplicitRetryAsync()
     {
-        await using var app = await StartHealthyFaultHostAsync(config => config.AddConversation("delayed-tool", graph => graph
-            .Step("call", step => step.CallsTool("weather", "{}", "call_delayed_fault")
-                .DelaysBy(1500).Complete())));
+        await using var app = await StartHealthyFaultHostAsync(config => config
+            .AddConversation("delayed-tool", graph => graph
+                .Step("call", step => step.WhenLatestUserEquals("run tool").CallsTool("weather", "{}", "call_delayed_fault")
+                    .DelaysBy(10000).Complete()))
+            .AddConversation("startup", graph => graph
+                .Step("ready", step => step.WhenLatestUserEquals("startup").Responds("provider ready").Complete())));
         using var http = app.GetTestClient();
-        using var conversation = new LlmTestServerClient(http).ForConversation("delayed-tool");
+        var root = new LlmTestServerClient(http);
+        // Initialize real routing, tokenization and public state serialization before measuring the pending reservation.
+        // This unrelated short prompt cannot populate the target's long system-prefix cache.
+        using (var startup = root.ForConversation("startup"))
+        {
+            using var startupWatchdog = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            var ready = (await CreateSdk(startup.HttpClient).CompleteChatAsync([new UserChatMessage("startup")], cancellationToken: startupWatchdog.Token)).Value;
+            await Assert.That(ready.Content.Single().Text).IsEqualTo("provider ready");
+            await Assert.That((await startup.Control.GetConversationsAsync(startupWatchdog.Token)).Single().ExecutedSteps).IsEqualTo(1);
+        }
+        using var conversation = root.ForConversation("delayed-tool");
         var sdk = CreateSdk(conversation.HttpClient);
         var options = new ChatCompletionOptions { Tools = { ChatTool.CreateFunctionTool("weather") } };
         List<ChatMessage> messages = [new SystemChatMessage(LongCachePrefix()), new UserChatMessage("run tool")];
-        using var cancellation = new CancellationTokenSource();
+        using var watchdog = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(watchdog.Token);
         var pending = sdk.CompleteChatAsync(messages, options, cancellation.Token);
-        var busy = false;
-        var deadline = DateTime.UtcNow.AddSeconds(10);
         try
         {
-            while (DateTime.UtcNow < deadline && !pending.IsCompleted)
+            while (true)
             {
-                if ((await conversation.Control.GetConversationsAsync()).Any(state => state.IsBusy)) { busy = true; break; }
-                await Task.Delay(10);
+                var observed = conversation.Control.GetConversationsAsync(watchdog.Token);
+                if (await Task.WhenAny(pending, observed) == pending)
+                {
+                    await observed;
+                    await pending;
+                    throw new InvalidOperationException("The delayed SDK request completed before its busy reservation was observed.");
+                }
+                if ((await observed).Any(state => state.IsBusy)) { break; }
+                await Task.Delay(10, watchdog.Token);
             }
+            cancellation.Cancel();
+            var cancelled = false;
+            try { await pending; }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { cancelled = true; }
+            await Assert.That(cancelled).IsTrue();
+            while ((await conversation.Control.GetConversationsAsync(watchdog.Token)).Any(state => state.IsBusy))
+            { await Task.Delay(10, watchdog.Token); }
+            await Assert.That((await conversation.Control.GetConversationsAsync(watchdog.Token)).Count).IsEqualTo(0);
+            // Retry the original input against the SAME graph and cache; no configure/reset can mask rollback.
+            var recovered = (await sdk.CompleteChatAsync(messages, options, watchdog.Token)).Value;
+            await Assert.That(recovered.ToolCalls.Single().Id).IsEqualTo("call_delayed_fault");
+            var evidence = await conversation.Control.GetRequestsAsync(new() { Conversation = conversation.Id, Order = LlmTestServerRequestOrder.Ascending }, watchdog.Token);
+            await Assert.That(evidence.Requests.Count).IsEqualTo(2);
+            await Assert.That((await root.GetRequestsAsync(cancellationToken: watchdog.Token)).TotalObserved).IsEqualTo(3);
+            await Assert.That(evidence.Requests[0].TransportState is LlmTestServerProviderHttpTraceTransportState.Cancelled
+                or LlmTestServerProviderHttpTraceTransportState.Aborted).IsTrue();
+            await Assert.That(evidence.Requests[0].ResponseToolCalls.Count).IsEqualTo(0);
+            await Assert.That(evidence.Requests[^1].Usage!.CachedInputTokens).IsEqualTo(0);
+            await Assert.That(evidence.Requests[^1].Usage!.CacheCreationInputTokens).IsGreaterThan(0);
+            await Assert.That((await conversation.Control.GetConversationsAsync(watchdog.Token)).Single().ExecutedSteps).IsEqualTo(1);
+            using var healthy = await http.GetAsync("/health", watchdog.Token);
+            await Assert.That(healthy.StatusCode).IsEqualTo(HttpStatusCode.OK);
         }
-        finally { cancellation.Cancel(); }
-        var cancelled = false;
-        try { await pending; }
-        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { cancelled = true; }
-        await Assert.That(busy).IsTrue();
-        await Assert.That(cancelled).IsTrue();
-        var rollbackDeadline = DateTime.UtcNow.AddSeconds(10);
-        while ((await conversation.Control.GetConversationsAsync()).Any(state => state.IsBusy) && DateTime.UtcNow < rollbackDeadline)
-        { await Task.Delay(10); }
-        await Assert.That((await conversation.Control.GetConversationsAsync()).Count).IsEqualTo(0);
-        var recovered = (await sdk.CompleteChatAsync(messages, options)).Value;
-        await Assert.That(recovered.ToolCalls.Single().Id).IsEqualTo("call_delayed_fault");
-        var evidence = await conversation.Control.GetRequestsAsync(new() { Order = LlmTestServerRequestOrder.Ascending });
-        await Assert.That(evidence.Requests.Count).IsEqualTo(2);
-        await Assert.That(evidence.Requests[0].TransportState is LlmTestServerProviderHttpTraceTransportState.Cancelled
-            or LlmTestServerProviderHttpTraceTransportState.Aborted).IsTrue();
-        await Assert.That(evidence.Requests[0].ResponseToolCalls.Count).IsEqualTo(0);
-        await Assert.That(evidence.Requests[^1].Usage!.CachedInputTokens).IsEqualTo(0);
-        await Assert.That(evidence.Requests[^1].Usage!.CacheCreationInputTokens).IsGreaterThan(0);
-        await Assert.That((await conversation.Control.GetConversationsAsync()).Single().ExecutedSteps).IsEqualTo(1);
-        using var healthy = await http.GetAsync("/health");
-        await Assert.That(healthy.StatusCode).IsEqualTo(HttpStatusCode.OK);
+        finally
+        {
+            cancellation.Cancel();
+            try { await pending.WaitAsync(TimeSpan.FromSeconds(60)); }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        }
     }
 
     [Test]

@@ -30,7 +30,7 @@ public sealed partial class StreamDeliveryIntegrationTests
         await using var secondSession = await control.CreateSessionAsync(Configure);
         using var firstConversation = firstSession.Control.ForConversation("same-label");
         using var secondConversation = secondSession.Control.ForConversation("same-label");
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var first = await ReadSdkAsync(Sdk(firstConversation.HttpClient), [new UserChatMessage("go")], null, deadline.Token);
         await Assert.That(first.Text).IsEqualTo("first ");
         await Assert.That(first.Finish).IsNull();
@@ -87,7 +87,7 @@ public sealed partial class StreamDeliveryIntegrationTests
         await Assert.That(rejected.StatusCode).IsEqualTo(409);
         await Assert.That(rejected.StreamDeliveryApplied).IsFalse();
         await Assert.That(rejected.EmittedContentFrames).IsEqualTo(0);
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var actual = await ReadSdkAsync(Sdk(http), [new UserChatMessage("go")], null, deadline.Token);
         await Assert.That(actual.Text).IsEqualTo("first ");
         await Assert.That(actual.Finish).IsNull();

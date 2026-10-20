@@ -12,6 +12,9 @@ public enum LlmTestServerStreamDeliveryMode
 public enum LlmTestServerStreamDeliverySurface
 {
     OpenAiChatCompletions = 1,
+    OpenAiResponses = 2,
+    AnthropicMessages = 3,
+    GeminiGenerateContent = 4,
 }
 
 /// <summary>Bounded delivery behavior applied after an actual text content frame is flushed.</summary>
@@ -26,7 +29,8 @@ public sealed record LlmTestServerStreamDelivery
     {
         if (response.StreamDelivery is not { } plan) { return null; }
         if (!Enum.IsDefined(plan.Mode) || plan.AfterContentFrames is < 1 or > 128
-            || plan.AfterContentFrames > Math.Max(1, response.StreamChunks.Count)
+            || plan.AfterContentFrames > (response.StreamChunks.Count > 0
+                ? response.StreamChunks.Count(chunk => !string.IsNullOrEmpty(chunk)) : response.Content.Length > 0 ? 1 : 0)
             || (plan.Mode == LlmTestServerStreamDeliveryMode.DelayThenContinue
                 ? plan.DelayMilliseconds is < 1 or > 60000 : plan.DelayMilliseconds != 0))
         { throw new ArgumentException("Invalid bounded stream delivery plan."); }

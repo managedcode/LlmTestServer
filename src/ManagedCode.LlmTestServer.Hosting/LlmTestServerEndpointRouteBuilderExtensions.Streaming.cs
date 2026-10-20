@@ -26,9 +26,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         var responseId = OpenAiWireMapper.CreateResponseId(result.WireMetadata);
         var created = (result.WireMetadata ?? WireMetadata(context)).CreatedAt.ToUnixTimeSeconds();
 
-        var emittedContentFrames = 0;
-        var deliveryApplied = false;
-        if (result.StreamDelivery is { } configuredDelivery) { LlmTestServerStreamDeliveryEvidence.Record(context, configuredDelivery, 0, false); }
+        LlmTestServerStreamDeliveryEvidence.Begin(context, result.StreamDelivery);
         foreach (var chunk in result.ToolCalls.Count > 0 ? new List<string> { result.Content } : result.StreamChunks)
         {
             var payload = JsonSerializer.Serialize(
@@ -38,27 +36,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
             await context.Response.WriteAsync($"data: {payload}\n\n", cancellationToken)
                 .ConfigureAwait(false);
             await context.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
-            emittedContentFrames++;
-            if (result.StreamDelivery is { } delivery)
-            {
-                var atBoundary = !deliveryApplied && emittedContentFrames == delivery.AfterContentFrames;
-                deliveryApplied |= atBoundary;
-                LlmTestServerStreamDeliveryEvidence.Record(context, delivery, emittedContentFrames, deliveryApplied);
-                if (atBoundary)
-                {
-                    switch (delivery.Mode)
-                    {
-                        case LlmTestServerStreamDeliveryMode.EarlyCleanEnd:
-                            return;
-                        case LlmTestServerStreamDeliveryMode.DelayThenContinue:
-                            await Task.Delay(delivery.DelayMilliseconds, cancellationToken).ConfigureAwait(false);
-                            break;
-                        case LlmTestServerStreamDeliveryMode.AbortConnection:
-                            context.Abort();
-                            throw new Microsoft.AspNetCore.Connections.ConnectionAbortedException("Configured stream delivery aborted the connection after a content frame.");
-                    }
-                }
-            }
+            if (!await LlmTestServerStreamDeliveryEvidence.AfterContentFrameAsync(context, chunk, cancellationToken).ConfigureAwait(false)) { return; }
         }
 
         var finalPayload = JsonSerializer.Serialize(
@@ -98,9 +76,16 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         context.Response.StatusCode = StatusCodes.Status200OK;
         context.Response.ContentType = "text/event-stream";
 
+        LlmTestServerStreamDeliveryEvidence.Begin(context, result.StreamDelivery);
         foreach (var streamEvent in OpenAiWireMapper.ToResponseStreamEvents(result, responseId, created, cacheUsageShape, includedProperties))
         {
             await WriteResponseSseDataAsync(context, streamEvent, cancellationToken).ConfigureAwait(false);
+            if (result.StreamDelivery is not null)
+            {
+                var frame = JsonSerializer.SerializeToElement(streamEvent, _jsonOptions);
+                if (frame.GetProperty("type").GetString() == "response.output_text.delta"
+                    && !await LlmTestServerStreamDeliveryEvidence.AfterContentFrameAsync(context, frame.GetProperty("delta").GetString()!, cancellationToken).ConfigureAwait(false)) { return; }
+            }
         }
         await context.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
         context.MarkLlmTestServerTerminalMarker();
@@ -231,6 +216,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         context.Response.StatusCode = StatusCodes.Status200OK;
         context.Response.ContentType = "text/event-stream";
 
+        LlmTestServerStreamDeliveryEvidence.Begin(context, result.StreamDelivery);
         await WriteAnthropicSseEventAsync(
                 context,
                 "message_start",
@@ -267,6 +253,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
                             cancellationToken
                         )
                         .ConfigureAwait(false);
+                    if (!await LlmTestServerStreamDeliveryEvidence.AfterContentFrameAsync(context, chunk, cancellationToken).ConfigureAwait(false)) { return; }
                 }
 
                 await WriteAnthropicSseEventAsync(
@@ -414,6 +401,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
             await context.Response.WriteAsync("[", cancellationToken).ConfigureAwait(false);
         }
 
+        LlmTestServerStreamDeliveryEvidence.Begin(context, result.StreamDelivery);
         var first = true;
         foreach (var chunk in ReadStreamChunks(result))
         {
@@ -424,6 +412,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
             await context.Response.WriteAsync(sse ? $"data: {payload}\n\n" : (first ? payload : $",{payload}"), cancellationToken).ConfigureAwait(false);
             await context.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
             first = false;
+            if (!await LlmTestServerStreamDeliveryEvidence.AfterContentFrameAsync(context, chunk, cancellationToken).ConfigureAwait(false)) { return; }
         }
 
         var finalPayload = JsonSerializer.Serialize(
@@ -554,8 +543,22 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         return request with
         {
             RequestId = context.GetLlmTestServerProviderHttpTraceId() ?? context.TraceIdentifier,
-            StreamDeliverySurface = string.Equals(context.Request.Path.Value, "/openai/v1/chat/completions", StringComparison.Ordinal)
-                ? LlmTestServerStreamDeliverySurface.OpenAiChatCompletions : null,
+            StreamDeliverySurface = ResolveStreamDeliverySurface(context),
+        };
+    }
+
+    private static LlmTestServerStreamDeliverySurface? ResolveStreamDeliverySurface(HttpContext context)
+    {
+        return context.Request.Path.Value switch
+        {
+            "/openai/v1/chat/completions" => LlmTestServerStreamDeliverySurface.OpenAiChatCompletions,
+            "/openai/v1/responses" => LlmTestServerStreamDeliverySurface.OpenAiResponses,
+            "/anthropic/v1/messages" => LlmTestServerStreamDeliverySurface.AnthropicMessages,
+            var path when context.Request.RouteValues["model"] is string model
+                && path == "/gemini/v1beta/models/" + model + ":streamGenerateContent"
+                && context.Request.Query["alt"].Count == 1 && context.Request.Query["alt"][0] == "sse"
+                => LlmTestServerStreamDeliverySurface.GeminiGenerateContent,
+            _ => null,
         };
     }
 

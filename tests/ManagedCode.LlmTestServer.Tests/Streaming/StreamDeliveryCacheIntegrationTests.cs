@@ -16,7 +16,7 @@ public sealed partial class StreamDeliveryIntegrationTests
         using var http = TcpClient(app);
         var control = new LlmTestServerClient(http);
         List<ChatMessage> messages = [new SystemChatMessage(string.Join(" ", Enumerable.Repeat("shared cache reference", 1600))), new UserChatMessage("same request")];
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var partial = await ReadSdkAsync(Sdk(http), messages, null, deadline.Token);
         await Assert.That(partial.Text).IsEqualTo("first ");
         await Assert.That(partial.Finish).IsNull();

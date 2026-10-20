@@ -3,6 +3,8 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using ManagedCode.LlmTestServer.Client;
+using ManagedCode.LlmTestServer.Models;
+using ManagedCode.LlmTestServer.Providers;
 using ManagedCode.LlmTestServer.Sessions;
 using ManagedCode.LlmTestServer.Tests.Providers;
 using ManagedCode.LlmTestServer.Tests.TestSupport;
@@ -77,35 +79,83 @@ public sealed class ConversationProviderIntegrationTests
     [Test]
     public async Task CancelledStep_RollsBackBusyReservationAndPreservesOtherConversationsAsync()
     {
-        using var host = await LlmTestServerTestHost.StartAsync(config => config.AddConversation("cancel", graph => graph
-            .ReplaySuccessfulRequests(false).Step("delayed", step => step.Responds("preserved").DelaysBy(500).Complete())));
+        using var watchdog = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        using var host = await LlmTestServerTestHost.StartAsync(config => config
+            .AddConversation("cancel", graph => graph.ReplaySuccessfulRequests(false)
+                .Step("delayed", step => step.WhenLatestUserEquals("same input").Responds("preserved").DelaysBy(60000).Complete()))
+            .AddConversation("independent", graph => graph.ReplaySuccessfulRequests(false)
+                .Step("ready", step => step.WhenLatestUserEquals("other input").Responds("independent state").Complete())), cancellationToken: watchdog.Token);
         using var http = host.GetTestClient();
         var root = new LlmTestServerClient(http);
         using var first = root.ForConversation("cancelled");
         using var other = root.ForConversation("active");
-        using var cancellation = new CancellationTokenSource();
-        var pending = SendAsync(first.HttpClient, cancellationToken: cancellation.Token);
-        await WaitUntilBusyAsync(first.Control);
-        using var concurrent = await SendAsync(first.HttpClient);
-        await Assert.That(concurrent.StatusCode).IsEqualTo(HttpStatusCode.Conflict);
-        await Assert.That(await concurrent.Content.ReadAsStringAsync()).Contains("conversation_busy");
-        cancellation.Cancel();
-        var cancelled = false;
-        try { using var response = await pending; }
-        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { cancelled = true; }
-        await Assert.That(cancelled).IsTrue();
-        var replies = await Task.WhenAll(SendAsync(first.HttpClient), SendAsync(other.HttpClient));
-        foreach (var response in replies)
+        using (var established = await SendAsync(other.HttpClient, cancellationToken: watchdog.Token, input: "other input"))
         {
-            using (response)
-            {
-                response.EnsureSuccessStatusCode();
-                await Assert.That(await response.Content.ReadAsStringAsync()).Contains("preserved");
-            }
+            established.EnsureSuccessStatusCode();
+            await Assert.That(await established.Content.ReadAsStringAsync(watchdog.Token)).Contains("independent state");
         }
-        var states = await root.GetConversationsAsync();
-        await Assert.That(states.Count).IsEqualTo(2);
-        await Assert.That(states.All(state => state.ExecutedSteps == 1 && !state.IsBusy)).IsTrue();
+        var independentBefore = (await other.Control.GetConversationsAsync(watchdog.Token)).Single();
+        await Assert.That(independentBefore.ExecutedSteps).IsEqualTo(1);
+        await Assert.That(independentBefore.IsTerminal).IsTrue();
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(watchdog.Token);
+        var pending = SendAsync(first.HttpClient, cancellationToken: cancellation.Token);
+        try
+        {
+            await WaitUntilBusyAsync(first.Control, pending, watchdog.Token);
+            using var concurrent = await SendAsync(first.HttpClient, cancellationToken: watchdog.Token);
+            await Assert.That(concurrent.StatusCode).IsEqualTo(HttpStatusCode.Conflict);
+            await Assert.That(await concurrent.Content.ReadAsStringAsync(watchdog.Token)).Contains("conversation_busy");
+            cancellation.Cancel();
+            var cancelled = false;
+            try { using var response = await pending; }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { cancelled = true; }
+            await Assert.That(cancelled).IsTrue();
+            while ((await first.Control.GetConversationsAsync(watchdog.Token)).Any(state => state.IsBusy))
+            { await Task.Delay(10, watchdog.Token); }
+            // These observations prove rollback BEFORE any configuration mutation can clear state.
+            await Assert.That((await first.Control.GetConversationsAsync(watchdog.Token)).Count).IsEqualTo(0);
+            var selectable = await first.Control.ExplainMatchAsync(new()
+            {
+                ProviderNamespace = LlmTestServerProviderRouteNamespaces.OpenAI,
+                Request = new() { ModelId = LlmTestServerKnownModelIds.Gpt41Mini, Messages = [new() { Role = "user", Content = "same input" }] },
+            }, watchdog.Token);
+            await Assert.That(selectable.SelectedScenarioId).IsEqualTo("cancel");
+            await Assert.That(selectable.SelectedStepId).IsEqualTo("delayed");
+            await Assert.That(selectable.Candidates.Single(candidate => candidate.IsSelected).IsMatch).IsTrue();
+            var independentAfter = (await other.Control.GetConversationsAsync(watchdog.Token)).Single();
+            await Assert.That(independentAfter.ExecutedSteps).IsEqualTo(independentBefore.ExecutedSteps);
+            await Assert.That(independentAfter.ScenarioId).IsEqualTo(independentBefore.ScenarioId);
+            await Assert.That(independentAfter.IsTerminal).IsTrue();
+            await Assert.That(independentAfter.IsBusy).IsFalse();
+            await Assert.That((await root.GetConversationsAsync(watchdog.Token)).Count).IsEqualTo(1);
+            await Assert.That((await root.GetAssertionsAsync(watchdog.Token)).Matched).IsEqualTo(1);
+
+            // Configure deliberately resets both graphs only after their cancellation invariants were verified.
+            // Zero-delay fixtures keep explicit recovery fast; recovery alone is not the rollback proof.
+            await root.ConfigureAsync(config => config
+                .UseConversation("cancel", graph => graph.ReplaySuccessfulRequests(false)
+                    .Step("delayed", step => step.WhenLatestUserEquals("same input").Responds("preserved").Complete()))
+                .UseConversation("independent", graph => graph.ReplaySuccessfulRequests(false)
+                    .Step("ready", step => step.WhenLatestUserEquals("other input").Responds("independent state").Complete())), watchdog.Token);
+            var replies = await Task.WhenAll(SendAsync(first.HttpClient, cancellationToken: watchdog.Token),
+                SendAsync(other.HttpClient, cancellationToken: watchdog.Token, input: "other input"));
+            string[] expectedReplies = ["preserved", "independent state"];
+            for (var index = 0; index < replies.Length; index++)
+            {
+                using var response = replies[index];
+                response.EnsureSuccessStatusCode();
+                await Assert.That(await response.Content.ReadAsStringAsync(watchdog.Token)).Contains(expectedReplies[index]);
+            }
+            var states = await root.GetConversationsAsync(watchdog.Token);
+            await Assert.That(states.Count).IsEqualTo(2);
+            await Assert.That(states.All(state => state.ExecutedSteps == 1 && !state.IsBusy)).IsTrue();
+        }
+        finally
+        {
+            cancellation.Cancel();
+            try { using var response = await pending.WaitAsync(TimeSpan.FromSeconds(60)); }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        }
     }
 
     [Test]
@@ -155,14 +205,30 @@ public sealed class ConversationProviderIntegrationTests
         await Assert.That((await root.GetConversationsAsync()).Count).IsEqualTo(0);
     }
 
-    private static async Task<HttpResponseMessage> SendAsync(HttpClient http, string? credential = null, CancellationToken cancellationToken = default)
+    private static async Task<HttpResponseMessage> SendAsync(HttpClient http, string? credential = null, string input = "same input", CancellationToken cancellationToken = default)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, "/openai/v1/chat/completions")
         {
-            Content = JsonContent.Create(new { model = "gpt-4.1-mini", messages = new[] { new { role = "user", content = "same input" } } }),
+            Content = JsonContent.Create(new { model = "gpt-4.1-mini", messages = new[] { new { role = "user", content = input } } }),
         };
         if (credential is not null) { request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credential); }
         return await http.SendAsync(request, cancellationToken);
+    }
+
+    private static async Task WaitUntilBusyAsync(LlmTestServerClient control, Task<HttpResponseMessage> pending, CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            var observed = control.GetConversationsAsync(cancellationToken);
+            if (await Task.WhenAny(pending, observed) == pending)
+            {
+                await observed;
+                using var completed = await pending;
+                throw new InvalidOperationException($"The provider request completed with HTTP {(int)completed.StatusCode} before its busy reservation was observed.");
+            }
+            if ((await observed).Any(state => state.IsBusy)) { return; }
+            await Task.Delay(10, cancellationToken);
+        }
     }
 
     private static async Task WaitUntilBusyAsync(LlmTestServerClient control)
