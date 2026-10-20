@@ -391,11 +391,9 @@ public sealed partial class LlmTestServerRuntime
             }
 
             var responseText = response.Error?.Message ?? response.Content;
-            var usage = CreateChatUsage(
-                request,
-                response.Error is null ? response.Content + string.Concat(response.ToolCalls.Select(call => call.Name + call.ArgumentsJson)) : null,
-                updatePromptCache: response.Error is null
-            );
+            var responseOutput = response.Error is null
+                ? response.Content + string.Concat(response.ToolCalls.Select(call => call.Name + call.ArgumentsJson))
+                : null;
             IReadOnlyList<string> successfulStreamChunks = response.StreamChunks.Count > 0
                 ? response.StreamChunks
                 : [response.Content];
@@ -403,16 +401,19 @@ public sealed partial class LlmTestServerRuntime
             if (response.Error is null)
             {
                 completed = RetainChatResponse(request, LlmTestServerChatResult.Success(request.ModelId, scenario.Id,
-                    response.Content, successfulStreamChunks, usage) with
+                    response.Content, successfulStreamChunks) with
                 { ToolCalls = [.. response.ToolCalls], WireMetadata = GetResponseMetadata() }, bearerToken);
                 if (!completed.IsSuccess)
                 {
                     RollBackResponse(scenario, responsePosition, generation, conversationLease);
+                    var rejectedUsage = CreateChatUsage(request, responseOutput);
                     AddEvent(LlmTestServerEventKind.ErrorReturned, scenario.Id, request.ModelId, completed.ErrorMessage!,
-                        FormatChatRequest(request), completed.ErrorMessage, usage, chatRequest: request);
+                        FormatChatRequest(request), completed.ErrorMessage, rejectedUsage, chatRequest: request);
                     return completed;
                 }
             }
+            var usage = CreateChatUsage(request, responseOutput, updatePromptCache: response.Error is null);
+            if (completed is not null) { completed = completed with { Usage = usage }; }
             var finalResult = response.Error is { } error
                 ? LlmTestServerChatResult.Failure(request.ModelId, error.StatusCode, error.Code, error.Message, scenario.Id, usage)
                 : completed!;
@@ -1775,6 +1776,10 @@ public sealed partial class LlmTestServerRuntime
             }
 
             maxCacheableTokens = Math.Max(maxCacheableTokens, candidate.Tokens);
+        }
+
+        foreach (var candidate in candidates)
+        {
             if (!_promptCacheEntries.ContainsKey(candidate.Key))
             {
                 while (_promptCacheEntries.Count >= _configuration.MaxPromptCacheEntries)
@@ -1791,7 +1796,7 @@ public sealed partial class LlmTestServerRuntime
             : Math.Max(0, maxCacheableTokens - cachedInputTokens));
     }
 
-    private static List<PromptCacheCandidate> CreatePromptCacheCandidates(
+    private List<PromptCacheCandidate> CreatePromptCacheCandidates(
         LlmTestServerChatRequest request
     )
     {
@@ -1869,7 +1874,7 @@ public sealed partial class LlmTestServerRuntime
         };
     }
 
-    private static string CreatePromptCacheEntryKey(
+    private string CreatePromptCacheEntryKey(
         LlmTestServerChatRequest request,
         string prefix,
         int cacheableTokens
@@ -1877,6 +1882,7 @@ public sealed partial class LlmTestServerRuntime
     {
         var keyMaterial = string.Join(
             '\u001d',
+            _activeRequest.Value?.ProviderNamespace ?? string.Empty,
             request.PromptCachePolicy.ToString(),
             request.ModelId,
             request.PromptCacheKey ?? string.Empty,

@@ -1,11 +1,16 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using ManagedCode.LlmTestServer.Client;
 using ManagedCode.LlmTestServer.Diagnostics;
 using ManagedCode.LlmTestServer.Hosting;
 using ManagedCode.LlmTestServer.Tests.TestSupport;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ManagedCode.LlmTestServer.Tests.Hosting;
@@ -108,29 +113,93 @@ public sealed class RequestQueryExportIntegrationTests
     [Test]
     public async Task QueryExport_SelectsActiveRequestsAndConversationStepsAsync()
     {
-        using var host = await LlmTestServerTestHost.StartAsync(config => config.AddConversation("step-query", graph => graph
-            .Step("finish", step => step.WhenLatestUserEquals("start").Responds("done").DelaysBy(350).Complete())));
-        using var http = host.GetTestClient();
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.ConfigureKestrel(options =>
+        {
+            options.Listen(IPAddress.Loopback, 0);
+            options.Limits.MinRequestBodyDataRate = null;
+        });
+        builder.Services.AddLlmTestServer(config => config.AddConversation("step-query", graph => graph
+            .Step("finish", step => step.WhenLatestUserEquals("start").Responds("done").Complete())));
+        await using var app = builder.Build();
+        app.MapLlmTestServer();
+        await app.StartAsync();
+        var addresses = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!;
+        using var http = new HttpClient { BaseAddress = new Uri(addresses.Addresses.Single()) };
         var control = new LlmTestServerClient(http);
         using var conversation = control.ForConversation("step-query-id");
-        var pending = conversation.HttpClient.PostAsJsonAsync("/openai/v1/chat/completions", new { model = "gpt-4.1-mini", messages = new[] { new { role = "user", content = "start" } } });
-        LlmTestServerRequestSnapshot active = new();
-        var deadline = DateTimeOffset.UtcNow.AddSeconds(5);
-        while (DateTimeOffset.UtcNow < deadline)
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await control.GetRequestsAsync(cancellationToken: cancellation.Token);
+        using var body = new GatedJsonContent("""{"model":"gpt-4.1-mini","messages":[{"role":"user","content":"start"}]}""");
+        var pending = conversation.HttpClient.PostAsync("/openai/v1/chat/completions", body, cancellation.Token);
+        try
         {
-            active = await control.GetRequestsAsync(new() { Completed = false });
-            if (active.Requests.Count > 0) { break; }
-            await Task.Delay(10);
+            LlmTestServerRequestSnapshot active = new();
+            while (true)
+            {
+                active = await control.GetRequestsAsync(new() { Completed = false }, cancellation.Token);
+                if (active.Requests.Count > 0) { break; }
+                await Task.Delay(10, cancellation.Token);
+            }
+            await Assert.That(active.Requests.Count).IsEqualTo(1);
+            await Assert.That(active.Requests.Single().IsSuccess).IsNull();
+            await Assert.That(active.Requests.Single().StartedMonotonicSeconds).IsNotNull();
+            await Assert.That(active.Requests.Single().CompletedMonotonicSeconds).IsNull();
+            await Assert.That(pending.IsCompleted).IsFalse();
+            body.Release();
+            using var response = await pending;
+            response.EnsureSuccessStatusCode();
+            await Assert.That(await response.Content.ReadAsStringAsync(cancellation.Token)).Contains("done");
+            var finished = await control.GetRequestsAsync(new() { Scenario = "step-query", Conversation = "step-query-id", Step = "finish", Completed = true, Success = true }, cancellation.Token);
+            await Assert.That(finished.Requests.Count).IsEqualTo(1);
+            await Assert.That(finished.Requests.Single().RequestId).IsEqualTo(active.Requests.Single().RequestId);
+            await Assert.That((await control.GetRequestsAsync(new() { Completed = false }, cancellation.Token)).Requests).IsEmpty();
         }
-        await Assert.That(active.Requests.Count).IsEqualTo(1);
-        await Assert.That(active.Requests.Single().IsSuccess).IsNull();
-        await Assert.That(active.Requests.Single().StartedMonotonicSeconds).IsNotNull();
-        await Assert.That(active.Requests.Single().CompletedMonotonicSeconds).IsNull();
-        using var response = await pending;
-        response.EnsureSuccessStatusCode();
-        var finished = await control.GetRequestsAsync(new() { Scenario = "step-query", Conversation = "step-query-id", Step = "finish", Completed = true, Success = true });
-        await Assert.That(finished.Requests.Count).IsEqualTo(1);
-        await Assert.That((await control.GetRequestsAsync(new() { Completed = false })).Requests).IsEmpty();
+        finally
+        {
+            body.Release();
+            await cancellation.CancelAsync();
+            try { using var cleanup = await pending; }
+            catch (OperationCanceledException) { }
+            catch (HttpRequestException) { }
+            await app.StopAsync();
+        }
+    }
+
+    private sealed class GatedJsonContent : HttpContent
+    {
+        private readonly byte[] _bytes;
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public GatedJsonContent(string json)
+        {
+            _bytes = Encoding.UTF8.GetBytes(json);
+            Headers.ContentType = new MediaTypeHeaderValue("application/json");
+        }
+
+        public void Release()
+        {
+            _release.TrySetResult();
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = _bytes.Length;
+            return true;
+        }
+
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+        {
+            return SerializeToStreamAsync(stream, context, CancellationToken.None);
+        }
+
+        protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context, CancellationToken cancellationToken)
+        {
+            await stream.WriteAsync(_bytes.AsMemory(0, 1), cancellationToken);
+            await stream.FlushAsync(cancellationToken);
+            await _release.Task.WaitAsync(cancellationToken);
+            await stream.WriteAsync(_bytes.AsMemory(1), cancellationToken);
+        }
     }
 
     [Test]
