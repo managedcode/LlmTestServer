@@ -34,6 +34,16 @@ Session credentials are independent of provider credentials. Reset/configure/del
 session. See [Test sessions](Features/TestSessions.md) for the HTTP/client contract and
 [ADR-0003](ADR/ADR-0003-isolated-test-sessions.md) for bounds, ownership and concurrency decisions.
 
+## Request evidence and fixture clocks
+
+Hosting retains bounded HTTP evidence in the session's existing trace journal. Core `Diagnostics` supplies the
+shared query/export DTOs, and core `Verification` evaluates serializable count/order/tool/conversation/retry
+expectations. Retention loss and incomplete pages prevent successful complete verification. Runtime-owned,
+provider-local seeded metadata controls generated wire IDs/time while real event/trace and monotonic timing
+remain observational. See [Request verification and determinism](Features/RequestVerificationAndDeterminism.md)
+and [ADR-0005](ADR/ADR-0005-request-evidence-and-wire-determinism.md). E4 is locally qualified; branch CI and
+public delivery remain pending.
+
 ## Stored response continuation
 
 The runtime owns bounded provider/model/credential-isolated chat-response snapshots. Provider adapters map
@@ -48,7 +58,8 @@ by the selected test session and is partitioned by scenario, provider and creden
 selector without changing shared transport headers. Control APIs expose bounded conversation status and
 side-effect-free match explanations. See [Conversation DSL](Features/ConversationDSL.md) for the contract and
 [ADR-0004](ADR/ADR-0004-conversation-step-graphs.md) for identity, reservation, replay and lifecycle decisions.
-Integration qualification of this extension is in progress.
+This extension is locally qualified through server integrations and an installed-package consumer; public
+delivery remains pending.
 
 ## Determinism
 

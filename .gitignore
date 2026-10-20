@@ -15,3 +15,6 @@ coverage.cobertura.xml
 *.suo
 *.swp
 *.tmp
+
+# Launch production materials remain local until owner approval.
+/marketing/

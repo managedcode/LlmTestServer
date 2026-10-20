@@ -1,0 +1,13 @@
+{
+  "name": "llm-test-server-site",
+  "private": true,
+  "scripts": {
+    "lint": "htmlhint index.html && stylelint styles.css tokens.css && node --check site.js",
+    "build": "python3 build.py"
+  },
+  "devDependencies": {
+    "htmlhint": "1.9.2",
+    "stylelint": "17.16.0",
+    "stylelint-config-standard": "40.0.0"
+  }
+}

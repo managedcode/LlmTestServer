@@ -110,7 +110,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
     private static void SetSystemOneRequestId(HttpContext context)
     {
         var supplied = context.Request.Headers[_typeSafeRequestIdHeader].ToString();
-        context.Response.Headers[_typeSafeRequestIdHeader] = string.IsNullOrEmpty(supplied) ? Guid.NewGuid().ToString("N") : supplied;
+        context.Response.Headers[_typeSafeRequestIdHeader] = string.IsNullOrEmpty(supplied) ? WireMetadata(context).IdFor("request") : supplied;
     }
 
     private static IResult SystemOneValidationError(string message)

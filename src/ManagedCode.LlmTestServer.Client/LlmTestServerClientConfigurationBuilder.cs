@@ -9,6 +9,12 @@ public sealed class LlmTestServerClientConfigurationBuilder
 {
     private readonly LlmTestServerConfigurationBuilder _builder = new();
 
+    public LlmTestServerClientConfigurationBuilder UseDeterminism(string seed, DateTimeOffset fixedUtc)
+    {
+        _builder.WithDeterminism(seed, fixedUtc);
+        return this;
+    }
+
     public LlmTestServerClientConfigurationBuilder RequireBearerToken(string token)
     {
         _builder.RequireBearerToken(token);

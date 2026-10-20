@@ -45,7 +45,7 @@ public sealed class LlmTestServerChatClient(
         return new ChatResponse(message)
         {
             ModelId = completion?.Model,
-            CreatedAt = DateTimeOffset.UtcNow,
+            CreatedAt = completion is null ? null : DateTimeOffset.FromUnixTimeSeconds(completion.Created),
             ResponseId = completion?.Id,
             FinishReason = MapFinishReason(completion?.Choices.FirstOrDefault()?.FinishReason),
             Usage = completion is null ? null : LlmTestServerUsageMapper.Map(completion.Usage),
@@ -113,6 +113,7 @@ public sealed class LlmTestServerChatClient(
                 {
                     ModelId = chunk.Model,
                     ResponseId = chunk.Id,
+                    CreatedAt = DateTimeOffset.FromUnixTimeSeconds(chunk.Created),
                     FinishReason = MapFinishReason(choice?.FinishReason),
                 };
                 AddToolCalls(update.Contents, choice?.Delta.ToolCalls);

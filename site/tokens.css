@@ -1,0 +1,21 @@
+/* Mirrors LlmTestServerAdminPage.razor's final brand layer, not earlier skins.
+   The static site owns this small semantic subset; review alongside dashboard changes. */
+:root {
+  color-scheme: light;
+
+  --canvas: #f9f7f5;
+  --pane: #fff;
+  --pane-selected: rgb(164 242 88 / 14%);
+  --text: #161616;
+  --text-soft: #363432;
+  --muted: rgb(18 18 18 / 60%);
+  --accent: #a4f258;
+  --accent-strong: #83cc3c;
+  --line: rgb(22 22 22 / 13%);
+  --line-soft: rgb(22 22 22 / 8%);
+  --brand-coral: #ff7e5d;
+  --brand-magenta: #db3276;
+  --link: #396623;
+  --focus: #396623;
+  --code-font: "SFMono-Regular", "SF Mono", ui-monospace, menlo, monaco, consolas, monospace;
+}

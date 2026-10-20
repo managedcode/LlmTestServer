@@ -4,7 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using ManagedCode.LlmTestServer.Cloudflare;
 using ManagedCode.LlmTestServer.Decisions;
-using ManagedCode.LlmTestServer.Hosting;
+using ManagedCode.LlmTestServer.Diagnostics;
 using ManagedCode.LlmTestServer.Runtime;
 using ManagedCode.LlmTestServer.Tests.TestSupport;
 

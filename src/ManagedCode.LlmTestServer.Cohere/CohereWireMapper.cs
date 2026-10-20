@@ -1,3 +1,4 @@
+using ManagedCode.LlmTestServer.Determinism;
 using ManagedCode.LlmTestServer.Runtime;
 using ManagedCode.LlmTestServer.Scenarios;
 
@@ -32,7 +33,7 @@ public static class CohereWireMapper
     {
         return new()
         {
-            Id = CreateResponseId(),
+            Id = CreateResponseId(result.WireMetadata),
             FinishReason = result.ToolCalls.Count > 0 ? "TOOL_CALL" : "COMPLETE",
             Message = new CohereAssistantMessage
             {
@@ -43,12 +44,12 @@ public static class CohereWireMapper
         };
     }
 
-    public static object ToMessageStartEvent()
+    public static object ToMessageStartEvent(LlmTestServerResponseMetadata? metadata = null)
     {
         return new
         {
             type = "message-start",
-            id = CreateResponseId(),
+            id = CreateResponseId(metadata),
             delta = new
             {
                 message = new { role = "assistant" },
@@ -126,11 +127,11 @@ public static class CohereWireMapper
         }
     }
 
-    public static CohereEmbedResponse ToEmbedResponse(IReadOnlyList<IReadOnlyList<float>> vectors)
+    public static CohereEmbedResponse ToEmbedResponse(IReadOnlyList<IReadOnlyList<float>> vectors, LlmTestServerResponseMetadata? metadata = null)
     {
         return new()
         {
-            Id = CreateResponseId(),
+            Id = CreateResponseId(metadata),
             Embeddings = new CohereEmbeddings { FloatValues = vectors },
         };
     }
@@ -170,9 +171,9 @@ public static class CohereWireMapper
         return new() { BilledUnits = tokens, Tokens = tokens };
     }
 
-    private static string CreateResponseId()
+    private static string CreateResponseId(LlmTestServerResponseMetadata? metadata)
     {
-        return Guid.NewGuid().ToString();
+        return new Guid((metadata ?? LlmTestServerResponseMetadata.Live()).IdFor("response")).ToString();
     }
 
 }

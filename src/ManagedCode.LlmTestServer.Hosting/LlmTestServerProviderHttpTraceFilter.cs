@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using ManagedCode.LlmTestServer.Diagnostics;
 using ManagedCode.LlmTestServer.Providers;
 using ManagedCode.LlmTestServer.Runtime;
 using Microsoft.AspNetCore.Connections;
@@ -64,6 +65,16 @@ public sealed class LlmTestServerProviderHttpTraceFilter(
         }
 
         var runtimeScope = TryBeginRuntimeScope(session.RequestId, httpContext.Request.Headers[ManagedCode.LlmTestServer.Conversations.LlmTestServerConversationHeaders.Id].FirstOrDefault(), provider.Value.Namespace);
+        if (runtime is ILlmTestServerWireMetadataSource wireMetadataSource)
+        {
+            var metadata = wireMetadataSource.GetResponseMetadata();
+            traceStore.TryEnrich(session.RequestId, new LlmTestServerProviderHttpTraceEnrichment
+            { WireClockMode = metadata.ClockMode, WireCreatedAt = metadata.CreatedAt, WireSequence = metadata.Sequence });
+            if (metadata.ClockMode == "fixed")
+            {
+                httpContext.Response.Headers.Date = metadata.CreatedAt.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+            }
+        }
         try
         {
             object? result;
@@ -78,6 +89,12 @@ public sealed class LlmTestServerProviderHttpTraceFilter(
                 throw;
             }
 
+            if (runtime is ILlmTestServerRuntimeEventLookup eventLookup
+                && eventLookup.TryGetEvent(session.RequestId, out var runtimeEvent)
+                && runtimeEvent?.RetryAfterSeconds is { } retryAfter)
+            {
+                httpContext.Response.Headers.RetryAfter = retryAfter.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
             session.CaptureRequestBestEffort();
             if (result is IResult httpResult)
             {
@@ -145,6 +162,8 @@ public sealed class LlmTestServerProviderHttpTraceFilter(
                 new LlmTestServerProviderHttpTrace
                 {
                     RequestId = requestId,
+                    RetryGroupId = context.Request.Headers[LlmTestServerRequestHeaders.RetryGroup].FirstOrDefault(),
+                    ConversationId = context.Request.Headers[ManagedCode.LlmTestServer.Conversations.LlmTestServerConversationHeaders.Id].FirstOrDefault(),
                     SessionId = context.Request.Headers[ManagedCode.LlmTestServer.Sessions.LlmTestServerSessionHeaders.Id].ToString() is { Length: > 0 } sessionId ? sessionId : null,
                     ProviderId = provider.ProviderId,
                     ProviderNamespace = provider.Namespace,
@@ -153,6 +172,7 @@ public sealed class LlmTestServerProviderHttpTraceFilter(
                     Route = route,
                     OperationId = operationId,
                     StartedAt = session.StartedAt,
+                    StartedMonotonicSeconds = session.StartedMonotonicSeconds,
                     TransportState = LlmTestServerProviderHttpTraceTransportState.InProgress,
                     RequestContentType = requestContentType,
                     RequestByteCount = context.Request.ContentLength,
@@ -318,6 +338,8 @@ public sealed class LlmTestServerProviderHttpTraceFilter(
 
         public DateTimeOffset StartedAt { get; } = DateTimeOffset.UtcNow;
 
+        public double StartedMonotonicSeconds => (double)_startedTimestamp / Stopwatch.Frequency;
+
         public void CaptureRequestBestEffort()
         {
             if (Interlocked.Exchange(ref _requestCaptured, 1) != 0)
@@ -446,6 +468,9 @@ public sealed class LlmTestServerProviderHttpTraceFilter(
                     new LlmTestServerProviderHttpTraceCompletion
                     {
                         CompletedAt = DateTimeOffset.UtcNow,
+                        CompletedMonotonicSeconds = (double)Stopwatch.GetTimestamp() / Stopwatch.Frequency,
+                        RetryAfter = context.Response.Headers.RetryAfter.FirstOrDefault(),
+                        TerminalMarkerObserved = context.HasLlmTestServerTerminalMarker(),
                         DurationMilliseconds = Stopwatch
                             .GetElapsedTime(_startedTimestamp)
                             .TotalMilliseconds,
@@ -543,6 +568,9 @@ public sealed class LlmTestServerProviderHttpTraceFilter(
                     requestId,
                     new LlmTestServerProviderHttpTraceEnrichment
                     {
+                        WireClockMode = runtimeEvent.WireMetadata?.ClockMode,
+                        WireCreatedAt = runtimeEvent.WireMetadata?.CreatedAt,
+                        WireSequence = runtimeEvent.WireMetadata?.Sequence,
                         ModelId = runtimeEvent.ModelId,
                         ScenarioId = runtimeEvent.ScenarioId,
                         ConversationId = runtimeEvent.ConversationId,
@@ -554,6 +582,7 @@ public sealed class LlmTestServerProviderHttpTraceFilter(
                         RuntimeResponse = runtimeEvent.Response,
                         Usage = runtimeEvent.Usage,
                         Messages = runtimeEvent.Messages,
+                        ResponseToolCalls = runtimeEvent.ResponseToolCalls,
                         StreamChunks = runtimeEvent.StreamChunks,
                         IsStreaming = runtimeEvent.IsStreaming,
                         RuntimePayloadTruncated = runtimeEvent.PayloadTruncated,
@@ -579,6 +608,9 @@ public sealed class LlmTestServerProviderHttpTraceFilter(
                     new LlmTestServerProviderHttpTraceCompletion
                     {
                         CompletedAt = DateTimeOffset.UtcNow,
+                        CompletedMonotonicSeconds = (double)Stopwatch.GetTimestamp() / Stopwatch.Frequency,
+                        RetryAfter = context.Response.Headers.RetryAfter.FirstOrDefault(),
+                        TerminalMarkerObserved = context.HasLlmTestServerTerminalMarker(),
                         DurationMilliseconds = Stopwatch
                             .GetElapsedTime(_startedTimestamp)
                             .TotalMilliseconds,

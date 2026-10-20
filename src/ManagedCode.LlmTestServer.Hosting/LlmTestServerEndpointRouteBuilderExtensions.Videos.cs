@@ -313,7 +313,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
             OpenAiWireMapper.ToVideoCharacterResponse(
                 "char_llm_test_server",
                 name,
-                DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                WireMetadata(context).CreatedAt.ToUnixTimeSeconds()
             )
         );
     }
@@ -335,7 +335,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
                 OpenAiWireMapper.ToVideoCharacterResponse(
                     characterId,
                     "LLM Test Server Character",
-                    DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                    WireMetadata(context).CreatedAt.ToUnixTimeSeconds()
                 )
             );
     }

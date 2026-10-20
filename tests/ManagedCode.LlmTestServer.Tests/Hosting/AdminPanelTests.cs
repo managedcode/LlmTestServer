@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using ManagedCode.LlmTestServer.Control;
+using ManagedCode.LlmTestServer.Diagnostics;
 using ManagedCode.LlmTestServer.Hosting;
 using ManagedCode.LlmTestServer.Models;
 using ManagedCode.LlmTestServer.Providers;

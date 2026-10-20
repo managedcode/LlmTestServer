@@ -172,9 +172,11 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         {
             var registry = invocation.HttpContext.RequestServices.GetRequiredService<LlmTestServerSessionRegistry>();
             if (registry.Resolve(invocation.HttpContext) is null) { return SessionNotFound(); }
-            var conversation = invocation.HttpContext.Request.Headers[ManagedCode.LlmTestServer.Conversations.LlmTestServerConversationHeaders.Id];
-            if (conversation.Count > 1 || conversation.Count == 1 && (string.IsNullOrWhiteSpace(conversation[0]) || conversation[0]!.Length > 128))
-            { return InvalidRequest("Supply one nonempty conversation ID of at most 128 characters."); }
+            if (!_providerRouteNamespaces.Any(prefix => invocation.HttpContext.Request.Path.StartsWithSegments(prefix)))
+            {
+                var error = ValidateCorrelationHeaders(invocation.HttpContext);
+                if (error is not null) { return error; }
+            }
             return await next(invocation).ConfigureAwait(false);
         });
         scopedEndpoints.MapGet(
@@ -189,6 +191,8 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         );
         scopedEndpoints.MapGet(LlmTestServerControlRoutes.Requests, GetRequests);
         MapConversationEndpoints(scopedEndpoints);
+        MapVerificationEndpoints(scopedEndpoints);
+        scopedEndpoints.MapGet(LlmTestServerControlRoutes.Requests + "/export", ExportRequests);
         scopedEndpoints.MapPost(
             LlmTestServerControlRoutes.Reset,
             async (
@@ -216,7 +220,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         providerEndpoints.AddLlmTestServerProviderHttpTracing();
         providerEndpoints.AddEndpointFilter(async (invocation, next) =>
         {
-            var error = LlmTestServerRequestPolicy.ValidateApiVersion(invocation.HttpContext);
+            var error = ValidateCorrelationHeaders(invocation.HttpContext) ?? LlmTestServerRequestPolicy.ValidateApiVersion(invocation.HttpContext);
             return error ?? await next(invocation).ConfigureAwait(false);
         });
 
@@ -1203,8 +1207,8 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
             );
         }
 
-        var responseId = result.ResponseId ?? $"resp_{Guid.NewGuid():N}";
-        var created = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var responseId = result.ResponseId ?? "resp_" + (result.WireMetadata ?? WireMetadata(context)).IdFor("response");
+        var created = (result.WireMetadata ?? WireMetadata(context)).CreatedAt.ToUnixTimeSeconds();
         if (request.Stream)
         {
             await WriteStreamingResponseAsync(
@@ -1236,7 +1240,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
 
         var read = await ReadJsonAsync<AnthropicMessagesRequest>(
                 context,
-                AnthropicInvalidRequest,
+                message => AnthropicInvalidRequest(context, message),
                 cancellationToken, validation: AnthropicRequestValidation.Validate
             )
             .ConfigureAwait(false);
@@ -1247,10 +1251,10 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
 
         if (read.Value is null)
         {
-            return AnthropicInvalidRequest("Missing message body.");
+            return AnthropicInvalidRequest(context, "Missing message body.");
         }
 
-        var validationError = ValidateAnthropicMessageRequest(read.Value);
+        var validationError = ValidateAnthropicMessageRequest(read.Value, context);
         if (validationError is not null)
         {
             return validationError;
@@ -1269,7 +1273,8 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
             return Results.Json(
                 AnthropicWireMapper.ToError(
                     ToAnthropicErrorType(result.StatusCode, result.ErrorCode!),
-                    result.ErrorMessage!
+                    result.ErrorMessage!,
+                    result.WireMetadata
                 ),
                 statusCode: result.StatusCode
             );
@@ -1849,7 +1854,8 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
                 OpenAiWireMapper.ToEmbeddingResponse(
                     request.Model,
                     result.Vectors,
-                    request.UsesBase64Encoding
+                    request.UsesBase64Encoding,
+                    result.WireMetadata
                 )
             )
             : Results.Json(
@@ -1943,7 +1949,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
             .ConfigureAwait(false);
 
         return result.IsSuccess
-            ? Results.Json(CohereWireMapper.ToEmbedResponse(result.Vectors))
+            ? Results.Json(CohereWireMapper.ToEmbedResponse(result.Vectors, result.WireMetadata))
             : Results.Json(
                 CohereWireMapper.ToError(result.ErrorMessage!),
                 statusCode: result.StatusCode
@@ -2244,7 +2250,8 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
                 request.Background,
                 request.OutputFormat,
                 request.Quality,
-                request.Size
+                request.Size,
+                result.WireMetadata
             )
         );
     }
@@ -2301,7 +2308,8 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
                 request.Background,
                 request.OutputFormat,
                 request.Quality,
-                request.Size
+                request.Size,
+                result.WireMetadata
             )
         );
     }
@@ -2336,7 +2344,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
             .ConfigureAwait(false);
 
         return result.IsSuccess
-            ? Results.Json(OpenAiWireMapper.ToImageResponse(result.DataUri, size: request.Size))
+            ? Results.Json(OpenAiWireMapper.ToImageResponse(result.DataUri, size: request.Size, metadata: result.WireMetadata))
             : Results.Json(
                 OpenAiWireMapper.ToError(result.ErrorCode!, result.ErrorMessage!),
                 statusCode: result.StatusCode

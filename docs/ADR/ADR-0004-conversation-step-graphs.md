@@ -1,6 +1,6 @@
 # ADR-0004: Typed conversation step graphs
 
-Status: Accepted; implementation in progress
+Status: Accepted; implemented and locally qualified, public delivery pending
 Date: 2026-10-20
 Related: [conversation DSL](../Features/ConversationDSL.md), [delivery E3](../Features/LlmTestServerDeliveryPlan.md),
 [test sessions](../Features/TestSessions.md), [architecture](../Architecture.md)

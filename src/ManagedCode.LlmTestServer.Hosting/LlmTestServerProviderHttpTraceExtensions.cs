@@ -81,6 +81,17 @@ public static class LlmTestServerProviderHttpTraceExtensions
         return group;
     }
 
+    public static void MarkLlmTestServerTerminalMarker(this HttpContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        context.Items["ManagedCode.LlmTestServer.TerminalMarker"] = true;
+    }
+
+    internal static bool? HasLlmTestServerTerminalMarker(this HttpContext context)
+    {
+        return context.Items.ContainsKey("ManagedCode.LlmTestServer.TerminalMarker") ? true : null;
+    }
+
     public static string? GetLlmTestServerProviderHttpTraceId(this HttpContext context)
     {
         ArgumentNullException.ThrowIfNull(context);

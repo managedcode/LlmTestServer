@@ -2,6 +2,8 @@ namespace ManagedCode.LlmTestServer.Control;
 
 public static class LlmTestServerControlRoutes
 {
+    public const string Verify = "/admin-api/verify";
+
     public const string Admin = "/";
     public const string Models = "/admin-api/models";
     public const string Assertions = "/admin-api/assertions";

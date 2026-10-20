@@ -76,6 +76,7 @@ public sealed partial class LlmTestServerRuntime
             _configuration = LlmTestServerConfigurationBuilder.Snapshot(configuration);
             _scenarioReservations.Clear();
             ClearConversations();
+            _wireSequences.Clear();
             _chatResponses.Clear();
             _chatResponseBytes = 0;
             _videos.Clear();
@@ -108,6 +109,7 @@ public sealed partial class LlmTestServerRuntime
         {
             _scenarioReservations.Clear();
             ClearConversations();
+            _wireSequences.Clear();
             _chatResponses.Clear();
             _chatResponseBytes = 0;
             _videos.Clear();
@@ -145,7 +147,7 @@ public sealed partial class LlmTestServerRuntime
         var previousRequest = _activeRequest.Value;
         lock (_gate)
         {
-            _activeRequest.Value = new RuntimeRequestContext(requestId, _generation, conversationId, providerNamespace);
+            _activeRequest.Value = new RuntimeRequestContext(requestId, _generation, conversationId, providerNamespace, ReserveResponseMetadata(providerNamespace ?? string.Empty));
         }
 
         return new RuntimeRequestScope(_activeRequest, previousRequest);
@@ -162,7 +164,7 @@ public sealed partial class LlmTestServerRuntime
         }
     }
 
-    public async Task<LlmTestServerChatResult> CompleteChatAsync(
+    private async Task<LlmTestServerChatResult> CompleteChatCoreAsync(
         LlmTestServerChatRequest request,
         string? bearerToken = null,
         CancellationToken cancellationToken = default
@@ -402,7 +404,7 @@ public sealed partial class LlmTestServerRuntime
             {
                 completed = RetainChatResponse(request, LlmTestServerChatResult.Success(request.ModelId, scenario.Id,
                     response.Content, successfulStreamChunks, usage) with
-                { ToolCalls = [.. response.ToolCalls] }, bearerToken);
+                { ToolCalls = [.. response.ToolCalls], WireMetadata = GetResponseMetadata() }, bearerToken);
                 if (!completed.IsSuccess)
                 {
                     RollBackResponse(scenario, responsePosition, generation, conversationLease);
@@ -414,6 +416,7 @@ public sealed partial class LlmTestServerRuntime
             var finalResult = response.Error is { } error
                 ? LlmTestServerChatResult.Failure(request.ModelId, error.StatusCode, error.Code, error.Message, scenario.Id, usage)
                 : completed!;
+            finalResult = finalResult with { WireMetadata = finalResult.WireMetadata ?? GetResponseMetadata() };
             if (conversationLease is not null) { CommitConversation(conversationLease, finalResult); }
             AddEvent(
                 response.Error is null ? LlmTestServerEventKind.Matched : LlmTestServerEventKind.ErrorReturned,
@@ -426,7 +429,10 @@ public sealed partial class LlmTestServerRuntime
                 chatRequest: request,
                 streamChunks: response.Error is null && request.Stream ? successfulStreamChunks : null,
                 stepId: conversationLease?.Step.Id,
-                logicalTurnIndex: conversationLease?.Turn
+                logicalTurnIndex: conversationLease?.Turn,
+                responseToolCalls: response.Error is null ? response.ToolCalls : null,
+                retryAfterSeconds: response.Error?.RetryAfterSeconds,
+                wireMetadata: finalResult.WireMetadata
             );
 
             if (response.Error is not null)
@@ -445,7 +451,7 @@ public sealed partial class LlmTestServerRuntime
         }
     }
 
-    public Task<LlmTestServerEmbeddingResult> CreateEmbeddingAsync(
+    private Task<LlmTestServerEmbeddingResult> CreateEmbeddingCoreAsync(
         string modelId,
         IReadOnlyList<string> inputs,
         string? bearerToken = null,
@@ -529,7 +535,7 @@ public sealed partial class LlmTestServerRuntime
         }
     }
 
-    public Task<LlmTestServerImageResult> GenerateImageAsync(
+    private Task<LlmTestServerImageResult> GenerateImageCoreAsync(
         string modelId,
         string prompt,
         string? bearerToken = null,
@@ -609,7 +615,7 @@ public sealed partial class LlmTestServerRuntime
         }
     }
 
-    public Task<LlmTestServerAudioResult> GenerateAudioAsync(
+    private Task<LlmTestServerAudioResult> GenerateAudioCoreAsync(
         string modelId,
         string input,
         string? bearerToken = null,
@@ -690,7 +696,7 @@ public sealed partial class LlmTestServerRuntime
         }
     }
 
-    public Task<LlmTestServerTranscriptionResult> TranscribeAudioAsync(
+    private Task<LlmTestServerTranscriptionResult> TranscribeAudioCoreAsync(
         string modelId,
         string fileName,
         string? prompt = null,
@@ -774,7 +780,7 @@ public sealed partial class LlmTestServerRuntime
         }
     }
 
-    public Task<LlmTestServerTranscriptionResult> TranslateAudioAsync(
+    private Task<LlmTestServerTranscriptionResult> TranslateAudioCoreAsync(
         string modelId,
         string fileName,
         string? prompt = null,
@@ -857,7 +863,7 @@ public sealed partial class LlmTestServerRuntime
         }
     }
 
-    public Task<LlmTestServerVideoResult> GenerateVideoAsync(
+    private Task<LlmTestServerVideoResult> GenerateVideoCoreAsync(
         string modelId,
         string prompt,
         string? bearerToken = null,
@@ -1382,7 +1388,10 @@ public sealed partial class LlmTestServerRuntime
         IReadOnlyList<string>? streamChunks = null,
         string? stepId = null,
         int? logicalTurnIndex = null,
-        bool isReplay = false
+        bool isReplay = false,
+        IReadOnlyList<LlmTestServerToolCall>? responseToolCalls = null,
+        int? retryAfterSeconds = null,
+        ManagedCode.LlmTestServer.Determinism.LlmTestServerResponseMetadata? wireMetadata = null
     )
     {
         var activeRequest = _activeRequest.Value;
@@ -1401,6 +1410,9 @@ public sealed partial class LlmTestServerRuntime
             StepId = stepId,
             TurnIndex = logicalTurnIndex,
             IsReplay = isReplay,
+            ResponseToolCalls = responseToolCalls ?? [],
+            RetryAfterSeconds = retryAfterSeconds,
+            WireMetadata = wireMetadata ?? activeRequest?.WireMetadata,
             ModelId = modelId,
             Message = message,
             Request = request,
@@ -1479,11 +1491,14 @@ public sealed partial class LlmTestServerRuntime
                 - modelId.Length
                 - message.Length
                 - CountCharacters(promptCacheKey)
+                - CountCharacters(runtimeEvent.WireMetadata?.Identity)
+                - CountCharacters(runtimeEvent.WireMetadata?.ClockMode)
         );
         var response = RetainText(runtimeEvent.Response, ref remaining, ref truncated);
         var streamChunks = RetainChunks(runtimeEvent.StreamChunks, ref remaining, ref truncated);
         var messages = RetainMessages(runtimeEvent.Messages, ref remaining, ref truncated);
         var tools = RetainTools(runtimeEvent.Tools, ref remaining, ref truncated);
+        var responseCalls = RetainResponseCalls(runtimeEvent.ResponseToolCalls, ref remaining, ref truncated);
         var request = RetainText(runtimeEvent.Request, ref remaining, ref truncated);
 
         return runtimeEvent with
@@ -1497,6 +1512,7 @@ public sealed partial class LlmTestServerRuntime
             PromptCacheKey = promptCacheKey,
             Messages = messages,
             Tools = tools,
+            ResponseToolCalls = responseCalls,
             Response = response,
             StreamChunks = streamChunks,
             Request = request,
@@ -1540,6 +1556,18 @@ public sealed partial class LlmTestServerRuntime
         }
 
         return retained.Count == 0 ? [] : Array.AsReadOnly(retained.ToArray());
+    }
+
+    private static IReadOnlyList<LlmTestServerToolCall> RetainResponseCalls(IReadOnlyList<LlmTestServerToolCall> calls, ref int remaining, ref bool truncated)
+    {
+        var retained = new List<LlmTestServerToolCall>();
+        foreach (var call in calls)
+        {
+            if (remaining < _retainedMessageCost) { truncated = true; break; }
+            remaining -= _retainedMessageCost;
+            retained.Add(new() { Id = RetainRequiredText(call.Id, ref remaining, ref truncated), Name = RetainRequiredText(call.Name, ref remaining, ref truncated), ArgumentsJson = RetainRequiredText(call.ArgumentsJson, ref remaining, ref truncated) });
+        }
+        return retained.ToArray();
     }
 
     private static IReadOnlyList<LlmTestServerToolDefinition> RetainTools(
@@ -1642,13 +1670,17 @@ public sealed partial class LlmTestServerRuntime
             + runtimeEvent.Message.Length
             + CountCharacters(runtimeEvent.Request)
             + CountCharacters(runtimeEvent.Response)
-            + CountCharacters(runtimeEvent.PromptCacheKey);
+            + CountCharacters(runtimeEvent.PromptCacheKey)
+            + CountCharacters(runtimeEvent.WireMetadata?.Identity)
+            + CountCharacters(runtimeEvent.WireMetadata?.ClockMode);
         foreach (var item in runtimeEvent.Messages)
         {
             total += _retainedMessageCost + item.Role.Length + item.Content.Length + CountCharacters(item.ToolCallId)
                 + item.ToolCalls.Sum(call => _retainedMessageCost + call.Id.Length + call.Name.Length + call.ArgumentsJson.Length);
         }
 
+        foreach (var call in runtimeEvent.ResponseToolCalls)
+        { total += _retainedMessageCost + call.Id.Length + call.Name.Length + call.ArgumentsJson.Length; }
         foreach (var item in runtimeEvent.Tools)
         {
             total += _retainedToolCost + item.Name.Length + CountCharacters(item.Description) + item.ParametersJson.Length;
@@ -1856,7 +1888,7 @@ public sealed partial class LlmTestServerRuntime
 
     private readonly record struct PromptCacheCandidate(string Key, int Tokens);
 
-    private readonly record struct RuntimeRequestContext(string RequestId, long Generation, string? ConversationId, string? ProviderNamespace);
+    private readonly record struct RuntimeRequestContext(string RequestId, long Generation, string? ConversationId, string? ProviderNamespace, ManagedCode.LlmTestServer.Determinism.LlmTestServerResponseMetadata WireMetadata);
 
     private static LlmTestServerTokenUsage CreateVideoUsage(string prompt)
     {

@@ -1,4 +1,5 @@
 using System.Text;
+using ManagedCode.LlmTestServer.Diagnostics;
 using ManagedCode.LlmTestServer.Scenarios;
 using Microsoft.Extensions.Options;
 
@@ -19,6 +20,9 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
     private readonly int _maxPreviewBytes;
     private readonly int _maxRetainedBytes;
     private long _retainedByteCount;
+    private long _totalObserved;
+    private long _evictedCount;
+    private bool _retentionTruncated;
 
     public LlmTestServerProviderHttpTraceStore(IOptions<LlmTestServerProviderHttpTraceOptions> options)
     {
@@ -57,6 +61,25 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
         }
     }
 
+    public LlmTestServerRequestSnapshot GetEvidenceSnapshot()
+    {
+        lock (_gate)
+        {
+            var entries = GetSnapshot();
+            return new()
+            {
+                Requests = entries,
+                TotalMatched = entries.Count,
+                TotalObserved = _totalObserved,
+                EvictedCount = _evictedCount,
+                RetentionTruncated = _retentionTruncated,
+                RetainedByteCount = _retainedByteCount,
+                FirstSequence = entries.Count == 0 ? null : entries.Min(entry => entry.Sequence),
+                LastSequence = entries.Count == 0 ? null : entries.Max(entry => entry.Sequence)
+            };
+        }
+    }
+
     public void Start(LlmTestServerProviderHttpTrace trace)
     {
         ArgumentNullException.ThrowIfNull(trace);
@@ -68,9 +91,11 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
             {
                 _retainedByteCount -= GetEntryRetainedByteCount(trace.RequestId, existing);
                 _order.Remove(trace.RequestId);
+                _evictedCount++;
             }
 
-            var retained = BoundTrace(trace);
+            var retained = BoundTrace(trace with { Sequence = ++_totalObserved });
+            _retentionTruncated |= retained.RetentionTruncated || retained.RequestPreviewTruncated || retained.ResponsePreviewTruncated || retained.RuntimePayloadTruncated;
             _traces[trace.RequestId] = retained;
             _order.AddLast(trace.RequestId);
             _retainedByteCount += GetEntryRetainedByteCount(trace.RequestId, retained);
@@ -95,6 +120,9 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
                 trace with
                 {
                     CompletedAt = completion.CompletedAt,
+                    CompletedMonotonicSeconds = completion.CompletedMonotonicSeconds,
+                    RetryAfter = completion.RetryAfter,
+                    TerminalMarkerObserved = completion.TerminalMarkerObserved,
                     DurationMilliseconds = completion.DurationMilliseconds,
                     StatusCode = completion.StatusCode,
                     IsCompleted = true,
@@ -158,6 +186,9 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
                 requestId,
                 trace with
                 {
+                    WireClockMode = enrichment.WireClockMode ?? trace.WireClockMode,
+                    WireCreatedAt = enrichment.WireCreatedAt ?? trace.WireCreatedAt,
+                    WireSequence = enrichment.WireSequence ?? trace.WireSequence,
                     OperationId = enrichment.OperationId ?? trace.OperationId,
                     ModelId = enrichment.ModelId ?? trace.ModelId,
                     ScenarioId = enrichment.ScenarioId ?? trace.ScenarioId,
@@ -172,6 +203,7 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
                     ErrorMessage = enrichment.ErrorMessage ?? trace.ErrorMessage,
                     Usage = enrichment.Usage ?? trace.Usage,
                     Messages = enrichment.Messages ?? trace.Messages,
+                    ResponseToolCalls = enrichment.ResponseToolCalls ?? trace.ResponseToolCalls,
                     StreamChunks = enrichment.StreamChunks ?? trace.StreamChunks,
                     IsStreaming = enrichment.IsStreaming ?? trace.IsStreaming,
                     RuntimePayloadTruncated =
@@ -189,6 +221,9 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
             _traces.Clear();
             _order.Clear();
             _retainedByteCount = 0;
+            _totalObserved = 0;
+            _evictedCount = 0;
+            _retentionTruncated = false;
         }
     }
 
@@ -197,6 +232,7 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
         var previous = _traces[requestId];
         _retainedByteCount -= GetEntryRetainedByteCount(requestId, previous);
         var retained = BoundTrace(trace);
+        _retentionTruncated |= retained.RetentionTruncated || retained.RequestPreviewTruncated || retained.ResponsePreviewTruncated || retained.RuntimePayloadTruncated;
         _traces[requestId] = retained;
         _retainedByteCount += GetEntryRetainedByteCount(requestId, retained);
         TrimOldestEntries();
@@ -324,6 +360,10 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
             ref retentionTruncated,
             out var requestPreviewTruncated
         );
+        var wireClockMode = RetainText(trace.WireClockMode, _maxMetadataBytes, ref remaining, ref retentionTruncated);
+        var retryGroupId = RetainText(trace.RetryGroupId, _maxMetadataBytes, ref remaining, ref retentionTruncated);
+        var retryAfter = RetainText(trace.RetryAfter, _maxMetadataBytes, ref remaining, ref retentionTruncated);
+        var responseToolCalls = RetainToolCalls(trace.ResponseToolCalls, ref remaining, ref retentionTruncated);
         var messages = RetainMessages(
             trace.Messages,
             ref remaining,
@@ -358,6 +398,10 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
             ErrorMessage = errorMessage,
             TransportError = transportError,
             Messages = messages,
+            ResponseToolCalls = responseToolCalls,
+            RetryGroupId = retryGroupId,
+            WireClockMode = wireClockMode,
+            RetryAfter = retryAfter,
             StreamChunks = streamChunks,
             RetentionTruncated = retentionTruncated,
             RetainedByteCount = _maxRetainedBytes - remaining,
@@ -399,7 +443,9 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
                 ref remaining,
                 ref truncated
             );
-            retained.Add(new LlmTestServerMessage { Role = role, Content = content });
+            var callId = RetainText(message.ToolCallId, _maxMetadataBytes, ref remaining, ref truncated);
+            var calls = RetainToolCalls(message.ToolCalls, ref remaining, ref truncated);
+            retained.Add(new LlmTestServerMessage { Role = role, Content = content, ToolCallId = callId, ToolCalls = [.. calls] });
         }
 
         if (retained.Count < source.Count)
@@ -408,6 +454,21 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
         }
 
         return retained.Count == 0 ? [] : Array.AsReadOnly(retained.ToArray());
+    }
+
+    private IReadOnlyList<LlmTestServerToolCall> RetainToolCalls(IReadOnlyList<LlmTestServerToolCall> source, ref int remaining, ref bool truncated)
+    {
+        var retained = new List<LlmTestServerToolCall>();
+        foreach (var call in source)
+        {
+            if (remaining < _messageOverheadBytes) { truncated = true; break; }
+            remaining -= _messageOverheadBytes;
+            var id = RetainRequiredText(call.Id, _maxMetadataBytes, ref remaining, ref truncated);
+            var name = RetainRequiredText(call.Name, _maxMetadataBytes, ref remaining, ref truncated);
+            var arguments = RetainRequiredText(call.ArgumentsJson, _maxPreviewBytes, ref remaining, ref truncated);
+            retained.Add(new() { Id = id, Name = name, ArgumentsJson = arguments });
+        }
+        return Array.AsReadOnly(retained.ToArray());
     }
 
     private IReadOnlyList<string> RetainChunks(
@@ -603,6 +664,7 @@ public sealed class LlmTestServerProviderHttpTraceStore : ILlmTestServerProvider
             if (_traces.Remove(oldest.Value, out var trace))
             {
                 _retainedByteCount -= GetEntryRetainedByteCount(oldest.Value, trace);
+                _evictedCount++;
             }
         }
 

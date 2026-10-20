@@ -26,6 +26,7 @@ or assert that no unexpected LLM calls occurred. When a bearer token is configur
 provider endpoints and runtime configuration/assertion control endpoints require it.
 Test-session lifecycle uses the credentials described in the [session guide](docs/Features/TestSessions.md).
 Branching tool workflows use the [typed conversation DSL](docs/Features/ConversationDSL.md).
+Use [request verification and deterministic wire clocks](docs/Features/RequestVerificationAndDeterminism.md) to inspect/export requests, assert complete tool workflows and retry behavior, and reproduce fixture IDs and timestamps.
 
 ## First passing test
 
@@ -144,7 +145,7 @@ This is the currently implemented behavior, not future intent:
 
 | Surface | What works now |
 | --- | --- |
-| Hosting | `builder.Services.AddLlmTestServer(...)` registers one deterministic runtime; `app.MapLlmTestServer()` maps the Blazor server-side browser panel at `/`, JSON control endpoints under `/admin-api`, and provider-namespaced HTTP routes. |
+| Hosting | `builder.Services.AddLlmTestServer(...)` registers the default runtime and isolated test-session registry; `app.MapLlmTestServer()` maps the Blazor server-side browser panel at `/`, JSON control endpoints under `/admin-api`, and provider-namespaced HTTP routes. |
 | Runtime configuration | Configure at host startup, through `LlmTestServerClient.ConfigureAsync(...)`, or through `POST /admin-api/configure`. Configuration replaces the current runtime state and resets assertions, scenario positions, fault counters, and prompt-cache entries. |
 | Reset | `ResetAsync()` and `POST /admin-api/reset` keep the current models/scenarios/fixtures but clear assertion events, scenario response positions, rate-limit counters, and prompt-cache entries. |
 | Models | Default models use official fixture IDs for chat, embeddings, images, audio, and video. Typed helpers register broader OpenAI model families, and `AddModel(...)` supports custom deployment or provider IDs. Model kind is enforced on every route. |
@@ -154,10 +155,22 @@ This is the currently implemented behavior, not future intent:
 | SDK clients | Official OpenAI, Azure OpenAI, Azure AI Inference / Foundry, Amazon Bedrock, and `Microsoft.Extensions.AI` clients can call the hosted provider routes. The client package also creates control, chat, embedding, image, and audio clients with the same bearer token. |
 | Auth | A global bearer token protects provider and `/admin-api/*` endpoints. Anthropic `x-api-key` and Azure `api-key` headers are accepted as provider-native ways to pass the same token. Scenarios can add their own bearer-token requirement. |
 | Fault simulation | Provider-neutral rate-limit and content-filter simulation flow through every provider family and return provider-shaped errors. Scripted per-scenario failures remain available for exact test paths. |
-| Assertions | `/admin-api/assertions` returns counters plus every runtime event with request preview, response/error text, model id, scenario id, event kind, and deterministic usage. |
+| Assertions | `/admin-api/assertions` returns counters plus retained runtime events with request preview, response/error text, model id, scenario id, event kind, and deterministic usage. |
+| Test sessions | Typed `CreateSessionAsync(...)` and session headers isolate configuration, queues, history, faults, cache and journal; reset/disposal affect the owning session. |
+| Conversation graphs | `UseConversation(...)` configures typed step predicates, branches, tool-result checks, turn ordering, terminal policies and successful-request replay; match explanations and conversation status are available through control APIs. |
+| Request evidence | `GetRequestsAsync(...)` filters/pages the bounded journal; `ExportRequestsAsync(...)` and `ExportRequestsNdjsonAsync(...)` include versioned retention/eviction evidence. |
+| Verification | `VerifyAsync(...)` checks counts/order, unexpected calls, structured tool arguments/results, visited graph steps, terminal markers and retry policy. Incomplete retained evidence cannot pass. |
+| Wire identity and time | `UseDeterminism(seed, fixedUtc)` fixes generated provider IDs/time with provider-local counters; reset reproduces them and graph replay retains metadata. Real diagnostic clocks and retry timing stay real. |
 | Usage accounting | Input, output, reasoning, total, cached-input, and cache-write token values are computed deterministically and projected into provider-specific response envelopes when that provider surface documents usage fields. |
 | Browser panel | `/` shows models/fixtures, actions, control and provider endpoint groups, grouped runtime events, captured requests, captured responses, counters, and per-event usage. It auto-refreshes every 15 seconds using Blazor component state and `StateHasChanged()`. |
 | Aspire | `builder.AddLlmTestServer()` starts the packaged .NET service without Docker by default; `WithApiKey(...)` wires auth, `GetHttpEndpoint()` and provider-specific endpoint helpers expose URLs, and `AddLlmTestServerContainer()` is an explicit container opt-in. |
+
+See [conversation graphs](docs/Features/ConversationDSL.md) and
+[request verification and determinism](docs/Features/RequestVerificationAndDeterminism.md) for typed APIs,
+HTTP contracts, retention limits and terminal-marker applicability. Explicit fixture timestamps retain their
+configured values. The current E4 batch passed 812/812 local integrations with 91.66% production line coverage,
+a clean Release build, all 19 local packages and the independent installed Aspire/SDK/Chromium consumer (1/1).
+Public publication and remaining roadmap features are tracked in the [delivery plan](docs/Features/LlmTestServerDeliveryPlan.md).
 
 ## Provider Packages
 

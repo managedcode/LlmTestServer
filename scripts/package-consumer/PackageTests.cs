@@ -106,10 +106,24 @@ public sealed class PackageTests
                 throw new InvalidOperationException("Installed package sessions must isolate requests and assertions from the dashboard runtime.");
         }
         await VerifyInstalledConversationGraphAsync(control, cancellationToken);
+        await VerifyInstalledToolPresetAsync(control, cancellationToken);
         using var playwright = await Playwright.CreateAsync();
         await using var browser = await playwright.Chromium.LaunchAsync(new() { Headless = true });
-        var page = await browser.NewPageAsync();
+        var recordingDirectory = Environment.GetEnvironmentVariable("LLM_TEST_SERVER_DEMO_RECORDING_DIRECTORY");
+        await using var browserContext = await browser.NewContextAsync(new()
+        {
+            ViewportSize = new() { Width = 1440, Height = 1000 },
+            RecordVideoDir = recordingDirectory,
+            RecordVideoSize = recordingDirectory is null ? null : new() { Width = 1440, Height = 1000 },
+        });
+        var page = await browserContext.NewPageAsync();
+        async Task HoldDemoFrameAsync(int seconds)
+        {
+            if (recordingDirectory is not null)
+                await Task.Delay(TimeSpan.FromSeconds(seconds), cancellationToken);
+        }
         await page.GotoAsync(http.BaseAddress!.ToString());
+        await HoldDemoFrameAsync(7);
         var runtimeTrigger = page.GetByRole(AriaRole.Button, new() { Name = "Runtime settings", Exact = true });
         await runtimeTrigger.ClickAsync();
         await Expect(page.GetByLabel("Bearer token", new() { Exact = true })).ToBeVisibleAsync();
@@ -130,6 +144,7 @@ public sealed class PackageTests
         await page.GetByRole(AriaRole.Button, new() { Name = "Refresh runtime state" }).ClickAsync();
         await Expect(page.GetByText("Unauthorized", new() { Exact = true })).ToHaveCountAsync(0);
         await page.SetViewportSizeAsync(1440, 1000);
+        await HoldDemoFrameAsync(7);
         await Expect(page.GetByRole(AriaRole.Alertdialog, new() { Name = "Runtime state" })).Not.ToBeVisibleAsync();
         var headerBounds = await page.Locator(".topbar").BoundingBoxAsync();
         var workspaceBounds = await page.Locator(".mail-workspace").BoundingBoxAsync();
@@ -139,11 +154,14 @@ public sealed class PackageTests
         await Expect(page.GetByTestId("request-details")).ToBeVisibleAsync();
         await page.ScreenshotAsync(new() { Path = "package-dashboard-overview.jpg", FullPage = true, Quality = 85 });
         await page.ScreenshotAsync(new() { Path = "package-dashboard-token-usage.png", FullPage = true });
+        await HoldDemoFrameAsync(12);
         await page.GetByRole(AriaRole.Tab, new() { Name = "Conversation", Exact = false }).ClickAsync();
         await page.ScreenshotAsync(new() { Path = "package-dashboard-conversation.jpg", FullPage = true, Quality = 85 });
+        await HoldDemoFrameAsync(12);
         await runtimeTrigger.ClickAsync();
         await Expect(page.GetByRole(AriaRole.Alertdialog, new() { Name = "Runtime state" })).ToBeVisibleAsync();
         await page.ScreenshotAsync(new() { Path = "package-dashboard-runtime.jpg", FullPage = true, Quality = 85 });
+        await HoldDemoFrameAsync(8);
         await page.Keyboard.PressAsync("Escape");
         await Expect(page.GetByRole(AriaRole.Alertdialog, new() { Name = "Runtime state" })).Not.ToBeVisibleAsync();
         await page.ScreenshotAsync(new() { Path = "package-dashboard-authorized.png", FullPage = true });
@@ -159,11 +177,46 @@ public sealed class PackageTests
         await Expect(page.GetByRole(AriaRole.Alertdialog, new() { Name = "Runtime state" })).Not.ToBeVisibleAsync();
         await page.ScreenshotAsync(new() { Path = "package-dashboard-authorized-mobile.png", FullPage = true });
         await page.ScreenshotAsync(new() { Path = "package-dashboard-mobile-request-detail.png", FullPage = true });
+        await HoldDemoFrameAsync(8);
+    }
+
+    private static async Task VerifyInstalledToolPresetAsync(LlmTestServerClient control, CancellationToken cancellationToken)
+    {
+        var fixture = ManagedCode.LlmTestServer.Tools.WellKnown.LlmTestServerWellKnownTools.Calculator.Success(
+            new() { Expression = "6 * 7" }, new() { Value = 42m }, "call_installed_calculator");
+        await using var session = await control.CreateSessionAsync(config => config.RequireBearerToken("test-key").UseGpt41Mini()
+            .UseConversation("installed-preset", graph => graph
+                .Step("call", step => step.WhenTurn(1).CallsTools(fixture.Call).Then("result"))
+                .Step("result", step => step.WhenToolResult(fixture.Call.Name, fixture.Call.Id)
+                    .WithToolArgumentsJson(fixture.Call.ArgumentsJson).WhenLatestJson("$", fixture.Result.Content)
+                    .Responds("42").Complete())), cancellationToken);
+        var sdk = new OpenAI.Chat.ChatClient("gpt-4.1-mini", new System.ClientModel.ApiKeyCredential("test-key"),
+            new OpenAI.OpenAIClientOptions
+            {
+                Endpoint = new Uri(session.HttpClient.BaseAddress!, "openai/v1"),
+                Transport = new System.ClientModel.Primitives.HttpClientPipelineTransport(session.HttpClient),
+            });
+        var options = new OpenAI.Chat.ChatCompletionOptions
+        {
+            Tools = { OpenAI.Chat.ChatTool.CreateFunctionTool(fixture.Definition.Name, fixture.Definition.Description,
+                BinaryData.FromString(fixture.Definition.ParametersJson)) },
+        };
+        List<OpenAI.Chat.ChatMessage> messages = [new OpenAI.Chat.UserChatMessage("calculate")];
+        var first = (await sdk.CompleteChatAsync(messages, options, cancellationToken)).Value;
+        if (first.ToolCalls.Single().FunctionName != fixture.Call.Name || first.ToolCalls.Single().Id != fixture.Call.Id)
+            throw new InvalidOperationException("Installed well-known preset lost its typed function call.");
+        messages.Add(new OpenAI.Chat.AssistantChatMessage(first));
+        messages.Add(new OpenAI.Chat.ToolChatMessage(fixture.Result.ToolCallId, fixture.Result.Content));
+        var answer = (await sdk.CompleteChatAsync(messages, options, cancellationToken)).Value;
+        var state = (await session.Control.GetConversationsAsync(cancellationToken)).Single();
+        if (answer.Content[0].Text != "42" || !state.IsTerminal || state.ExecutedSteps != 2)
+            throw new InvalidOperationException("Installed well-known preset did not complete its real SDK tool round.");
     }
 
     private static async Task VerifyInstalledConversationGraphAsync(LlmTestServerClient control, CancellationToken cancellationToken)
     {
         await using var session = await control.CreateSessionAsync(config => config.RequireBearerToken("test-key").UseGpt41Mini()
+            .UseDeterminism("installed-seed", new DateTimeOffset(2001, 2, 3, 4, 5, 6, TimeSpan.Zero))
             .UseConversation("package-graph", graph => graph
                 .Step("lookup", step => step.WhenLatestUserEquals("weather in Paris").WhenTurn(1)
                     .CallsTool("weather", """{"city":"Paris"}""", "call_package_graph").Then("answer"))
@@ -184,6 +237,8 @@ public sealed class PackageTests
         };
         List<OpenAI.Chat.ChatMessage> messages = [new OpenAI.Chat.UserChatMessage("weather in Paris")];
         var first = (await sdk.CompleteChatAsync(messages, options, cancellationToken)).Value;
+        if (first.CreatedAt != new DateTimeOffset(2001, 2, 3, 4, 5, 6, TimeSpan.Zero))
+            throw new InvalidOperationException("Installed fixed-clock SDK fixture time was lost.");
         var call = first.ToolCalls.Single();
         if (call.Id != "call_package_graph" || call.FunctionName != "weather"
             || call.FunctionArguments.ToString() != """{"city":"Paris"}""")
@@ -220,6 +275,41 @@ public sealed class PackageTests
             || events.Any(item => item.ConversationId != conversation.Id)
             || (await control.GetAssertionsAsync(cancellationToken)).Matched != 1)
             throw new InvalidOperationException("Installed conversation replay must preserve graph state, header scope and default runtime isolation.");
+        var evidence = await conversation.Control.GetRequestsAsync(new() { Order = ManagedCode.LlmTestServer.Diagnostics.LlmTestServerRequestOrder.Ascending }, cancellationToken);
+        var exported = await conversation.Control.ExportRequestsAsync(cancellationToken: cancellationToken);
+        var ndjson = await conversation.Control.ExportRequestsNdjsonAsync(cancellationToken: cancellationToken);
+        var verified = await conversation.Control.VerifyAsync(new()
+        {
+            NoUnexpectedCalls = true,
+            Requests =
+            [
+                new() { Name = "all graph calls", MinimumCount = 3, MaximumCount = 3 },
+                new() { Name = "stream completion", Query = new() { Streaming = true }, RequireStreamingTerminalMarker = true },
+                new() { Name = "tool fixture", Query = new() { Step = "lookup" }, Tools = [new() { Name = "weather", CallId = "call_package_graph", ArgumentsJson = """{"city":"Paris"}""" }] },
+            ],
+            Conversations = [new() { ScenarioId = "package-graph", ConversationId = conversation.Id, VisitedSteps = ["lookup", "answer"], RequireTerminal = true }],
+        }, cancellationToken);
+        if (evidence.Requests.Count != 3 || evidence.EvictedCount != 0 || evidence.RetentionTruncated
+            || evidence.Requests.Any(trace => trace.WireClockMode != "fixed") || evidence.Requests[^1].WireSequence != 2
+            || exported.SchemaVersion != 1 || exported.Evidence.Requests.Count != 3
+            || ndjson.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length != 4 || !verified.Passed || !verified.EvidenceComplete)
+            throw new InvalidOperationException("Installed request query/export/verification lost complete fixture evidence.");
+        await using var retrySession = await control.CreateSessionAsync(config => config.RequireBearerToken("test-key")
+            .UseChatScenario("sdk-retry", scenario => scenario.Fails(429, "too_many_requests", "try again").RetryAfter(0).Responds("retried")), cancellationToken);
+        retrySession.HttpClient.DefaultRequestHeaders.Add(ManagedCode.LlmTestServer.Diagnostics.LlmTestServerRequestHeaders.RetryGroup, "installed-sdk-retry");
+        var retrySdk = new OpenAI.Chat.ChatClient("gpt-4.1-mini", new System.ClientModel.ApiKeyCredential("test-key"),
+            new OpenAI.OpenAIClientOptions { Endpoint = new Uri(retrySession.HttpClient.BaseAddress!, "openai/v1"),
+                Transport = new System.ClientModel.Primitives.HttpClientPipelineTransport(retrySession.HttpClient) });
+        var retryAnswer = (await retrySdk.CompleteChatAsync([new OpenAI.Chat.UserChatMessage("retry")], cancellationToken: cancellationToken)).Value;
+        var retryEvidence = await retrySession.Control.VerifyAsync(new()
+        {
+            NoUnexpectedCalls = true,
+            Retries = [new() { GroupId = "installed-sdk-retry", MinimumAttempts = 2, MaximumAttempts = 2,
+                StatusSequence = [429, 200], MinimumRetryAfterSeconds = 0, RespectRetryAfter = true }],
+        }, cancellationToken);
+        if (retryAnswer.Content[0].Text != "retried" || !retryEvidence.Passed || !retryEvidence.EvidenceComplete)
+            throw new InvalidOperationException("Installed official SDK retries must be proven by actual provider requests.");
+
     }
 
 }

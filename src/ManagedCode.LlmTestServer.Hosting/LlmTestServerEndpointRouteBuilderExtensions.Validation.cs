@@ -18,26 +18,26 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         var version = context.Request.Headers[AnthropicWireMapper.VersionHeaderName].ToString();
         return string.Equals(version, AnthropicWireMapper.SupportedVersion, StringComparison.Ordinal)
             ? null
-            : AnthropicInvalidRequest(
+            : AnthropicInvalidRequest(context,
                 $"The {AnthropicWireMapper.VersionHeaderName} header must be {AnthropicWireMapper.SupportedVersion}."
             );
     }
 
-    private static IResult? ValidateAnthropicMessageRequest(AnthropicMessagesRequest request)
+    private static IResult? ValidateAnthropicMessageRequest(AnthropicMessagesRequest request, HttpContext context)
     {
         if (string.IsNullOrWhiteSpace(request.Model))
         {
-            return AnthropicInvalidRequest("Missing message model.");
+            return AnthropicInvalidRequest(context, "Missing message model.");
         }
 
         if (request.MaxTokens is null or < 0)
         {
-            return AnthropicInvalidRequest("Missing or invalid max_tokens.");
+            return AnthropicInvalidRequest(context, "Missing or invalid max_tokens.");
         }
 
         if (request.Messages is null || request.Messages.Count == 0)
         {
-            return AnthropicInvalidRequest("At least one message is required.");
+            return AnthropicInvalidRequest(context, "At least one message is required.");
         }
 
         return request.Messages.Any(message =>
@@ -45,7 +45,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
                 || message.Role is not ("user" or "assistant")
                 || message.Content.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null
             )
-            ? AnthropicInvalidRequest("Every message requires a user or assistant role and content.")
+            ? AnthropicInvalidRequest(context, "Every message requires a user or assistant role and content.")
             : null;
     }
 
@@ -555,10 +555,10 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         );
     }
 
-    private static IResult AnthropicInvalidRequest(string message)
+    private static IResult AnthropicInvalidRequest(HttpContext context, string message)
     {
         return Results.Json(
-            AnthropicWireMapper.ToError("invalid_request_error", message),
+            AnthropicWireMapper.ToError("invalid_request_error", message, WireMetadata(context)),
             statusCode: StatusCodes.Status400BadRequest
         );
     }

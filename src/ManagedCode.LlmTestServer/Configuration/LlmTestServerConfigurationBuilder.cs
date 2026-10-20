@@ -502,6 +502,11 @@ public sealed partial class LlmTestServerConfigurationBuilder
     internal static LlmTestServerConfiguration Snapshot(LlmTestServerConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
+        if (configuration.Determinism is { } determinism)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(determinism.Seed);
+            if (determinism.Seed.Length > 256) { throw new ArgumentException("Deterministic seeds are limited to 256 characters.", nameof(configuration)); }
+        }
         ArgumentOutOfRangeException.ThrowIfNegative(configuration.MaxPromptCacheEntries);
         ArgumentOutOfRangeException.ThrowIfNegative(configuration.MaxConversations);
         ArgumentOutOfRangeException.ThrowIfNegative(configuration.MaxConversationBytes);
@@ -624,7 +629,7 @@ public sealed partial class LlmTestServerConfigurationBuilder
         foreach (var chunk in response.StreamChunks) { ArgumentNullException.ThrowIfNull(chunk); }
         if (response.Error is { } error)
         {
-            if (error.StatusCode is < 400 or > 599) { throw new ArgumentOutOfRangeException(nameof(response)); }
+            if (error.StatusCode is < 400 or > 599 || error.RetryAfterSeconds is < 0 or > 86400) { throw new ArgumentOutOfRangeException(nameof(response)); }
             ArgumentException.ThrowIfNullOrWhiteSpace(error.Code);
             ArgumentNullException.ThrowIfNull(error.Message);
         }

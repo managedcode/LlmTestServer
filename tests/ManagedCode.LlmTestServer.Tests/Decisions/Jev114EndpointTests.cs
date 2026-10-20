@@ -2,7 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using ManagedCode.LlmTestServer.Decisions;
-using ManagedCode.LlmTestServer.Hosting;
+using ManagedCode.LlmTestServer.Diagnostics;
 using ManagedCode.LlmTestServer.SystemOne;
 using ManagedCode.LlmTestServer.Tests.TestSupport;
 

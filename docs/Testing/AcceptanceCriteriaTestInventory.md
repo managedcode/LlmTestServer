@@ -49,18 +49,30 @@ have been removed. This inventory is documentation; tests do not read it to asse
 | Dashboard root HTML and request/response presentation | `AdminPanelTests` |
 | Public request journal auth, all filter/paging parameters, validation, reset | `RequestJournalIntegrationTests` |
 | Bounded request/response diagnostics preserve full HTTP response bytes | `RequestJournalIntegrationTests.Journal_BoundsRetentionWithoutTruncatingActualProviderResponsesAsync` |
+| Request query filters, order, JSON/NDJSON export, retention/eviction/reset and active-request evidence | `RequestQueryExportIntegrationTests` |
+| Counts/order/no-unexpected-calls, structured tool/result predicates and graph expectations | `VerificationIntegrationTests` |
+| Retry group/status/count, advertised Retry-After and real monotonic wait compliance | `VerificationIntegrationTests` |
+| Incomplete evidence after eviction/truncation/paging/pending requests cannot pass | `VerificationIntegrationTests` |
+| Seed/fixed clock/reset/replay, provider-local ordinals, session isolation and real observations | `DeterminismIntegrationTests` |
+| Native Anthropic/Gemini/Cohere/Ollama JSON/stream identity, embedding/image/Groq audio metadata | `NativeDeterminismIntegrationTests` |
 | Aspire starts packaged service and exercises official SDKs through allocated endpoint | `AspireIntegrationTests` |
 | Configuration key enforced by running Aspire server | `AspireAuthorizationIntegrationTests` |
 | Installed NuGet assets, typed configuration, official SDK and interactive Chromium dashboard | `scripts/package-consumer/PackageTests.cs`, run by `scripts/verify-package.py` with isolated build configuration/cache |
 | Actual public GitHub release and all NuGet bytes | `scripts/verify-release.py`, executed after publication |
 | Clean public-feed installed consumer | `scripts/verify-package.py --public-feed`, executed after publication |
 
-## Integration qualification still in progress
+## Qualification and remaining delivery
 
-Removing old internal tests does not prove equivalent public API coverage. The remaining integration obligations
-are tracked in the integration-parity verification artifact and the implementation ledger in
-[the delivery plan](../Features/LlmTestServerDeliveryPlan.md). Remaining work includes final coverage qualification, installed-package browser flows and container
-execution; the current configuration/history/conversation integrations passed in the 722/722 integration-only suite (91.34% production line coverage). Add real server flows for uncovered behavior; do not restore internal tests or lower the 90% coverage gate.
+E4 local qualification passed **812/812** running-server integrations, **91.66%** production line coverage and a
+final canonical Release build with **0 warnings / 0 errors**. All **19 packages** packed successfully. The
+independent clean installed NuGet consumer ran the packaged Aspire service, official SDKs, E4 typed
+query/export/verification/fixed metadata and interactive Chromium acceptance (**1/1**).
+Evidence logs: `artifacts/delivery/e4-build-final.log`, `e4-coverage-final.log`, `e4-pack.log`, `e4-consumer.log`.
+
+E3 [CI 39446187097](https://github.com/managedcode/LlmTestServer/actions/runs/39446187097) passed at `3aae4db`.
+E4 has not yet been pushed to branch CI. Local NuGet acceptance does not prove public-feed publication.
+The [delivery plan](../Features/LlmTestServerDeliveryPlan.md) retains E5–E13, public NuGet/GHCR and launch
+acceptance as unfinished. Add actual server flows for new behavior and preserve the 90% coverage gate.
 
 Each implemented operation must be exercised with every supported parameter, positive and invalid/boundary
 values, supported streaming modes, auth/version handling and stateful continuation where applicable. A passing

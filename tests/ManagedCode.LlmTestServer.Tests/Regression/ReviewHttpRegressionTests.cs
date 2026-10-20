@@ -3,7 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using ManagedCode.LlmTestServer.Client;
-using ManagedCode.LlmTestServer.Hosting;
+using ManagedCode.LlmTestServer.Diagnostics;
 using ManagedCode.LlmTestServer.Models;
 using ManagedCode.LlmTestServer.Runtime;
 using ManagedCode.LlmTestServer.Tests.TestSupport;

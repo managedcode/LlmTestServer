@@ -57,3 +57,31 @@ jobs:
         with:
           name: packages
           path: artifacts/packages/*.nupkg
+
+  container-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5.4.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish SDK container to local daemon without registry push
+        run: >-
+          dotnet publish samples/ManagedCode.LlmTestServer.Service/ManagedCode.LlmTestServer.Service.csproj
+          --configuration Release --runtime linux-x64 --self-contained false
+          /t:PublishContainer -p:ContainerImageTag=ci -p:ContainerRuntimeIdentifier=linux-x64
+          -p:UseAppHost=false
+
+      - name: Verify actual container HTTP behavior
+        run: python3 scripts/verify-container.py --image managedcode/llm-test-server:ci
+
+      - name: Upload container verification evidence
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: container-verification
+          path: artifacts/container-verification

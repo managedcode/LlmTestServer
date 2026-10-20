@@ -23,8 +23,8 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
     {
         context.Response.StatusCode = StatusCodes.Status200OK;
         context.Response.ContentType = "text/event-stream";
-        var responseId = OpenAiWireMapper.CreateResponseId();
-        var created = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var responseId = OpenAiWireMapper.CreateResponseId(result.WireMetadata);
+        var created = (result.WireMetadata ?? WireMetadata(context)).CreatedAt.ToUnixTimeSeconds();
 
         foreach (var chunk in result.ToolCalls.Count > 0 ? new List<string> { result.Content } : result.StreamChunks)
         {
@@ -57,6 +57,8 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         }
 
         await context.Response.WriteAsync("data: [DONE]\n\n", cancellationToken).ConfigureAwait(false);
+        await context.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+        context.MarkLlmTestServerTerminalMarker();
     }
 
     private static async Task WriteStreamingResponseAsync(
@@ -75,6 +77,8 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         {
             await WriteResponseSseDataAsync(context, streamEvent, cancellationToken).ConfigureAwait(false);
         }
+        await context.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+        context.MarkLlmTestServerTerminalMarker();
     }
 
     private static async Task WriteResponseSseDataAsync(
@@ -110,6 +114,8 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
                 cancellationToken
             )
             .ConfigureAwait(false);
+        await context.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+        context.MarkLlmTestServerTerminalMarker();
     }
 
     private static async Task WriteImageStreamingAsync(
@@ -135,7 +141,8 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
                     background,
                     outputFormat,
                     quality,
-                    size
+                    size,
+                    WireMetadata(context)
                 ),
                 cancellationToken
             )
@@ -149,11 +156,14 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
                     background,
                     outputFormat,
                     quality,
-                    size
+                    size,
+                    WireMetadata(context)
                 ),
                 cancellationToken
             )
             .ConfigureAwait(false);
+        await context.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+        context.MarkLlmTestServerTerminalMarker();
     }
 
     private static async Task WriteOllamaStreamingChatAsync(
@@ -182,6 +192,8 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         );
         await context.Response.WriteAsync($"{finalPayload}\n", cancellationToken)
             .ConfigureAwait(false);
+        await context.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+        context.MarkLlmTestServerTerminalMarker();
     }
 
     private static async Task WriteAnthropicStreamingMessageAsync(
@@ -253,6 +265,8 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
                 cancellationToken
             )
             .ConfigureAwait(false);
+        await context.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+        context.MarkLlmTestServerTerminalMarker();
     }
 
     private static async Task WriteAnthropicSseEventAsync(
@@ -282,7 +296,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         await WriteCohereSseEventAsync(
                 context,
                 "message-start",
-                CohereWireMapper.ToMessageStartEvent(),
+                CohereWireMapper.ToMessageStartEvent(result.WireMetadata),
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -330,6 +344,8 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
                 cancellationToken
             )
             .ConfigureAwait(false);
+        await context.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+        context.MarkLlmTestServerTerminalMarker();
     }
 
     private static async Task WriteCohereSseEventAsync(
@@ -356,7 +372,7 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         context.Response.StatusCode = StatusCodes.Status200OK;
         var sse = string.Equals(context.Request.Query["alt"], "sse", StringComparison.Ordinal);
         context.Response.ContentType = sse ? "text/event-stream" : "application/json";
-        var responseId = $"gemini_{Guid.NewGuid():N}";
+        var responseId = "gemini-" + (result.WireMetadata ?? WireMetadata(context)).IdFor("response");
         if (!sse)
         {
             await context.Response.WriteAsync("[", cancellationToken).ConfigureAwait(false);
@@ -379,6 +395,8 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
             _jsonOptions
         );
         await context.Response.WriteAsync(sse ? $"data: {finalPayload}\n\n" : $",{finalPayload}]", cancellationToken).ConfigureAwait(false);
+        await context.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+        context.MarkLlmTestServerTerminalMarker();
     }
 
     private static async Task WriteBedrockConverseStreamAsync(
@@ -441,6 +459,8 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
                 cancellationToken
             )
             .ConfigureAwait(false);
+        await context.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+        context.MarkLlmTestServerTerminalMarker();
     }
 
     private static async Task WriteBedrockInvokeModelStreamAsync(

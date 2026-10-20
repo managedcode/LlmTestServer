@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ManagedCode.LlmTestServer.Determinism;
 using ManagedCode.LlmTestServer.Runtime;
 using ManagedCode.LlmTestServer.Scenarios;
 
@@ -77,7 +78,7 @@ public static class GeminiWireMapper
                 TotalTokenCount = result.Usage.InputTokens + outputTokens + (finishReason is not null ? result.Usage.ReasoningTokens : 0),
             },
             ModelVersion = result.ModelId,
-            ResponseId = responseId ?? CreateResponseId(),
+            ResponseId = responseId ?? CreateResponseId(result.WireMetadata),
         };
     }
 
@@ -247,9 +248,9 @@ public static class GeminiWireMapper
         };
     }
 
-    private static string CreateResponseId()
+    private static string CreateResponseId(LlmTestServerResponseMetadata? metadata)
     {
-        return $"gemini-{Guid.NewGuid():N}";
+        return "gemini-" + (metadata ?? LlmTestServerResponseMetadata.Live()).IdFor("response");
     }
 
 }

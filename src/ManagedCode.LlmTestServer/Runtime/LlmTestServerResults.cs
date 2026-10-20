@@ -1,3 +1,4 @@
+using ManagedCode.LlmTestServer.Determinism;
 using ManagedCode.LlmTestServer.Models;
 using ManagedCode.LlmTestServer.Scenarios;
 
@@ -5,6 +6,8 @@ namespace ManagedCode.LlmTestServer.Runtime;
 
 public sealed record LlmTestServerChatResult
 {
+    public LlmTestServerResponseMetadata? WireMetadata { get; init; }
+
     public bool IsSuccess { get; init; }
 
     public int StatusCode { get; init; } = 200;
@@ -70,6 +73,8 @@ public sealed record LlmTestServerChatResult
 
 public sealed record LlmTestServerEmbeddingResult
 {
+    public LlmTestServerResponseMetadata? WireMetadata { get; init; }
+
     public bool IsSuccess { get; init; }
 
     public int StatusCode { get; init; } = 200;
@@ -85,6 +90,8 @@ public sealed record LlmTestServerEmbeddingResult
 
 public sealed record LlmTestServerImageResult
 {
+    public LlmTestServerResponseMetadata? WireMetadata { get; init; }
+
     public bool IsSuccess { get; init; }
 
     public int StatusCode { get; init; } = 200;
@@ -100,6 +107,8 @@ public sealed record LlmTestServerImageResult
 
 public sealed record LlmTestServerAudioResult
 {
+    public LlmTestServerResponseMetadata? WireMetadata { get; init; }
+
     public bool IsSuccess { get; init; }
 
     public int StatusCode { get; init; } = 200;
@@ -117,6 +126,8 @@ public sealed record LlmTestServerAudioResult
 
 public sealed record LlmTestServerTranscriptionResult
 {
+    public LlmTestServerResponseMetadata? WireMetadata { get; init; }
+
     public LlmTestServerTranscriptionUsage? Usage { get; init; }
 
     public bool IsSuccess { get; init; }
@@ -134,6 +145,8 @@ public sealed record LlmTestServerTranscriptionResult
 
 public sealed record LlmTestServerVideoResult
 {
+    public LlmTestServerResponseMetadata? WireMetadata { get; init; }
+
     public bool IsSuccess { get; init; }
 
     public int StatusCode { get; init; } = 200;

@@ -3,7 +3,26 @@
     <IsPackable>false</IsPackable>
     <NoDefaultLaunchSettingsFile>true</NoDefaultLaunchSettingsFile>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <EnableSdkContainerSupport>true</EnableSdkContainerSupport>
+    <RuntimeIdentifiers>linux-x64;linux-arm64</RuntimeIdentifiers>
+    <ContainerRuntimeIdentifiers>linux-x64;linux-arm64</ContainerRuntimeIdentifiers>
+    <ContainerBaseImage>mcr.microsoft.com/dotnet/aspnet:10.0</ContainerBaseImage>
+    <ContainerRepository>managedcode/llm-test-server</ContainerRepository>
+    <ContainerImageTag Condition="'$(ContainerImageTag)' == ''">$(Version)</ContainerImageTag>
+    <ContainerImageFormat>OCI</ContainerImageFormat>
+    <ContainerUser>1654</ContainerUser>
+    <ContainerWorkingDirectory>/app/</ContainerWorkingDirectory>
+    <ContainerPublishInParallel>false</ContainerPublishInParallel>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ContainerPort Include="8080" Type="tcp" />
+    <ContainerEnvironmentVariable Include="ASPNETCORE_HTTP_PORTS" Value="8080" />
+    <ContainerLabel Include="org.opencontainers.image.source" Value="https://github.com/managedcode/LlmTestServer" />
+    <ContainerLabel Include="org.opencontainers.image.title" Value="LLM Test Server" />
+    <ContainerLabel Include="org.opencontainers.image.description" Value="Deterministic LLM API mock server with management API and dashboard" />
+    <ContainerLabel Include="org.opencontainers.image.licenses" Value="MIT" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.App.Internal.Assets" />

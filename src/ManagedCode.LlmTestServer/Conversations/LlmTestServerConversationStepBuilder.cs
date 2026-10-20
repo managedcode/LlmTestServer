@@ -24,6 +24,7 @@ public sealed class LlmTestServerConversationStepBuilder(string id)
     public LlmTestServerConversationStepBuilder CallsTool(string name, string argumentsJson, string callId = "call_fixture") { _response.CallsTool(name, argumentsJson, callId); return this; }
     public LlmTestServerConversationStepBuilder CallsTools(params LlmTestServerToolCall[] calls) { _response.CallsTools(calls); return this; }
     public LlmTestServerConversationStepBuilder Fails(int status, string code, string message) { _response.Fails(status, code, message); return this; }
+    public LlmTestServerConversationStepBuilder RetryAfter(int seconds) { _response.RetryAfter(seconds); return this; }
     public LlmTestServerConversationStepBuilder DelaysBy(int milliseconds) { _response.DelaysBy(milliseconds); return this; }
     public LlmTestServerConversationStepBuilder Then(params string[] stepIds) { _next = [.. stepIds]; _terminal = false; return this; }
     public LlmTestServerConversationStepBuilder Complete() { _next = []; _terminal = true; return this; }

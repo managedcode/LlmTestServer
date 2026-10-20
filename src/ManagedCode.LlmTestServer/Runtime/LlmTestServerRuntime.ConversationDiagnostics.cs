@@ -126,6 +126,7 @@ public sealed partial class LlmTestServerRuntime
                 ExecutedSteps = entry.Value.Executions,
                 LastTurnIndex = entry.Value.LastTurn,
                 NextSteps = [.. entry.Value.NextSteps],
+                VisitedSteps = pair.Key.Conversation!.Steps.Where(step => entry.Value.Visited.Contains(step.Id)).Select(step => step.Id).ToList(),
                 UnvisitedSteps = pair.Key.Conversation!.Steps.Where(step => !entry.Value.Visited.Contains(step.Id)).Select(step => step.Id).ToList(),
             })).ToArray();
         }

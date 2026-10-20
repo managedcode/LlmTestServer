@@ -40,7 +40,7 @@ public sealed partial class LlmTestServerRuntime
         {
             return LlmTestServerChatResult.Failure(request.ModelId, 409, "llm_test_server_response_capacity_exceeded", "Response history capacity exceeded. Reset the runtime or increase its configured capacity.");
         }
-        var id = $"resp_{Guid.NewGuid():N}";
+        var id = "resp_" + (result.WireMetadata ?? GetResponseMetadata()).IdFor("response");
         _chatResponses.Add(id, new StoredChatResponse(request.HistoryNamespace!, TokenHash(token), messages));
         _chatResponseBytes += bytes;
         return result with { ResponseId = id };

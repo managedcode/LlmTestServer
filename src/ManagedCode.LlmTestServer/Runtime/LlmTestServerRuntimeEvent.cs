@@ -4,6 +4,11 @@ namespace ManagedCode.LlmTestServer.Runtime;
 
 public sealed record LlmTestServerRuntimeEvent
 {
+    public ManagedCode.LlmTestServer.Determinism.LlmTestServerResponseMetadata? WireMetadata { get; init; }
+
+    public IReadOnlyList<LlmTestServerToolCall> ResponseToolCalls { get; init; } = [];
+    public int? RetryAfterSeconds { get; init; }
+
     public DateTimeOffset Timestamp { get; init; }
 
     public LlmTestServerEventKind Kind { get; init; }

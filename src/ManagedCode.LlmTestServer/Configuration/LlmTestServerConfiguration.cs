@@ -6,6 +6,8 @@ namespace ManagedCode.LlmTestServer.Configuration;
 
 public sealed record LlmTestServerConfiguration
 {
+    public ManagedCode.LlmTestServer.Determinism.LlmTestServerDeterminism? Determinism { get; init; }
+
     /// <summary>Maximum retained prompt-cache prefixes. Zero disables prompt caching.</summary>
     public int MaxConversations { get; init; } = 256;
 

@@ -77,6 +77,12 @@ Rule format:
 
 ### Likes
 
+- Ship one complete v1.0.0 launch batch on a separate branch; the owner performs the merge. Do not merge, publish intermediate versions, or trigger releases before the complete product and launch preparation are ready.
+- Publish the product landing page through GitHub Pages using the dashboard visual language and shared styles/components where practical; substantiate product sections with real server/browser screenshots and demo recordings.
+- Keep launch marketing drafts, generated images, videos, screenshots and production files under marketing/ and leave that directory uncommitted until the owner authorizes publication.
+- Deliver both NuGet packages and a publicly pullable prebuilt Docker image, configurable through the management API.
+- Build and publish container images through the .NET SDK container targets (`dotnet publish /t:PublishContainer`); do not use Dockerfile/docker build as the distribution build mechanism.
+
 - Keep checked-in UI screenshots synchronized with the current rendered product; after visible dashboard changes, refresh and verify the affected images in a real browser before commit and push.
 - When token usage is requested, count response tokens with `tiktoken` and include the measured usage in replies; if `tiktoken` is unavailable, report that blocker instead of guessing token counts.
 - Token usage workflow changes need executable code and tests, not only contributor-guide documentation, so callers can verify usage accounting behavior directly.

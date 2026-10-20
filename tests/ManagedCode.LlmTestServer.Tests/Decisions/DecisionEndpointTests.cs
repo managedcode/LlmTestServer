@@ -4,7 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using ManagedCode.LlmTestServer.Client;
 using ManagedCode.LlmTestServer.Decisions;
-using ManagedCode.LlmTestServer.Hosting;
+using ManagedCode.LlmTestServer.Diagnostics;
 using ManagedCode.LlmTestServer.Models;
 using ManagedCode.LlmTestServer.OpenAI;
 using ManagedCode.LlmTestServer.Runtime;

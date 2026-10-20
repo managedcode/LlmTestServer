@@ -26,10 +26,13 @@ Bedrock, OpenRouter, DeepSeek, Perplexity, SystemOne і Cloudflare.
 Є linear response queues, scripted errors/delays, function tool loops, structured output, Responses continuation,
 streaming, embeddings/image/audio/video fixtures, cache/reasoning/token accounting, Blazor dashboard, bounded
 request journal, rate-limit/content-filter simulation і package-owned Aspire без Docker. Test sessions локально
-кваліфіковані. E3 conversation graph локально кваліфікований; наступні етапи не є завершеними support claims.
+кваліфіковані. E3 conversation graph та E4 request verification/query/export/fixed wire metadata локально
+кваліфіковані; наступні етапи не є завершеними support claims.
 
-Wire mappers ще використовують generated IDs і поточний час. Сценарні результати детерміновані, але
-byte-for-byte однакові response IDs/timestamps потребують fixed-clock/seed роботи E4.
+E4 fixed-clock/seed режим задає generated wire IDs/time через session-owned provider-local ordinals; reset
+відтворює послідовність, conversation replay зберігає response metadata. Live режим лишається доступним.
+Explicit fixture timestamps/model dictionaries зберігають власні значення; runtime/trace observations та
+monotonic retry timing залишаються реальними. Це не гарантія byte-for-byte однакових довільних HTTP bytes.
 
 ## 3. Цільові можливості
 
@@ -51,9 +54,9 @@ Public API: `AddLlmTestServer`, `MapLlmTestServer`, `AddLlmTestServerContainer`;
 `llm_test_server_`. Усі package IDs, dependencies, targets, service assets, docs і screenshots використовують
 один бренд і використовують наведені публічні ідентифікатори.
 
-Погоджена версія combined batch — `0.2.0`; canonical version bump виконується один раз, коли весь batch
+Погоджена версія combined batch — `1.0.0`; canonical version bump виконується один раз, коли весь batch
 готовий. Порядок: branch changes → local quality gate → pack/installed consumer → release preflight →
-merge/push через чинні gates → GitHub release/GHCR/NuGet → чистий consumer з public feed.
+owner merge через чинні gates → GitHub release/GHCR/NuGet → чистий consumer з public feed.
 Часткову publication відновлювати для тієї самої версії. Не публікувати окрему версію на кожну зміну.
 Release завершений лише після перевіреної публікації всіх 19 пакетів та container image і реального consumer flow.
 
@@ -72,7 +75,8 @@ Release завершений лише після перевіреної публ
 Control endpoints E2: `POST /admin-api/sessions`, `DELETE /admin-api/sessions/{id}` та session-scoped
 configure/reset локально кваліфіковані. `GET /admin-api/requests` доступний із paging/filter. E3 додає
 `GET /admin-api/conversations` і `POST /admin-api/match/explain`; інтеграційна кваліфікація пройшла.
-Наступні control API: verification та fixture import/export/validate. Session headers і client factory описані
+E4 `POST /admin-api/verify`, розширений request query та `GET /admin-api/requests/export` локально
+кваліфіковані. Наступні control API: fixture import/export/validate. Session headers і client factory описані
 в [ADR-0003](../ADR/ADR-0003-isolated-test-sessions.md), conversation DSL — у [контракті](ConversationDSL.md).
 Control routes залишаються під `/admin-api`, provider routes — у своїх namespaces.
 
@@ -95,7 +99,9 @@ flowchart LR
 
 ### 6.1. Готові function-tool fixtures
 
-Рекомендовані repo-owned presets: `Calculator`, `CurrentTime`, `Weather`, `WebSearch`, `FetchUrl`, `FileSearch`, `ReadFile`, `WriteFile`, `ListFiles`, `RunCode`, `Shell`, `ApplyPatch`. Це наші зручні test presets, а не універсальний міжпровайдерний стандарт назв function tools.
+Реалізовано [typed function-tool catalogue](WellKnownFunctionTools.md) із дванадцятьма presets, input/output/error schemas та scripted success/error fixtures. Focused HTTP qualification: 40/40; combined server suite 852/852, production line coverage 91,79%, Release build 0 warnings/errors; 19 packages packed. Clean installed NuGet/Aspire/official SDK/Chromium consumer пройшов 1/1, включно з typed Calculator tool round. Це частина E5: native built-ins, dashboard discovery та розширена provider qualification залишаються відкритими.
+
+Repo-owned presets: `Calculator`, `CurrentTime`, `Weather`, `WebSearch`, `FetchUrl`, `FileSearch`, `ReadFile`, `WriteFile`, `ListFiles`, `RunCode`, `Shell`, `ApplyPatch`. Це наші зручні test presets, а не універсальний міжпровайдерний стандарт назв function tools.
 
 Кожен має typed argument/result schema, явні success/error fixtures, predictable call IDs, optional delay, expected-call verification та repeat/exhaustion rules. Час береться з fixture clock. Пошук і файли беруться із заданих test data. Tool loop може виконувати тестовий delegate через `Microsoft.Extensions.AI` function invocation; зовнішні побічні ефекти не входять у preset. Calculator не повинен виконувати довільний код через eval.
 
@@ -162,8 +168,8 @@ Well-known catalogue повинен бути discoverable у C# та dashboard: 
 | E1 | Єдина ідентичність 19 packages, GitHub/GHCR/docs, verified published consumer | E0 | 3–5 |
 | E2 | Session isolation, bounded stores/lifecycle, typed session client | E1 | 6–10 |
 | E3 | Conversation DSL, branches, matching explanations, tool-round semantics | E2 | 5–8 |
-| E4 | Request query/export, assertions, retry verification, stable clock/IDs | E2–E3 | 4–7 |
-| E5 | Well-known presets + основні native search/file/code tools | E3–E4; file-search lifecycle узгодити з E9 | 10–16 |
+| E4 | [Request query/export, assertions, retry verification, stable clock/IDs](RequestVerificationAndDeterminism.md) | E2–E3 | 4–7 |
+| E5 | [Well-known presets](WellKnownFunctionTools.md) + основні native search/file/code tools | E3–E4; file-search lifecycle узгодити з E9 | 10–16 |
 | E6 | Timing, transport faults, semantic misbehavior catalogue | E2–E4 | 6–10 |
 | E7 | P1 API: moderation/rerank/count/model discovery/Ollama generate | E2, contract inventory | 6–10 |
 | E8 | Fixture validation/import/export та record/replay | E3–E4, E6 | 7–12 |
@@ -225,14 +231,25 @@ Validation skills під час реалізації: `mcaf-testing`, `run-tests
 | E1 | Product identity локально реалізовано; public delivery pending | 19 package surfaces/22 проєкти; Release build, format, local pack та installed consumer пройшли. GitHub `managedcode/LlmTestServer`, origin і default branch `main` перевірені. Branded IDs/config повністю очищено; 19 nupkg metadata/entries перевірено без старих назв |
 | E2 | Реалізовано й локально кваліфіковано | Незалежні runtime/journals, session ID/key, typed client, bounded admission, atomic configure/reset/dispose та retirement pending work. 655/655 integration tests, coverage 91,17%; installed consumer/Aspire/Chromium 1/1. [Контракт](TestSessions.md), [ADR-0003](../ADR/ADR-0003-isolated-test-sessions.md) |
 | E3 | Реалізовано й локально кваліфіковано | [Conversation DSL](ConversationDSL.md), [ADR-0004](../ADR/ADR-0004-conversation-step-graphs.md); 722/722 integration tests, coverage 91,34%; format/Release build 0 warnings/errors; all 19 packages packed, independent installed Aspire/SDK/Chromium consumer 1/1 |
-| E4–E13 | Не завершено | Увесь погоджений функціональний обсяг активний; support claims не розширюються наперед |
+| E4 | Реалізовано й локально кваліфіковано | [Request evidence/verification/determinism](RequestVerificationAndDeterminism.md), [ADR-0005](../ADR/ADR-0005-request-evidence-and-wire-determinism.md); full suite 812/812, production line coverage 91,66%; final Release build 0 warnings/errors; 19 packages packed; independent clean installed NuGet/Aspire/official SDK/Chromium consumer 1/1. E4 branch CI ще не запущений |
+| E5 | Частково реалізовано | [12 typed function-tool presets](WellKnownFunctionTools.md), явні success-root/error-envelope schemas, existing queue/graph lifecycle; 40/40 focused HTTP cases, combined suite 852/852, coverage 91,79%, Release build 0 warnings/errors, 19 packages packed (`artifacts/delivery/presets-coverage.log`). Clean installed NuGet/Aspire/official SDK/Chromium consumer 1/1 (`artifacts/delivery/presets-consumer.log`), включно з Calculator tool round; native built-ins, dashboard discovery і provider qualification не завершено |
+| E6–E13 | Не завершено | Увесь погоджений функціональний обсяг активний; support claims не розширюються наперед |
 
 Гілка `codex/llm-test-server`, [PR1](https://github.com/managedcode/LlmTestServer/pull/1).
-CI [39440908006](https://github.com/managedcode/LlmTestServer/actions/runs/39440908006) успішно завершив
-Format, Build, Test, Pack і Verify installed NuGet consumer для commit `4039c08`; це evidence E1/E2,
-а не поточних незакомічених E3 змін. Public NuGet/GHCR publication ще не виконано.
+E3 CI [39446187097](https://github.com/managedcode/LlmTestServer/actions/runs/39446187097) успішний для
+head `3aae4db`. E4 зміни ще не pushed до CI; локальна кваліфікація не підміняє цей майбутній gate.
+Локальні E4 evidence logs: `artifacts/delivery/e4-build-final.log`, `e4-coverage-final.log`, `e4-pack.log` та
+`e4-consumer.log`. Consumer встановив local NuGet artifacts у незалежний clean project/cache і реально
+запустив packaged Aspire service, official SDK та Chromium; це не public-feed publication acceptance.
+Public NuGet/GHCR publication, E5–E13 і GitHub Pages launch залишаються незавершеними.
 
 Інтеграційні перевірки виявили й виправили model-list authorization, trace error metadata та browser dialog
 layout. Docs screenshots і site hero отримано з реального browser run. Sessions доведені для 13 chat provider
 families і native Jev/Kev/Clef/OpenAI decisions: JSON/SSE, cache/history/video/fault/journal isolation, auth,
 count/byte/config boundaries, cancellation та in-flight reset/configure/delete.
+
+## Launch preparation
+
+The release target is v1.0.0, delivered as one complete batch on the current branch. The owner will merge when ready; do not merge or publish intermediate releases. The launch includes a GitHub Pages landing page in the dashboard visual language with shared styles/components, real screenshots and demo videos, a detailed mc-compact guide, the supplied launch content plan, and a public prebuilt Docker image configurable through the management API. Marketing production materials live in ignored marketing/ until the owner authorizes their publication.
+
+Launch content reference: https://claude.ai/artifact/HHRF9Y8dzTbN8TJnaTKxnj

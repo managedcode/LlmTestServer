@@ -16,6 +16,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--public-feed", action="store_true", help="Restore exclusively from public NuGet, after publication.")
 parser.add_argument("--refresh-screenshots", action="store_true", help="Update checked-in dashboard images after browser verification.")
 parser.add_argument("--packages", type=Path, help="Local package directory; defaults to artifacts/packages.")
+parser.add_argument("--record-demo", action="store_true", help="Keep a real dashboard browser recording under ignored marketing/raw.")
 args = parser.parse_args()
 
 root = Path(__file__).resolve().parent.parent
@@ -38,6 +39,10 @@ for key, value in {"__VERSION__": version, "__ASPIRE_VERSION__": versions["Aspir
 for name in ["Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props"]:
     (consumer / name).write_text("<Project />\n")
 env = dict(os.environ, NUGET_PACKAGES=str(package_cache))
+if args.record_demo:
+    recording_directory = root / "marketing/raw/dashboard-recordings"
+    recording_directory.mkdir(parents=True, exist_ok=True)
+    env["LLM_TEST_SERVER_DEMO_RECORDING_DIRECTORY"] = str(recording_directory)
 def run(*args):
     subprocess.run(args, cwd=consumer, env=env, check=True)
 sources = [] if args.public_feed else ["--source", str(packages)]

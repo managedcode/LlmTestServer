@@ -1,7 +1,7 @@
 # Typed conversation step graphs
 
 Status: Locally qualified through running-server integrations and an installed-package consumer. This document describes the E3 contract;
-it does not establish a completed test or public-package release claim.
+public-package delivery remains pending.
 Related: [architecture](../Architecture.md), [ADR-0004](../ADR/ADR-0004-conversation-step-graphs.md),
 [sessions](TestSessions.md), [structured/tool fixtures](ToolAndStructuredFixtures.md),
 [Responses continuation](ResponsesContinuation.md).
@@ -159,4 +159,4 @@ bash scripts/coverage.sh
 
 Completion requires the focused HTTP/SDK cases, full integration suite, at least 90% production line coverage,
 canonical Release build and independent installed-package consumer to pass. Results belong in the delivery
-implementation ledger. The current full suite passed 722/722 with 91.34% production line coverage; the independent installed-package Aspire/SDK/Chromium consumer passed 1/1. Public package publication remains pending the combined delivery batch.
+implementation ledger. The E3 checkpoint passed 722/722 with 91.34% production line coverage; the independent installed-package Aspire/SDK/Chromium consumer passed 1/1. Public package publication remains pending the combined delivery batch.

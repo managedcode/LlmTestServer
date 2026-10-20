@@ -53,7 +53,7 @@ public sealed partial class LlmTestServerRuntime : ILlmTestServerConversationDia
             var result = CopyConversationResult(state.LastResult!);
             AddEvent(LlmTestServerEventKind.Matched, scenario.Id, request.ModelId, "Conversation response replayed.",
                 FormatChatRequest(request), result.Content, result.Usage, request, request.Stream ? result.StreamChunks : null,
-                state.LastStep.Id, turn, true);
+                state.LastStep.Id, turn, true, result.ToolCalls, wireMetadata: result.WireMetadata);
             return result;
         }
         if (state?.Busy == true) { return Failure("conversation_busy", "A conversation step is already in flight."); }

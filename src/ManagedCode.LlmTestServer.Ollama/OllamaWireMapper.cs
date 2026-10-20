@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ManagedCode.LlmTestServer.Determinism;
 using ManagedCode.LlmTestServer.Runtime;
 using ManagedCode.LlmTestServer.Scenarios;
 
@@ -34,6 +35,7 @@ public static class OllamaWireMapper
         return new()
         {
             Model = result.ModelId,
+            CreatedAt = (result.WireMetadata ?? LlmTestServerResponseMetadata.Live()).CreatedAt,
             Message = new OllamaChatMessageResponse { Content = result.Content, ToolCalls = MapTools(result) },
             Done = true,
             DoneReason = "stop",
@@ -52,6 +54,7 @@ public static class OllamaWireMapper
         return new()
         {
             Model = result.ModelId,
+            CreatedAt = (result.WireMetadata ?? LlmTestServerResponseMetadata.Live()).CreatedAt,
             Message = new OllamaChatMessageResponse { Content = content, ToolCalls = done ? MapTools(result) : null },
             Done = done,
             DoneReason = done ? "stop" : null,

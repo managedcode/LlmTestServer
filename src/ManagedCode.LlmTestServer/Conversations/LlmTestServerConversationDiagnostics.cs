@@ -39,6 +39,7 @@ public sealed record LlmTestServerConversationStatus
     public int ExecutedSteps { get; init; }
     public int LastTurnIndex { get; init; }
     public List<string> NextSteps { get; init; } = [];
+    public List<string> VisitedSteps { get; init; } = [];
     public List<string> UnvisitedSteps { get; init; } = [];
 }
 

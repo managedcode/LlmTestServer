@@ -1,76 +1,455 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>LLM Test Server</title>
-    <meta name="description" content="Deterministic LLM API mocking for .NET and Aspire. Script responses, streaming, tool calls, and failures locally.">
-    <link rel="stylesheet" href="styles.css">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f9f7f5" />
+    <title>LLM Mock Server for .NET and Aspire | LLM Test Server</title>
+    <meta
+      name="description"
+      content="Script LLM API responses, streaming and tool calls locally. Use .NET and Aspire, then inspect requests and conversations in the built-in dashboard."
+    />
+    <link rel="canonical" href="https://managedcode.github.io/LlmTestServer/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="LLM Test Server · Your tests. Your responses." />
+    <meta
+      property="og:description"
+      content="A local LLM API mock server for .NET and Aspire. Script the response. Inspect the request."
+    />
+    <meta property="og:url" content="https://managedcode.github.io/LlmTestServer/" />
+    <meta
+      property="og:image"
+      content="https://managedcode.github.io/LlmTestServer/assets/admin-dashboard-overview.jpg"
+    />
+    <meta
+      property="og:image:alt"
+      content="LLM Test Server request inbox with a selected provider request and its response."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22tile%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20stop-color%3D%22%232a2a2a%22%2F%3E%3Cstop%20offset%3D%22.72%22%20stop-color%3D%22%23121212%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2216%22%20fill%3D%22url%28%23tile%29%22%2F%3E%3Ctext%20x%3D%2232%22%20y%3D%2244%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2Csans-serif%22%20font-size%3D%2235%22%20font-weight%3D%22700%22%20fill%3D%22%23fff%22%3ET%3C%2Ftext%3E%3Crect%20x%3D%2245%22%20y%3D%229%22%20width%3D%2211%22%20height%3D%2211%22%20rx%3D%223%22%20fill%3D%22%23a4f258%22%2F%3E%3C%2Fsvg%3E"
+    />
+    <link rel="stylesheet" href="tokens.css" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="site.js" defer></script>
   </head>
   <body>
+    <a class="skip-link" href="#main">Skip to content</a>
     <header class="topbar">
-      <a class="brand" href="#top">LLM Test Server</a>
+      <a class="brand" href="#top" aria-label="LLM Test Server home"
+        ><span class="brand-symbol" aria-hidden="true">T</span><span>LLM Test Server</span></a
+      >
       <nav aria-label="Primary navigation">
+        <a href="#workflow">How it works</a>
         <a href="#coverage">Coverage</a>
-        <a href="#packages">Packages</a>
-        <a href="#start">Start</a>
+        <a href="https://github.com/managedcode/LlmTestServer">GitHub <span aria-hidden="true">↗</span></a>
       </nav>
+      <a class="button button-small" href="#get-started">Get started <span aria-hidden="true">↗</span></a>
     </header>
 
-    <main id="top">
-      <section class="hero">
+    <main id="main">
+      <section class="hero section-wrap" id="top" aria-labelledby="hero-title">
         <div class="hero-copy">
-          <p class="eyebrow">ManagedCode.LlmTestServer</p>
-          <h1>Test your AI integrations locally.</h1>
-          <p class="lede">
-            Script provider responses, streaming, tool calls, and failures. Inspect requests in a built-in dashboard. Built for .NET and Aspire.
+          <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span> Built for .NET. At home in Aspire.</p>
+          <h1 id="hero-title">Your tests.<br />Your <span class="accent-text">responses.</span></h1>
+          <p class="hero-definition">An LLM mock server for .NET and Aspire.</p>
+          <p class="hero-lede">
+            Script provider responses, streaming and tool calls locally. Use your regular SDK, then see exactly what
+            your application sent.
           </p>
           <div class="actions">
-            <a class="primary" href="#start">Get started</a>
-            <a class="secondary" href="https://github.com/managedcode/LlmTestServer">GitHub</a>
+            <a class="button" href="#get-started">Get started <span aria-hidden="true">↗</span></a
+            ><a class="text-link" href="#dashboard">Explore the dashboard <span aria-hidden="true">↓</span></a>
           </div>
-        </div>
-        <img class="hero-art" src="assets/admin-dashboard-overview.jpg" alt="LLM Test Server request dashboard showing provider calls and conversation details.">
-      </section>
-
-      <section id="coverage" class="band">
-        <div class="section-heading">
-          <p class="eyebrow">Coverage</p>
-          <h2>Provider behavior you can pin down.</h2>
-        </div>
-        <div class="grid">
-          <article><span>01</span><h3>Chat</h3><p>Script exact responses, failures, and queued replies.</p></article>
-          <article><span>02</span><h3>Streaming</h3><p>Emit known SSE chunks and a deterministic done marker.</p></article>
-          <article><span>03</span><h3>Models</h3><p>Expose a local catalog for chat, embeddings, image, and audio.</p></article>
-          <article><span>04</span><h3>Assertions</h3><p>Inspect matched, unmatched, auth, exhausted, and error events.</p></article>
-          <article><span>05</span><h3>Embeddings</h3><p>Return configured vectors for repeatable semantic tests.</p></article>
-          <article><span>06</span><h3>Media</h3><p>Serve fixed image and audio fixtures without external calls.</p></article>
-        </div>
-      </section>
-
-      <section id="packages" class="split">
-        <div>
-          <p class="eyebrow">Packages</p>
-          <h2>Small surfaces, clear ownership.</h2>
-          <p>
-            Core runtime, OpenAI wire mapping, ASP.NET Core endpoints, Microsoft.Extensions.AI clients, and Aspire AppHost extensions ship as separate packages.
+          <p class="hero-note">
+            <code>ManagedCode.LlmTestServer</code><span>Local fixtures. Real HTTP and SDK calls.</span>
           </p>
         </div>
-        <ul class="package-list">
-          <li><strong>ManagedCode.LlmTestServer</strong><span>Scenarios and assertions</span></li>
-          <li><strong>ManagedCode.LlmTestServer.Hosting</strong><span>Provider and control endpoints</span></li>
-          <li><strong>ManagedCode.LlmTestServer.Client</strong><span>Control and AI clients</span></li>
-          <li><strong>ManagedCode.LlmTestServer.Aspire</strong><span>AppHost integration</span></li>
-        </ul>
+        <figure class="hero-product">
+          <div class="window-bar" aria-hidden="true">
+            <span class="window-dots"><i></i><i></i><i></i></span><span>LLM Test Server · Request dashboard</span
+            ><span class="window-label">LOCAL</span>
+          </div>
+          <a
+            href="assets/admin-dashboard-overview.jpg"
+            class="screenshot-link"
+            aria-label="Open full request dashboard screenshot"
+            ><img
+              src="assets/admin-dashboard-overview.jpg"
+              width="1440"
+              height="1000"
+              alt="Request inbox showing provider calls and a selected request with its response and token usage."
+              fetchpriority="high"
+          /></a>
+          <figcaption>
+            <span class="caption-dot" aria-hidden="true"></span> The request, the response, and the context. Together.
+          </figcaption>
+        </figure>
       </section>
 
-      <section id="start" class="start">
-        <p class="eyebrow">Start</p>
-        <h2>Add the Aspire resource and call the local endpoint.</h2>
-        <pre><code>builder
-    .AddLlmTestServer()
-    .WithApiKey("test-key");</code></pre>
+      <section class="workflow section-wrap" id="workflow" aria-labelledby="workflow-title">
+        <div class="section-intro">
+          <p class="eyebrow">A smaller loop</p>
+          <h2 id="workflow-title">From fixture to a<br />request you can inspect.</h2>
+          <p>Keep your provider integration in the test. Choose the behavior on the other side.</p>
+        </div>
+        <ol class="workflow-steps">
+          <li>
+            <span class="step-number">01</span>
+            <h3>Set the scene.</h3>
+            <p>Configure a model, a response or a tool call. Make the expected behavior explicit.</p>
+            <code>UseChatScenario(…)</code>
+          </li>
+          <li>
+            <span class="step-number">02</span>
+            <h3>Make the call.</h3>
+            <p>Point a supported provider SDK or HTTP client at the local, namespaced API.</p>
+            <code>/openai/v1/chat/completions</code>
+          </li>
+          <li>
+            <span class="step-number">03</span>
+            <h3>Check what happened.</h3>
+            <p>Verify the response and recorded requests. Open the dashboard when you need the full story.</p>
+            <code>GetAssertionsAsync()</code>
+          </li>
+        </ol>
+      </section>
+
+      <section class="dashboard-section" id="dashboard" aria-labelledby="dashboard-title">
+        <div class="section-wrap">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">The built-in request dashboard</p>
+              <h2 id="dashboard-title">Less reconstruction.<br />More context.</h2>
+            </div>
+            <p>
+              Provider, model, status, timing and token usage stay with the request. Select a call to inspect the
+              response and conversation behind it.
+            </p>
+          </div>
+          <figure class="dashboard-figure">
+            <a href="assets/admin-dashboard-overview.jpg" aria-label="Open full dashboard overview"
+              ><img
+                src="assets/admin-dashboard-overview.jpg"
+                width="1440"
+                height="1000"
+                loading="lazy"
+                alt="LLM Test Server dashboard with a request list, filters and selected response details."
+            /></a>
+            <figcaption>A real dashboard capture from the packaged server.</figcaption>
+          </figure>
+          <div class="detail-grid">
+            <article>
+              <p class="eyebrow">Conversation context</p>
+              <h3>The whole turn of events.</h3>
+              <p>
+                Read user messages, assistant replies and tool results in order. Expand the payload when the details
+                matter.
+              </p>
+              <a
+                class="detail-image"
+                href="assets/admin-dashboard-conversation.jpg"
+                aria-label="Open full conversation screenshot"
+                ><img
+                  src="assets/admin-dashboard-conversation.jpg"
+                  width="1440"
+                  height="1000"
+                  loading="lazy"
+                  alt="Conversation view showing messages and the scripted provider response."
+              /></a>
+            </article>
+            <article>
+              <p class="eyebrow">Runtime diagnostics</p>
+              <h3>Look inside your test.</h3>
+              <p>
+                Inspect models, fixtures, provider endpoints, assertions and runtime events from the same debugging
+                surface.
+              </p>
+              <a
+                class="detail-image"
+                href="assets/admin-dashboard-runtime.jpg"
+                aria-label="Open full runtime diagnostics screenshot"
+                ><img
+                  src="assets/admin-dashboard-runtime.jpg"
+                  width="1440"
+                  height="1000"
+                  loading="lazy"
+                  alt="Runtime state dialog showing configuration and diagnostic information."
+              /></a>
+            </article>
+          </div>
+          <p class="retention-note">
+            The request journal is bounded. Oversized diagnostic payloads are marked when truncated.
+          </p>
+        </div>
+      </section>
+
+      <section class="capabilities section-wrap" aria-labelledby="capabilities-title">
+        <div class="section-intro">
+          <p class="eyebrow">Beyond a single reply</p>
+          <h2 id="capabilities-title">Test the conversation.<br />And the unexpected.</h2>
+        </div>
+        <div class="capability-grid">
+          <article>
+            <span class="feature-mark" aria-hidden="true">↳</span>
+            <h3>Tool calls with a next step.</h3>
+            <p>
+              Script a tool call, send its result and match the next conversation step. Use explicit branches and
+              terminal behavior.
+            </p>
+            <a
+              class="inline-link"
+              href="https://github.com/managedcode/LlmTestServer/blob/main/docs/Features/ConversationDSL.md"
+              >Conversation DSL <span aria-hidden="true">↗</span></a
+            >
+          </article>
+          <article>
+            <span class="feature-mark" aria-hidden="true">∥</span>
+            <h3>Parallel tests, separate state.</h3>
+            <p>
+              Give each test a session with its own configuration, history, queues and journal. Reset one without
+              resetting another.
+            </p>
+            <a
+              class="inline-link"
+              href="https://github.com/managedcode/LlmTestServer/blob/main/docs/Features/TestSessions.md"
+              >Test sessions <span aria-hidden="true">↗</span></a
+            >
+          </article>
+          <article>
+            <span class="feature-mark" aria-hidden="true">!</span>
+            <h3>Make the error path happen.</h3>
+            <p>
+              Return scripted failures, rate limits and content-filter errors. Exercise the path your happy-path fixture
+              never reaches.
+            </p>
+            <a class="inline-link" href="https://github.com/managedcode/LlmTestServer#current-functionality"
+              >Runtime capabilities <span aria-hidden="true">↗</span></a
+            >
+          </article>
+          <article>
+            <span class="feature-mark" aria-hidden="true">[ ]</span>
+            <h3>Fixtures for more than text.</h3>
+            <p>
+              Return explicit embeddings, image, audio and video fixtures on the operations supported by each provider
+              profile.
+            </p>
+            <a class="inline-link" href="#coverage">Check operation coverage <span aria-hidden="true">↓</span></a>
+          </article>
+        </div>
+      </section>
+
+      <section class="coverage-section section-wrap" id="coverage" aria-labelledby="coverage-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Provider-aware, by design</p>
+            <h2 id="coverage-title">Your provider.<br />A local endpoint.</h2>
+          </div>
+          <div>
+            <p>Provider APIs use explicit namespaces. Operation coverage varies by provider and grows incrementally.</p>
+            <a
+              class="inline-link"
+              href="https://github.com/managedcode/LlmTestServer/blob/main/docs/Features/ProviderApiContractCoverage.md"
+              >Read the operation matrix <span aria-hidden="true">↗</span></a
+            >
+          </div>
+        </div>
+        <div class="provider-table-wrap">
+          <table>
+            <caption>
+              Provider namespaces. Check the linked operation matrix for exact methods, streaming modes and SDK
+              coverage.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Provider family</th>
+                <th scope="col">Local API namespace</th>
+                <th scope="col">Contract details</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">OpenAI</th>
+                <td><code>/openai</code></td>
+                <td>
+                  <a
+                    href="https://github.com/managedcode/LlmTestServer/blob/main/docs/Features/ProviderApiContractCoverage.md"
+                    >Operation matrix ↗</a
+                  >
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Azure OpenAI · Microsoft Foundry</th>
+                <td><code>/azure-openai</code><br /><code>/microsoft-foundry</code></td>
+                <td>Provider routes and SDK checks</td>
+              </tr>
+              <tr>
+                <th scope="row">Anthropic · Gemini · Amazon Bedrock</th>
+                <td><code>/anthropic</code> <code>/gemini</code> <code>/bedrock</code></td>
+                <td>Native provider contracts</td>
+              </tr>
+              <tr>
+                <th scope="row">Groq · Mistral · Ollama · Cohere</th>
+                <td><code>/groq</code> <code>/mistral</code> <code>/ollama</code> <code>/cohere</code></td>
+                <td>Provider-specific operations</td>
+              </tr>
+              <tr>
+                <th scope="row">OpenRouter · DeepSeek · Perplexity</th>
+                <td><code>/openrouter</code> <code>/deepseek</code> <code>/perplexity</code></td>
+                <td>Provider-specific operations</td>
+              </tr>
+              <tr>
+                <th scope="row">SystemOne · Cloudflare</th>
+                <td><code>/systemone</code> <code>/cloudflare</code></td>
+                <td>Native decision fixtures</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="coverage-note">
+          A provider profile does not imply every API is implemented. Verify the operation and client version your
+          application uses.
+        </p>
+      </section>
+
+      <section class="start-section" id="get-started" aria-labelledby="start-title">
+        <div class="section-wrap start-layout">
+          <div class="start-copy">
+            <p class="eyebrow">Start in your AppHost</p>
+            <h2 id="start-title">A local server.<br />A familiar workflow.</h2>
+            <p>
+              Add the Aspire package, register the resource and let Aspire allocate its endpoint. The default
+              integration runs without Docker.
+            </p>
+            <a class="inline-link" href="https://github.com/managedcode/LlmTestServer#first-passing-test"
+              >Open the complete integration test <span aria-hidden="true">↗</span></a
+            >
+            <p class="setup-note">.NET 10 · Aspire AppHost<br />Use a local fixture key in test code.</p>
+          </div>
+          <div class="code-stack">
+            <div class="code-panel">
+              <div class="code-heading">
+                <span>Install · AppHost project</span
+                ><button type="button" class="copy-button" data-copy="install-code" hidden>Copy</button>
+              </div>
+              <pre><code id="install-code">dotnet add package ManagedCode.LlmTestServer.Aspire</code></pre>
+            </div>
+            <div class="code-panel">
+              <div class="code-heading">
+                <span>AppHost.cs</span
+                ><button type="button" class="copy-button" data-copy="apphost-code" hidden>Copy</button>
+              </div>
+              <pre><code id="apphost-code"><span class="code-keyword">using</span> ManagedCode.LlmTestServer.Aspire;
+
+<span class="code-keyword">var</span> builder = DistributedApplication.CreateBuilder(args);
+builder.AddLlmTestServer(<span class="code-string">"llm-test-server"</span>)
+       .WithApiKey(<span class="code-string">"test-key"</span>);
+builder.Build().Run();</code></pre>
+            </div>
+            <p class="code-note">
+              Next: retrieve the Aspire resource endpoint, configure a scenario and make an SDK call. The full example
+              includes health, auth and assertions.
+            </p>
+          </div>
+        </div>
+        <div class="section-wrap standalone-layout">
+          <div>
+            <p class="eyebrow">Standalone alternative</p>
+            <h3>Prefer Docker?</h3>
+            <p class="standalone-copy">
+              Start the test server in a container. Open <code>http://localhost:8080</code> for the dashboard, then load
+              your models, scenarios and fixtures through <code>POST /admin-api/configure</code>.
+            </p>
+            <a class="inline-link" href="https://github.com/managedcode/LlmTestServer#runtime-reconfiguration"
+              >Management API configuration <span aria-hidden="true">↗</span></a
+            >
+          </div>
+          <div class="code-panel">
+            <div class="code-heading">
+              <span>Standalone · v1.0.0</span
+              ><button type="button" class="copy-button" data-copy="docker-code" hidden>Copy</button>
+            </div>
+            <pre><code id="docker-code">docker run --rm -p 8080:8080 ghcr.io/managedcode/llm-test-server:1.0.0</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="faq-section section-wrap" aria-labelledby="faq-title">
+        <div class="section-intro">
+          <p class="eyebrow">A few useful details</p>
+          <h2 id="faq-title">Before your first test.</h2>
+        </div>
+        <div class="faq-list">
+          <details>
+            <summary>Does it call a live model?</summary>
+            <p>
+              The server returns the fixtures configured for your test. It models API behavior so your application can
+              make real HTTP or SDK calls against a local server.
+            </p>
+          </details>
+          <details>
+            <summary>Do I need Docker?</summary>
+            <p>
+              The default package-owned Aspire integration runs without Docker. Aspire starts the packaged .NET server
+              and exposes its allocated resource endpoint.
+            </p>
+          </details>
+          <details>
+            <summary>Can I keep my provider SDK?</summary>
+            <p>
+              Use the supported routes with the SDKs listed in the
+              <a
+                href="https://github.com/managedcode/LlmTestServer/blob/main/docs/Features/ProviderApiContractCoverage.md"
+                >operation coverage documentation</a
+              >. Compatibility is verified per operation; check your client version and API requirements.
+            </p>
+          </details>
+          <details>
+            <summary>Can tests share a server?</summary>
+            <p>
+              Yes. Create separate test sessions for independent configuration, scenario queues, history and
+              diagnostics. Dispose each session when its test ends.
+            </p>
+          </details>
+          <details>
+            <summary>Is every provider API implemented?</summary>
+            <p>
+              No. Coverage varies by provider. The operation matrix describes the claimed routes, streaming modes and
+              SDK evidence. Provider profiles grow incrementally.
+            </p>
+          </details>
+          <details>
+            <summary>Does this evaluate model quality?</summary>
+            <p>
+              It verifies your application's behavior against scripted API fixtures. It does not measure the quality of
+              a live model's answers.
+            </p>
+          </details>
+        </div>
+      </section>
+
+      <section class="closing section-wrap" aria-labelledby="closing-title">
+        <p class="eyebrow">Make the next call predictable</p>
+        <h2 id="closing-title">Know what you send.<br />Choose what comes back.</h2>
+        <p>Start the server, script a response and inspect your first request.</p>
+        <div class="actions">
+          <a class="button" href="#get-started">Get started <span aria-hidden="true">↗</span></a
+          ><a class="text-link" href="https://github.com/managedcode/LlmTestServer"
+            >View on GitHub <span aria-hidden="true">↗</span></a
+          >
+        </div>
       </section>
     </main>
+    <footer class="footer section-wrap">
+      <a class="brand" href="#top"><span class="brand-symbol" aria-hidden="true">T</span>LLM Test Server</a>
+      <p>Built by <a href="https://github.com/managedcode">ManagedCode</a>.</p>
+      <div>
+        <a href="https://github.com/managedcode/LlmTestServer#readme">Documentation</a
+        ><a href="https://github.com/managedcode/LlmTestServer/blob/main/LICENSE">License</a
+        ><a href="https://github.com/managedcode/LlmTestServer">Source code</a>
+      </div>
+    </footer>
+    <p id="copy-status" class="visually-hidden" role="status" aria-live="polite"></p>
   </body>
 </html>

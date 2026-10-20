@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ManagedCode.LlmTestServer.Determinism;
 using ManagedCode.LlmTestServer.Runtime;
 using ManagedCode.LlmTestServer.Scenarios;
 
@@ -42,7 +43,7 @@ public static class AnthropicWireMapper
     {
         return new()
         {
-            Id = CreateMessageId(),
+            Id = CreateMessageId(result.WireMetadata),
             Model = result.ModelId,
             Content = cacheOnly ? [] : result.ToolCalls.Count > 0 ? (result.Content.Length > 0 ? new[] { new AnthropicContentBlock { Text = result.Content } } : []).Concat(result.ToolCalls.Select(ToToolBlock)).ToList() : [new AnthropicContentBlock { Text = result.Content }],
             StopReason = cacheOnly ? "max_tokens" : result.ToolCalls.Count > 0 ? "tool_use" : "end_turn",
@@ -50,7 +51,7 @@ public static class AnthropicWireMapper
         };
     }
 
-    public static AnthropicErrorResponse ToError(string type, string message)
+    public static AnthropicErrorResponse ToError(string type, string message, LlmTestServerResponseMetadata? metadata = null)
     {
         return new()
         {
@@ -59,7 +60,7 @@ public static class AnthropicWireMapper
                 Type = type,
                 Message = message,
             },
-            RequestId = CreateRequestId(),
+            RequestId = CreateRequestId(metadata),
         };
     }
 
@@ -70,7 +71,7 @@ public static class AnthropicWireMapper
             type = "message_start",
             message = new AnthropicMessageResponse
             {
-                Id = CreateMessageId(),
+                Id = CreateMessageId(result.WireMetadata),
                 Model = result.ModelId,
                 StopReason = null,
                 Content = [],
@@ -174,9 +175,9 @@ public static class AnthropicWireMapper
         }
     }
 
-    private static string CreateMessageId()
+    private static string CreateMessageId(LlmTestServerResponseMetadata? metadata)
     {
-        return $"msg_llmtestserver_{Guid.NewGuid():N}";
+        return "msg_llmtestserver_" + (metadata ?? LlmTestServerResponseMetadata.Live()).IdFor("message");
     }
 
     private static AnthropicUsage CreateUsage(
@@ -218,9 +219,9 @@ public static class AnthropicWireMapper
         return cacheControl is { ValueKind: not JsonValueKind.Undefined and not JsonValueKind.Null };
     }
 
-    private static string CreateRequestId()
+    private static string CreateRequestId(LlmTestServerResponseMetadata? metadata)
     {
-        return $"req_llmtestserver_{Guid.NewGuid():N}";
+        return "req_llmtestserver_" + (metadata ?? LlmTestServerResponseMetadata.Live()).IdFor("request");
     }
 
 }

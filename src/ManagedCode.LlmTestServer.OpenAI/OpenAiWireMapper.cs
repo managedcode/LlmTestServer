@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ManagedCode.LlmTestServer.Determinism;
 using ManagedCode.LlmTestServer.Models;
 using ManagedCode.LlmTestServer.Runtime;
 using ManagedCode.LlmTestServer.Scenarios;
@@ -84,11 +85,11 @@ public static class OpenAiWireMapper
         OpenAiCacheUsageShape cacheUsageShape = OpenAiCacheUsageShape.None
     )
     {
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var now = (result.WireMetadata ?? LlmTestServerResponseMetadata.Live()).CreatedAt.ToUnixTimeSeconds();
 
         return new OpenAiChatCompletionResponse
         {
-            Id = CreateResponseId(),
+            Id = CreateResponseId(result.WireMetadata),
             Created = now,
             Model = result.ModelId,
             Choices =
@@ -170,7 +171,7 @@ public static class OpenAiWireMapper
         var output = new List<OpenAiResponseOutputMessage>();
         if (result.Content.Length > 0 || result.ToolCalls.Count == 0)
         {
-            output.Add(CreateOutputMessage(result.Content, completed: true));
+            output.Add(CreateOutputMessage(result.Content, completed: true, result.WireMetadata));
         }
 
         output.AddRange(result.ToolCalls.Select(call => new OpenAiResponseOutputMessage
@@ -232,14 +233,14 @@ public static class OpenAiWireMapper
         };
     }
 
-    public static object ToResponseOutputItemAddedEvent(string responseId)
+    public static object ToResponseOutputItemAddedEvent(string responseId, LlmTestServerResponseMetadata? metadata = null)
     {
         return new
         {
             type = "response.output_item.added",
             response_id = responseId,
             output_index = 0,
-            item = CreateOutputMessage(string.Empty, completed: false),
+            item = CreateOutputMessage(string.Empty, completed: false, metadata),
         };
     }
 
@@ -274,7 +275,7 @@ public static class OpenAiWireMapper
             type = "response.output_item.done",
             response_id = responseId,
             output_index = 0,
-            item = CreateOutputMessage(result.Content, completed: true),
+            item = CreateOutputMessage(result.Content, completed: true, result.WireMetadata),
         };
     }
 
@@ -310,12 +311,13 @@ public static class OpenAiWireMapper
     public static OpenAiEmbeddingResponse ToEmbeddingResponse(
         string model,
         IReadOnlyList<IReadOnlyList<float>> vectors,
-        bool encodeAsBase64 = false
+        bool encodeAsBase64 = false,
+        LlmTestServerResponseMetadata? metadata = null
     )
     {
         return new()
         {
-            Id = CreateResponseId(),
+            Id = CreateResponseId(metadata),
             Model = model,
             Data = vectors
                 .Select((vector, index) => OpenAiEmbeddingData.FromVector(index, vector, encodeAsBase64))
@@ -333,12 +335,13 @@ public static class OpenAiWireMapper
         string? background = null,
         string? outputFormat = null,
         string? quality = null,
-        string? size = null
+        string? size = null,
+        LlmTestServerResponseMetadata? metadata = null
     )
     {
         return new OpenAiImageGenerationResponse
         {
-            Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            Created = (metadata ?? LlmTestServerResponseMetadata.Live()).CreatedAt.ToUnixTimeSeconds(),
             Background = background,
             OutputFormat = outputFormat,
             Quality = quality,
@@ -354,14 +357,15 @@ public static class OpenAiWireMapper
         string? background,
         string? outputFormat,
         string? quality,
-        string? size
+        string? size,
+        LlmTestServerResponseMetadata? metadata = null
     )
     {
         var payload = new Dictionary<string, object?>
         {
             ["type"] = eventType,
             ["b64_json"] = ReadBase64Payload(dataUri),
-            ["created_at"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            ["created_at"] = (metadata ?? LlmTestServerResponseMetadata.Live()).CreatedAt.ToUnixTimeSeconds(),
             ["size"] = size ?? "1024x1024",
             ["quality"] = quality ?? "auto",
             ["background"] = background ?? "auto",
@@ -503,7 +507,7 @@ public static class OpenAiWireMapper
         return new()
         {
             Text = result.Text,
-            XGroq = new GroqRequestMetadata { Id = $"req_{Guid.NewGuid():N}" },
+            XGroq = new GroqRequestMetadata { Id = "req_" + (result.WireMetadata ?? LlmTestServerResponseMetadata.Live()).IdFor("groq-request") },
         };
     }
 
@@ -574,9 +578,9 @@ public static class OpenAiWireMapper
         };
     }
 
-    public static string CreateResponseId()
+    public static string CreateResponseId(LlmTestServerResponseMetadata? metadata = null)
     {
-        return $"llmtestserver-{Guid.NewGuid():N}";
+        return "llmtestserver-" + (metadata ?? LlmTestServerResponseMetadata.Live()).IdFor("chat");
     }
 
     private static OpenAiUsage CreateUsage(
@@ -678,12 +682,13 @@ public static class OpenAiWireMapper
 
     private static OpenAiResponseOutputMessage CreateOutputMessage(
         string content,
-        bool completed
+        bool completed,
+        LlmTestServerResponseMetadata? metadata = null
     )
     {
         return new()
         {
-            Id = $"msg_{Guid.NewGuid():N}",
+            Id = "msg_" + (metadata ?? LlmTestServerResponseMetadata.Live()).IdFor("message"),
             Status = completed ? "completed" : "in_progress",
             Content = [new OpenAiResponseOutputText { Text = content }],
         };

@@ -80,6 +80,15 @@ public sealed class LlmTestServerScenarioBuilder(string id)
         return Responds(json);
     }
 
+    public LlmTestServerScenarioBuilder RetryAfter(int seconds)
+    {
+        if (seconds is < 0 or > 86400) { throw new ArgumentOutOfRangeException(nameof(seconds)); }
+        if (_scenario.Responses.LastOrDefault()?.Error is not { } error) { throw new InvalidOperationException("RetryAfter requires a preceding scripted error."); }
+        var response = _scenario.Responses[^1];
+        _scenario.Responses[^1] = response with { Error = error with { RetryAfterSeconds = seconds } };
+        return this;
+    }
+
     public LlmTestServerScenarioBuilder Fails(int statusCode, string code, string message)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(code);
