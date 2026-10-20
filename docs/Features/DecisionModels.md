@@ -1,6 +1,6 @@
 # Native decision contracts
 
-Official native contracts audited 2026-10-08. Provider DTOs live in their owning SystemOne, Cloudflare and OpenAI packages; deterministic fixtures live in core and routes in Hosting.
+Official native decision/vision contracts re-audited 2026-10-20; see [vision audit](DecisionVisionAudit.md). Provider DTOs live in their owning SystemOne, Cloudflare and OpenAI packages; deterministic fixtures live in core and routes in Hosting.
 
 Jev, Kev, Cloudflare Clef/Clef Flash and OpenAI Decisions use explicit decision fixtures. The TCK hosts their native JSON shapes under provider namespaces and does not contact production providers. Declare the provider profile explicitly; model names never select an API implicitly.
 
@@ -80,6 +80,14 @@ Send the same SystemOne question shape to the account/model route with body `mod
 Configure `AddClef()` / `AddClefFlash()` and fixtures with the matching short model ID; native surrounding model whitespace is accepted. Runtime/auth failures remain non-success HTTP responses and use `success: false` with native numeric `errors[].code`. Explicit numeric scenario error codes are preserved, including 5004/400 (invalid input), 3007 or 3008/408 (timeout), 3036 or 3040/429 (capacity/rate limit). See [native errors](https://developers.cloudflare.com/workers-ai/platform/errors/). For native error cases, configure the explicit numeric `LlmTckScenarioError.Code`. Unmapped TCK-only errors such as fixture mismatch use the HTTP status as a synthetic code; that fallback is not a claimed Cloudflare native error code.
 
 Optional `images` is an array of inline data URLs or `{ "content_type": "image/png", "base64": "..." }` objects. PNG/JPEG/WebP are supported; remote URLs are rejected. Limits: four images, 4 MiB decoded file bytes and 16 megapixels per image, 8 MiB combined decoded bytes, and 13 MiB for the complete request body. Image dimensions and file type are read as metadata; compressed pixel streams are not decoded, so full raster validity is outside this deterministic mock validation. The TCK retains supplied images in the matched input and trace. See [input schema](https://developers.cloudflare.com/workers-ai/models/clef/schema-input.json), [output schema](https://developers.cloudflare.com/workers-ai/models/clef/schema-output.json).
+
+The typed client is available through
+`new LlmTckClient(httpClient, bearerToken).CreateCloudflareDecisionClient(accountId)`.
+Pass `CloudflareDecisionRequest` with either `CloudflareDecisionImage.DataUrl` or
+`Embedded = new CloudflareBase64Image { ContentType = ..., Base64 = ... }`.
+`EvaluateAsync` selects the native route from the explicit `clef`/`clef-flash` model,
+returns the complete Cloudflare envelope (including native non-2xx errors), and
+leaves the shared HTTP client owned by its caller. It does not download remote URLs.
 
 ### OpenAI Decisions
 

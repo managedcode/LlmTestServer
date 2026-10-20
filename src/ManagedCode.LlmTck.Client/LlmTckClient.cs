@@ -92,6 +92,11 @@ public sealed class LlmTckClient(HttpClient httpClient, string? bearerToken = nu
         return new LlmTckChatClient(httpClient, defaultModelId, bearerToken);
     }
 
+    public LlmTckCloudflareDecisionClient CreateCloudflareDecisionClient(string accountId)
+    {
+        return new(httpClient, accountId, bearerToken);
+    }
+
     public LlmTckSystemOneClient CreateSystemOneClient()
     {
         return new(httpClient, bearerToken);

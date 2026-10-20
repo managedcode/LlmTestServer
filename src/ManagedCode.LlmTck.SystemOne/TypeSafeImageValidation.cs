@@ -10,7 +10,7 @@ namespace ManagedCode.LlmTck.SystemOne;
 internal static class TypeSafeImageValidation
 {
     private const int _maxImageBytes = 16 * 1024 * 1024;
-    private const int _minSide = 256;
+    private const int _minSide = 280;
     private const int _maxSide = 1568;
     private const int _minPixels = 78400;
     private const int _maxPixels = 2458624;

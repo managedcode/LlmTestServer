@@ -62,12 +62,15 @@ public static partial class LlmTckEndpointRouteBuilderExtensions
         }
         else
         {
+            context.Request.EnableBuffering();
             read = await ReadJsonAsync<SystemOneDecisionRequest>(context, SystemOneValidationError, cancellationToken, body =>
         {
             provider = ResolveSystemOneProvider(body, runtime);
             if (provider == LlmTckDecisionProvider.TypeSafe)
             {
-                typeSafeValidation = TypeSafeRequestValidation.Validate(body,
+                typeSafeValidation = (context.Request.ContentLength ?? context.Request.Body.Length) > TypeSafeRequestValidation.MaxRequestBytes
+                    ? new TypeSafeValidationResult("TypeSafe request body exceeds 32 MiB.", StatusCodes.Status413PayloadTooLarge)
+                    : TypeSafeRequestValidation.Validate(body,
                     context.Request.Headers[TypeSafeRequestValidation.ImagesHeader] == TypeSafeRequestValidation.Enabled);
                 return new LlmTckRequestValidationResult(typeSafeValidation.Error);
             }
@@ -93,7 +96,7 @@ public static partial class LlmTckEndpointRouteBuilderExtensions
         { return Results.Json(new { detail = "SystemOne does not support refusal answer fixtures." }, statusCode: StatusCodes.Status409Conflict); }
         if (provider == LlmTckDecisionProvider.Kev)
         { context.Response.Headers["server-timing"] = "app;dur=" + Math.Round(result.Metadata.LatencyMilliseconds, 1).ToString("F1", CultureInfo.InvariantCulture); }
-        return Results.Json(SystemOneDecisionMapper.ToResponse(read.Value, result, provider == LlmTckDecisionProvider.Kev, provider));
+        return Results.Json(SystemOneDecisionMapper.ToResponse(read.Value, result, provider == LlmTckDecisionProvider.Kev, provider), SystemOneNativeJson.Options);
     }
 
     private static LlmTckDecisionProvider ResolveSystemOneProvider(JsonElement body, ILlmTckRuntime runtime)

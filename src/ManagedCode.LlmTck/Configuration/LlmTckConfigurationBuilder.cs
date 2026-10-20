@@ -552,7 +552,7 @@ public sealed class LlmTckConfigurationBuilder
                 ManagedCode.LlmTck.Decisions.LlmTckDecisionKind.Choice => answer.Choice is not null,
                 ManagedCode.LlmTck.Decisions.LlmTckDecisionKind.Score => answer.Score.HasValue,
                 ManagedCode.LlmTck.Decisions.LlmTckDecisionKind.Box => answer.Box is not null
-                    && (scenario.AllowMalformedResponse || answer.Box.IsValid) && answer.Confidence.HasValue,
+                    && (scenario.AllowMalformedResponse || answer.Box.IsValid),
                 _ => false,
             };
             if (!valid && !answer.Refused) { throw new ArgumentException("The fixture must provide the value for its decision kind.", nameof(scenario)); }

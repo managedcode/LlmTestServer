@@ -11,7 +11,7 @@
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <NoWarn>$(NoWarn);CS1591;CA1707;CA1848;CA1859;CA1861;CA1873;MEAI001</NoWarn>
-    <Version>0.1.17</Version>
+    <Version>0.1.18</Version>
     <PackageVersion>$(Version)</PackageVersion>
   </PropertyGroup>
 

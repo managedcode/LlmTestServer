@@ -49,7 +49,7 @@ public static class SystemOneDecisionMapper
         if (question.TryGetProperty("instructions", out var instructions) && !IsContent(instructions, kev)) { return false; }
         var hasCriteria = question.TryGetProperty("criteria", out var criteria);
         if (typeSafe && type.GetString() == SystemOneDecisionTypes.Box)
-        { return !hasCriteria && question.TryGetProperty("instructions", out instructions) && IsContent(instructions, false) && instructions.ValueKind != JsonValueKind.Null; }
+        { return !hasCriteria; }
         if (type.GetString() == SystemOneDecisionTypes.Predicate)
         {
             return !hasCriteria || criteria.ValueKind == JsonValueKind.Null || (criteria.ValueKind == JsonValueKind.Object

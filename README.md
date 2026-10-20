@@ -915,6 +915,13 @@ After restore/build, run `bash scripts/coverage.sh` for the production 90% cover
 
 ## Native decision API fixtures
 
+Native typed clients are available through `LlmTckClient.CreateSystemOneClient()`
+and `LlmTckClient.CreateCloudflareDecisionClient(accountId)`. Clef accepts embedded
+PNG/JPEG/WebP data URLs or base64 objects; Jev accepts PNG/JPEG reference assets as
+JSON or multipart, with explicit image/long-context opt-ins. See the
+[official-contract audit and supported limits](docs/Features/DecisionVisionAudit.md).
+
+
 Jev, Kev, Cloudflare Clef/Clef Flash and OpenAI Decisions use explicit decision fixtures. The TCK hosts their native JSON shapes under provider namespaces and does not contact production providers. Declare the provider profile explicitly; model names never select an API implicitly.
 
 | Provider | TCK POST route | Production POST endpoint | Model helper | Official contract |
