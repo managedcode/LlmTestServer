@@ -1,152 +1,95 @@
-name: Release
+name: NuGet Release
 
 on:
-  push:
+  workflow_run:
+    workflows: [Build and Test]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
     inputs:
       force:
-        description: Rebuild and publish even when the GitHub Release already exists.
+        description: Retry publishing the validated version even if its completion receipt exists.
         required: false
         default: false
         type: boolean
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
+  actions: read
 
 concurrency:
-  group: release
+  group: nuget-release
   cancel-in-progress: false
 
 jobs:
-  pack:
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    env:
-      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-
+  source:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch'))
+    runs-on: ubuntu-24.04
+    outputs:
+      ready: ${{ steps.source.outputs.ready }}
+      sha: ${{ steps.source.outputs.sha }}
+      run_id: ${{ steps.source.outputs.run_id }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7.0.0
+      - uses: actions/checkout@v7.0.0
         with:
-          fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Resolve successful validation of current main
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/resolve-release-run.py
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v5.4.0
+  publish-nuget:
+    name: Publish NuGet and GitHub Release
+    needs: source
+    if: needs.source.outputs.ready == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_COMMIT: ${{ needs.source.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v7.0.0
+        with:
+          ref: ${{ needs.source.outputs.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v5.4.0
         with:
           dotnet-version: 10.0.x
-
-      - name: Resolve release version
+      - name: Resolve package version and existing release
         id: release
         env:
           FORCE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
-          GH_TOKEN: ${{ github.token }}
         run: bash scripts/release.sh resolve
-
-      - name: Validate publishing credentials
-        if: ${{ steps.release.outputs.should_release == 'true' }}
-        run: test -n "$NUGET_API_KEY" || { echo "::error::NUGET_API_KEY is required to publish this release."; exit 1; }
-
-      - name: Restore tools
-        if: ${{ steps.release.outputs.should_release == 'true' }}
-        run: dotnet tool restore
-
-      - name: Restore
-        if: ${{ steps.release.outputs.should_release == 'true' }}
-        run: dotnet restore ManagedCode.LlmTestServer.slnx
-
-      - name: Format
-        if: ${{ steps.release.outputs.should_release == 'true' }}
-        run: dotnet format ManagedCode.LlmTestServer.slnx --verify-no-changes --no-restore
-
-      - name: Build
-        if: ${{ steps.release.outputs.should_release == 'true' }}
-        run: dotnet build ManagedCode.LlmTestServer.slnx --configuration Release --no-restore
-
-      - name: Test
-        if: ${{ steps.release.outputs.should_release == 'true' }}
-        run: bash scripts/coverage.sh
-
-      - name: Pack
-        if: ${{ steps.release.outputs.should_release == 'true' }}
-        run: for project in src/*/*.csproj; do dotnet pack "$project" --configuration Release --no-build --output artifacts/packages; done
-
-      - name: Verify installed NuGet consumer
-        if: ${{ steps.release.outputs.should_release == 'true' }}
-        run: python3 scripts/verify-package.py
-
-      - name: Upload verification evidence
-        if: always()
-        uses: actions/upload-artifact@v7.0.1
+      - name: Download the packages verified by Build and Test
+        if: steps.release.outputs.should_release == 'true'
+        uses: actions/download-artifact@v5
         with:
-          name: verification-evidence
-          path: |
-            artifacts/coverage
-            artifacts/package-consumer
-
-      - name: Publish and verify standalone SDK container locally
-        if: ${{ steps.release.outputs.should_release == 'true' }}
+          name: packages
+          path: artifacts/packages
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.source.outputs.run_id }}
+      - name: Push NuGet packages and attach GitHub Release assets
+        if: steps.release.outputs.should_release == 'true'
         env:
-          IMAGE_TAG: ${{ steps.release.outputs.version }}
-        run: |
-          dotnet publish samples/ManagedCode.LlmTestServer.Service/ManagedCode.LlmTestServer.Service.csproj \
-            --configuration Release --runtime linux-x64 --self-contained false \
-            /t:PublishContainer -p:ContainerRuntimeIdentifier=linux-x64 \
-            -p:ContainerImageTag="$IMAGE_TAG" -p:UseAppHost=false
-          python3 scripts/verify-container.py --image "managedcode/llm-test-server:$IMAGE_TAG"
-
-      - name: Publish versioned multi-platform SDK container
-        if: ${{ steps.release.outputs.should_release == 'true' }}
-        env:
-          IMAGE_TAG: ${{ steps.release.outputs.version }}
-          GHCR_TOKEN: ${{ github.token }}
-        run: |
-          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          dotnet publish samples/ManagedCode.LlmTestServer.Service/ManagedCode.LlmTestServer.Service.csproj \
-            --configuration Release --self-contained false /t:PublishContainer \
-            -p:ContainerRegistry=ghcr.io -p:ContainerImageTag="$IMAGE_TAG" \
-            -p:UseAppHost=false
-
-      - name: Verify anonymous public pull and actual container behavior
-        if: ${{ steps.release.outputs.should_release == 'true' }}
-        env:
-          IMAGE_TAG: ${{ steps.release.outputs.version }}
-        run: |
-          python3 scripts/verify-container.py \
-            --image "ghcr.io/managedcode/llm-test-server:$IMAGE_TAG" --anonymous-pull \
-            --require-platform linux/amd64 --require-platform linux/arm64 || {
-            echo "::error::Public container delivery failed. In the managedcode organization package settings for llm-test-server, set package visibility to Public, then rerun this release for the same version. packages:write and public repository visibility alone do not make a GHCR image public."
-            exit 1
-          }
-
-      - name: Upload container verification evidence
-        if: always()
-        uses: actions/upload-artifact@v7.0.1
-        with:
-          name: release-container-verification
-          path: artifacts/container-verification
-
-      - name: Publish packages and create release
-        if: ${{ steps.release.outputs.should_release == 'true' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
           TAG_NAME: ${{ steps.release.outputs.tag }}
         run: bash scripts/release.sh publish
-
-      - name: Verify actual GitHub and NuGet publication
-        if: ${{ steps.release.outputs.should_release == 'true' }}
+      - name: Verify GitHub release artifacts
+        if: steps.release.outputs.should_release == 'true'
+        run: python3 scripts/verify-release.py --allow-draft
+      - name: Record accepted package publication
+        if: steps.release.outputs.should_release == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/verify-release.py
-
-      - name: Verify public installed NuGet consumer
-        if: ${{ steps.release.outputs.should_release == 'true' }}
-        run: python3 scripts/verify-package.py --public-feed
-
-      - name: Mark verified delivery complete
-        if: ${{ steps.release.outputs.should_release == 'true' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ steps.release.outputs.tag }}
         run: bash scripts/release.sh finalize
+      - name: Verify the published GitHub Release
+        if: steps.release.outputs.should_release == 'true'
+        run: python3 scripts/verify-release.py

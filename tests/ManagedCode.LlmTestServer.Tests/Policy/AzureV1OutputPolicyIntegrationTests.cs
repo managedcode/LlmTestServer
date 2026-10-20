@@ -380,11 +380,15 @@ public sealed partial class OutputDispositionIntegrationTests
     {
         await using var host = await StartAsync(_ => { });
         using var http = host.Client(); var control = new LlmTestServerClient(http);
-        void Configure(LlmTestServerClientConfigurationBuilder config) => config.UseGpt41Mini()
+        void Configure(LlmTestServerClientConfigurationBuilder config)
+        {
+            config.UseGpt41Mini()
             .UseConversation("isolated-policy", graph => graph.ForModel(LlmTestServerKnownModelIds.Gpt41Mini)
                 .Step("policy", step => step.WhenLatestUserEquals("go").Responds(_text)
                     .WithOutputDisposition(new() { Kind = kind }).Then("next"))
                 .Step("next", step => step.WhenLatestUserEquals("next").Responds(_recovery).Complete()));
+        }
+
         await using var firstSession = await control.CreateSessionAsync(Configure);
         await using var secondSession = await control.CreateSessionAsync(Configure);
         using var firstConversation = firstSession.Control.ForConversation("shared-label");
@@ -427,12 +431,21 @@ public sealed partial class OutputDispositionIntegrationTests
         await Assert.That((await firstSession.Control.GetAssertionsAsync()).Matched).IsEqualTo(3);
     }
 
-    private static Uri AzurePolicyEndpoint(HttpClient http, string provider) => new(http.BaseAddress!, provider + "/openai/v1/");
+    private static Uri AzurePolicyEndpoint(HttpClient http, string provider)
+    {
+        return new(http.BaseAddress!, provider + "/openai/v1/");
+    }
 
-    private static ChatClient AzurePolicyChatSdk(HttpClient http, string provider) => new(
+    private static ChatClient AzurePolicyChatSdk(HttpClient http, string provider)
+    {
+        return new(
         LlmTestServerKnownModelIds.Gpt41Mini, new ApiKeyCredential(_key), new OpenAIClientOptions
         { Endpoint = AzurePolicyEndpoint(http, provider), Transport = new HttpClientPipelineTransport(http), RetryPolicy = new ClientRetryPolicy(0) });
+    }
 
-    private static ResponsesClient AzurePolicyResponsesSdk(HttpClient http, string provider) => new(new ApiKeyCredential(_key), new ResponsesClientOptions
+    private static ResponsesClient AzurePolicyResponsesSdk(HttpClient http, string provider)
+    {
+        return new(new ApiKeyCredential(_key), new ResponsesClientOptions
         { Endpoint = AzurePolicyEndpoint(http, provider), Transport = new HttpClientPipelineTransport(http), RetryPolicy = new ClientRetryPolicy(0) });
+    }
 }

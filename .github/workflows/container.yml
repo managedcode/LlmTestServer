@@ -1,0 +1,90 @@
+name: Container Release
+
+on:
+  workflow_run:
+    workflows: [Build and Test]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: container-release
+  cancel-in-progress: false
+
+jobs:
+  source:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch'))
+    runs-on: ubuntu-24.04
+    outputs:
+      ready: ${{ steps.source.outputs.ready }}
+      sha: ${{ steps.source.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v7.0.0
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Resolve successful validation of current main
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/resolve-release-run.py
+
+  publish-container:
+    needs: source
+    if: needs.source.outputs.ready == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7.0.0
+        with:
+          ref: ${{ needs.source.outputs.sha }}
+      - uses: actions/setup-dotnet@v5.4.0
+        with:
+          dotnet-version: 10.0.x
+      - name: Resolve image version
+        id: image
+        run: |
+          version=$(dotnet msbuild src/ManagedCode.LlmTestServer/ManagedCode.LlmTestServer.csproj -nologo -v:q -getProperty:Version)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Preserve immutable published image versions
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_COMMIT: ${{ needs.source.outputs.sha }}
+          IMAGE_TAG: ${{ steps.image.outputs.version }}
+        run: python3 scripts/resolve-container-version.py
+      - name: Publish multi-platform image with the .NET SDK
+        if: steps.existing.outputs.publish == 'true'
+        env:
+          RELEASE_COMMIT: ${{ needs.source.outputs.sha }}
+          GHCR_TOKEN: ${{ github.token }}
+          IMAGE_TAG: ${{ steps.image.outputs.version }}
+        run: |
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          dotnet publish samples/ManagedCode.LlmTestServer.Service/ManagedCode.LlmTestServer.Service.csproj \
+            --configuration Release --self-contained false /t:PublishContainer \
+            -p:ContainerRegistry=ghcr.io -p:ContainerImageTag="$IMAGE_TAG" -p:UseAppHost=false \
+            -p:SourceRevisionId="$RELEASE_COMMIT"
+      - name: Verify public pull, both architectures and real HTTP behavior
+        env:
+          IMAGE_TAG: ${{ steps.image.outputs.version }}
+        run: |
+          python3 scripts/verify-container.py \
+            --image "ghcr.io/managedcode/llm-test-server:$IMAGE_TAG" --anonymous-pull \
+            --require-platform linux/amd64 --require-platform linux/arm64
+      - name: Upload container verification evidence
+        if: always() && hashFiles('artifacts/container-verification/**') != ''
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: public-container-verification
+          path: artifacts/container-verification

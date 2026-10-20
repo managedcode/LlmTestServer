@@ -3,14 +3,10 @@ name: Website
 on:
   pull_request:
     branches: [main]
-    paths: ['site/**', '.github/workflows/pages.yml']
+    paths: ['site/**', 'docs/images/**', '.github/workflows/pages.yml']
   push:
     branches: [main]
-    paths: ['site/**', '.github/workflows/pages.yml']
-  workflow_run:
-    workflows: [Release]
-    types: [completed]
-    branches: [main]
+    paths: ['site/**', 'docs/images/**', '.github/workflows/pages.yml']
   workflow_dispatch:
 
 permissions:
@@ -22,11 +18,9 @@ concurrency:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7.0.0
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/setup-node@v7.1.0
         with:
           node-version: 24
@@ -40,9 +34,9 @@ jobs:
         run: npm run build --prefix site
 
   deploy:
-    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       pages: write
@@ -52,21 +46,13 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7.0.0
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       # Select GitHub Actions as the repository Pages source before the first deployment.
-      - name: Require the verified release before publishing the landing page
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          version=$(python3 -c 'import xml.etree.ElementTree as e; print(e.parse("Directory.Build.props").findtext(".//Version"))')
-          gh release view "v$version" --json assets --jq '.assets[].name' | grep -qx 'nuget-published.txt'
       - name: Configure GitHub Pages
         id: pages
         uses: actions/configure-pages@v6.0.0
       - name: Build for canonical Pages URL
         env:
-          PAGES_BASE_URL: ${{ steps.pages.outputs.base_url }}
+          PAGES_BASE_URL: https://llmtest.managed-code.com
         run: python3 site/build.py --base-url "$PAGES_BASE_URL"
       - name: Upload static website
         uses: actions/upload-pages-artifact@v5.0.0

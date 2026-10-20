@@ -64,7 +64,7 @@ Rule format:
 - Build: `dotnet build ManagedCode.LlmTestServer.slnx --configuration Release --no-restore`
 - Test: `dotnet test --project tests/ManagedCode.LlmTestServer.Tests/ManagedCode.LlmTestServer.Tests.csproj --configuration Release --no-build --verbosity normal`
 - Pack: `for project in src/*/*.csproj; do dotnet pack "$project" --configuration Release --no-build --output artifacts/packages; done`
-- Release: pushing to `main` must start the release workflow; it reads the package version from `Directory.Build.props`, creates the matching `vX.Y.Z` tag and GitHub Release, attaches package artifacts, and publishes NuGet packages only when that version is not already released.
+- Release: successful `Build and Test` runs on `main` trigger package publication for the same tested commit and artifacts. Read the version from `Directory.Build.props`; finish after successful NuGet pushes and GitHub Release asset verification, without polling NuGet indexing or waiting for a public-feed restore.
 - Format check: `dotnet format ManagedCode.LlmTestServer.slnx --verify-no-changes`
 - Tool restore: `dotnet tool restore`
 - Coverage gate: production code line coverage must stay at or above 90%; measure with coverlet/reportgenerator when coverage expectations change.
@@ -79,7 +79,9 @@ Rule format:
 
 - In marketing avatar videos, keep the presenter addressing the camera in frontal shots without side profiles or sustained off-camera gaze. Preserve natural blinking, small eye movements and relaxed facial/head motion; camera contact must feel conversational rather than frozen or tense.
 - Match the avatar video's background, lighting and wardrobe colours to the actual website and product screenshots so all launch assets form one coherent visual style when edited together.
-- Ship one complete v1.0.0 launch batch on a separate branch; the owner performs the merge. Do not merge, publish intermediate versions, or trigger releases before the complete product and launch preparation are ready.
+- Work, commit and push only on `main`. Do not create or use additional Git worktrees; validate in the primary checkout so all changes remain visible to the owner.
+- Keep build/test, package release and website deployment as separate workflows: publish packages only after successful validation of the same main commit, and deploy the site independently when its source or referenced assets change.
+- NuGet release must push packages and create the GitHub Release without waiting for NuGet indexing or public-feed availability; use locally packed packages for pre-publication consumer checks.
 - Publish the product landing page through GitHub Pages using the dashboard visual language and shared styles/components where practical; substantiate product sections with real server/browser screenshots and demo recordings.
 - Keep README.md product-first: what LLM Test Server is, why to use it, what to do with it, and where to go next, in plain language. Move deep technical detail into docs/ and link to it. Every code sample must use real public APIs and be compile-checked against the current packages before it ships; never invent APIs or pad the README with technical noise.
 - Lead README, landing and launch material with visually interesting captures (token flow, insights charts), not plain list or table screenshots.

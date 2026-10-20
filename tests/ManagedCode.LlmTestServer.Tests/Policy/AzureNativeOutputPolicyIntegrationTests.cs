@@ -69,7 +69,7 @@ public sealed partial class OutputDispositionIntegrationTests
             config.RequireBearerToken(_key);
             ConfigureQueue(config, LlmTestServerKnownModelIds.Gpt41Mini, kind, empty);
         });
-        using var http = host.Client(); var control = new LlmTestServerClient(http);
+        using var http = host.Client(); var control = new LlmTestServerClient(http, _key);
         using var observer = new AzurePolicyObserver();
         using var sdkHttp = new HttpClient(observer) { BaseAddress = http.BaseAddress };
         var sdk = AzurePolicySdk(sdkHttp);
@@ -130,7 +130,7 @@ public sealed partial class OutputDispositionIntegrationTests
             config.RequireBearerToken(_key);
             ConfigureQueue(config, LlmTestServerKnownModelIds.Gpt41Mini, LlmTestServerOutputDispositionKind.Filtered, empty);
         });
-        using var http = host.Client(); var control = new LlmTestServerClient(http);
+        using var http = host.Client(); var control = new LlmTestServerClient(http, _key);
         using var observer = new AzurePolicyObserver();
         using var sdkHttp = new HttpClient(observer) { BaseAddress = http.BaseAddress };
         var sdk = FoundryPolicySdk(sdkHttp, endpoint);
@@ -225,8 +225,11 @@ public sealed partial class OutputDispositionIntegrationTests
         }
         else
         {
-            try { await FoundryPolicySdk(http, surface).CompleteAsync(new ChatCompletionsOptions([new ChatRequestUserMessage("blocked-input")])
-            { Model = LlmTestServerKnownModelIds.Gpt41Mini }); }
+            try
+            {
+                await FoundryPolicySdk(http, surface).CompleteAsync(new ChatCompletionsOptions([new ChatRequestUserMessage("blocked-input")])
+                { Model = LlmTestServerKnownModelIds.Gpt41Mini });
+            }
             catch (global::Azure.RequestFailedException exception) { status = exception.Status; }
         }
         await Assert.That(status).IsEqualTo(400);
@@ -275,8 +278,11 @@ public sealed partial class OutputDispositionIntegrationTests
         {
             var options = new ChatCompletionsOptions([new ChatRequestUserMessage("policy")]) { Model = LlmTestServerKnownModelIds.Gpt41Mini };
             if (schema) { options.ResponseFormat = ChatCompletionsResponseFormat.CreateJsonFormat(); }
-            else { options.Tools.Add(new ChatCompletionsToolDefinition(new FunctionDefinition("weather")
-            { Parameters = BinaryData.FromString("{\"type\":\"object\",\"properties\":{}}") })); }
+            else
+            {
+                options.Tools.Add(new ChatCompletionsToolDefinition(new FunctionDefinition("weather")
+                { Parameters = BinaryData.FromString("{\"type\":\"object\",\"properties\":{}}") }));
+            }
             try { await FoundryPolicySdk(http, surface).CompleteAsync(options); }
             catch (global::Azure.RequestFailedException exception) { status = exception.Status; }
         }
@@ -412,7 +418,7 @@ public sealed partial class OutputDispositionIntegrationTests
             config.RequireBearerToken(_key);
             ConfigureQueue(config, LlmTestServerKnownModelIds.Gpt41Mini, kind);
         });
-        using var http = host.Client(); var control = new LlmTestServerClient(http);
+        using var http = host.Client(); var control = new LlmTestServerClient(http, _key);
         using var request = new HttpRequestMessage(HttpMethod.Post,
             "/azure-openai/openai/deployments/" + LlmTestServerKnownModelIds.Gpt41Mini + "/chat/completions?api-version=" + apiVersion)
         {

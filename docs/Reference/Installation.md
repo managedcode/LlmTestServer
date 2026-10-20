@@ -12,12 +12,12 @@ How to install the packages, run the standalone container, embed the server in A
 
 **v1.0.0 publication is pending.** NuGet links below identify the intended packages; they do not establish
 public availability. Build and [pack the source](#build-and-test) to use the local `artifacts/packages` feed now.
-The current source package version is `0.1.18` from `Directory.Build.props`. Run these in your consumer
+The current source package version is `1.0.0` from `Directory.Build.props`. Run these in your consumer
 project, replacing the feed path with your checkout (use the canonical version if it changes):
 
 ```sh
-dotnet add package ManagedCode.LlmTestServer.Aspire --version 0.1.18 --no-restore
-dotnet add package ManagedCode.LlmTestServer.Client --version 0.1.18 --no-restore
+dotnet add package ManagedCode.LlmTestServer.Aspire --version 1.0.0 --no-restore
+dotnet add package ManagedCode.LlmTestServer.Client --version 1.0.0 --no-restore
 dotnet restore --source /absolute/path/to/LlmTestServer/artifacts/packages \
   --source https://api.nuget.org/v3/index.json
 ```
@@ -176,4 +176,4 @@ for project in src/*/*.csproj; do dotnet pack "$project" --configuration Release
 
 `global.json` opts `dotnet test` into `Microsoft.Testing.Platform` for .NET 10.
 
-After restore/build, run `bash scripts/coverage.sh` for the production 90% coverage gate. After packing, run `python3 scripts/verify-package.py` for an isolated NuGet consumer, test-owned Aspire host and Chromium dashboard test; this requires Python 3 and PowerShell (`pwsh`). CI installs Chromium dependencies and saves coverage/browser evidence. `python3 scripts/test-release.py` verifies partial-release recovery locally without external publication. Release delivery is marked complete only after NuGet push and GitHub artifact attachment succeed.
+After restore/build, run `bash scripts/coverage.sh` for the production 90% coverage gate. After packing, run `python3 scripts/verify-package.py` for an isolated NuGet consumer, test-owned Aspire host and Chromium dashboard test; this requires Python 3 and PowerShell (`pwsh`). CI installs Chromium dependencies and saves coverage/browser evidence. Release delivery is marked complete only after NuGet push and GitHub artifact attachment succeed.

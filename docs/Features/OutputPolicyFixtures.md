@@ -1,9 +1,13 @@
 # Output policy fixtures
 
-The qualified text output-policy mappings below passed **79/79 focused running-server SDK cases**
-and **1,438/1,438 full integration cases**, with **92.58% production line coverage**. Tests use
-OpenAI 2.14.0, Anthropic 12.58.0 with strict response validation, Google.GenAI 1.26.1 and the
-package's `Microsoft.Extensions.AI` client. Other E6 outcomes and provider families remain open.
+The qualified text output-policy mappings below passed **180/180 focused running-server cases**
+and **1,545/1,545 full integration cases**, with **92.45% production line coverage**. Tests use
+OpenAI 2.14.0, Azure.AI.OpenAI 2.9.0-beta.1, Azure.AI.Inference 1.0.0-beta.5, Anthropic 12.58.0
+with strict response validation, Google.GenAI 1.26.1 and the package's `Microsoft.Extensions.AI`
+client. Raw HTTP supplements native protocol and admission boundaries. Other E6 outcomes and
+provider families remain open. A fresh installed-package consumer passed **24/24**, including
+the seven Azure/Foundry routes. The .NET SDK-built linux/arm64 container passed native policy,
+streaming, authorization, management and recovery acceptance.
 
 ## Configure an explicit output outcome
 
@@ -82,6 +86,13 @@ from the policy outcome alone.
 | `/openai/v1/chat/completions` | Final `finish_reason: content_filter`; explicit content/prefix | `message.refusal`, null ordinary content; streamed `delta.refusal`, then normal stop/terminal sequence |
 | `/deepseek/v1/chat/completions` | Final `finish_reason: content_filter`; explicit content/prefix | Unsupported pairing: fixture mismatch |
 | `/openai/v1/responses` | `status: incomplete`, `incomplete_details.reason: content_filter`; SSE ends with `response.incomplete` | Typed `refusal` content part; refusal delta/done events; completed response |
+| `/azure-openai/openai/deployments/{deployment}/chat/completions` | Final `finish_reason: content_filter`; explicit content/prefix | Native `message.refusal` / streamed `delta.refusal`, null ordinary content, normal stop |
+| `/azure-openai/openai/v1/chat/completions` | Final `finish_reason: content_filter`; explicit content/prefix | Native `message.refusal` / streamed `delta.refusal`, null ordinary content, normal stop |
+| `/azure-openai/openai/v1/responses` | `status: incomplete`, reason `content_filter`; SSE ends with `response.incomplete` | Native refusal part/deltas; completed response |
+| `/microsoft-foundry/chat/completions` | Final `finish_reason: content_filter`; explicit content/prefix | Unsupported pairing: fixture mismatch |
+| `/microsoft-foundry/models/chat/completions` | Final `finish_reason: content_filter`; explicit content/prefix | Unsupported pairing: fixture mismatch |
+| `/microsoft-foundry/openai/v1/chat/completions` | Final `finish_reason: content_filter`; explicit content/prefix | Native `message.refusal` / streamed `delta.refusal`, null ordinary content, normal stop |
+| `/microsoft-foundry/openai/v1/responses` | `status: incomplete`, reason `content_filter`; SSE ends with `response.incomplete` | Native refusal part/deltas; completed response |
 | `/anthropic/v1/messages` | Unsupported pairing: fixture mismatch | `stop_reason: refusal` and `stop_details` with type `refusal` and required nullable category/explanation; final `message_stop` |
 | `/gemini/v1beta/models/{model}:generateContent` and `:streamGenerateContent` | Terminal candidate `finishReason: SAFETY`; terminal content omitted | Unsupported pairing: fixture mismatch |
 
@@ -116,9 +127,49 @@ Nineteen additional real-server cases cover empty and prefix output, the three u
 unsupported refusal admission without consumption, recovery, graph replay and cache evidence.
 Non-streaming requests with a non-null `stream_options` object return HTTP 400 before fixture
 consumption, including explicit false and omitted `stream`. Together with the initial policy slice,
-the focused result is **79/79**, including three successful raw JSON configuration cases.
-The full integration result is **1,438/1,438**; a fresh installed-package consumer passed **16/16**, and the .NET SDK-built linux/arm64
-container passed native DeepSeek JSON/SSE, usage, invalid-options and recovery acceptance.
+the earlier DeepSeek checkpoint was **79/79**, including three successful raw JSON configuration
+cases. At that checkpoint the full integration result was **1,438/1,438**, and the .NET SDK-built
+linux/arm64 container passed native DeepSeek JSON/SSE, usage, invalid-options and recovery acceptance. These historical package/container results
+do not qualify the subsequent Azure extension.
+
+## Azure OpenAI and Microsoft Foundry
+
+The seven exact Azure/Foundry routes in the table are independently qualified for JSON and text
+SSE. Deployment Chat and both v1 Chat routes return native `ChatFinishReason.ContentFilter` for
+filtering or native refusal text with a normal stop for refusal. Both v1 Responses routes return
+native incomplete/content-filter or completed/refusal outcomes. The two Model Inference routes
+accept only `Filtered`, parsed as `CompletionsFinishReason.ContentFiltered`; `Refused` returns
+fixture-mismatch HTTP 409 before consumption. Empty output and explicitly generated prefixes are
+covered separately.
+
+Deployment tests use the original `AzureOpenAIClient.GetChatClient(...)` with parameterless
+`AzureOpenAIClientOptions`: the pinned 2.9.0-beta.1 SDK selects `2025-04-01-preview`. A transparent
+request observer records that outgoing URI without rewriting it. Supplemental raw HTTP tests cover
+both supported deployment schemas, `2024-10-21` and `2025-04-01-preview`, for both outcomes and
+transports. Model Inference tests use the original `ChatCompletionsClient` with parameterless
+`AzureAIInferenceClientOptions`: version 1.0.0-beta.5 selects `2024-05-01-preview` for both roots.
+Consumers do not set `ServiceVersion` to satisfy the server. The four v1 routes use original OpenAI
+Chat/Responses clients with the documented v1 endpoint and no dated version selection. See the
+[Azure OpenAI SDK options](https://github.com/Azure/azure-sdk-for-net/blob/Azure.AI.OpenAI_2.9.0-beta.1/sdk/openai/Azure.AI.OpenAI/src/Custom/AzureOpenAIClientOptions.cs),
+[Model Inference SDK options](https://github.com/Azure/azure-sdk-for-net/blob/Azure.AI.Inference_1.0.0-beta.5/sdk/ai/Azure.AI.Inference/src/Generated/AzureAIInferenceClientOptions.cs)
+and [Azure v1 lifecycle](https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle).
+
+On the two exact Model Inference SSE routes, the server places usage on the final existing choice
+with its non-null finish reason, followed by `[DONE]`; it emits no empty-choice usage-only frame.
+This applies to ordinary and filtered completions. The original SDK reads that final typed usage,
+and input/output/total counts reconcile with the public request journal without a `stream_options`
+extension. Usage is an optional native field supplied by this deterministic fixture contract; this
+is not a claim that every upstream stream must include it. Other Azure/OpenAI SSE routes keep their
+own usage-frame behavior. See the [Model Inference REST contract](https://learn.microsoft.com/en-us/rest/api/microsoft-foundry/modelinference/).
+
+Policy completion remains HTTP 200, while the existing input filter returns HTTP 400. Unsupported
+tools/structured requests reject before selecting the policy response. Running-server tests also
+cover explicit recovery, canonical SDK refusal history, stored/manual Responses continuation,
+JSON-to-SSE graph replay, committed cache usage and provider/session isolation. Freeform fixture
+`Category`/`Explanation` remain diagnostics; they do not fabricate optional Azure classifier
+annotations. Asynchronous moderation offset events, service safety configuration and classifier
+annotation fixtures are outside this qualified subset. See the [Azure Chat reference](https://learn.microsoft.com/en-us/rest/api/microsoft-foundry/azureopenai/chat)
+and [content filtering concepts](https://learn.microsoft.com/en-us/azure/foundry-classic/foundry-models/concepts/content-filter).
 
 ## Policy completion, input rejection and broken delivery
 
@@ -191,17 +242,19 @@ Focused tests under `tests/ManagedCode.LlmTestServer.Tests/Policy` start Kestrel
 HTTP/SDK behavior: typed JSON/SSE outcomes, valid terminal evidence, empty/prefix text, strict refusal
 details, explicit recovery, graph replay, session/cache isolation, manual/stored canonical history,
 metadata bounds, unsupported combinations and the existing input-filter distinction. Raw HTTP
-supplements configuration and Gemini array boundaries. SDK automatic retries are disabled; Google
-automatic continuation is also disabled. The focused result is 79/79, including malformed refusal-history admission, bounded diagnostic
-retention, native DeepSeek usage and successful named-enum JSON configuration. The full suite passed
-1,438/1,438 with 92.58% line coverage. All 19 packages were packed; a fresh
-installed-package consumer passed 16/16, and the .NET SDK-built linux/arm64 container passed
-standalone health, dashboard, authorization, management, JSON/SSE, native-tool and DeepSeek
-policy/options/recovery acceptance.
+supplements configuration, Gemini array boundaries, both documented Azure deployment versions and
+Model Inference SSE frame layout. SDK automatic retries are disabled; Google
+automatic continuation is also disabled. The focused result is **180/180**, including malformed
+refusal-history admission, bounded diagnostic retention, native DeepSeek usage, successful named-enum
+JSON configuration and the seven exact Azure/Foundry routes. The full suite passed **1,545/1,545**
+with **92.45% production line coverage**. A fresh installed-package consumer passed **24/24**,
+including the seven Azure/Foundry routes. All 19 v1.0.0 packages were packed. The .NET SDK-built
+linux/arm64 container passed standalone health, dashboard, authorization, management, JSON/SSE,
+native-tool, DeepSeek and seven-route Azure/Foundry policy/recovery acceptance.
 
 The larger E6 objective remains open for additional provider-specific outcomes and transports,
 including in-stream API error events and separately qualified semantics for other provider families.
-This document does not claim output-policy support for Azure OpenAI, Foundry, Bedrock, Groq, Mistral,
-Ollama, Cohere, OpenRouter, Perplexity, System One decision profiles, Cloudflare decision
-profiles or media/native-tool/structured-output combinations. Shared mapper code alone is not
+This document does not claim output-policy support for Bedrock, Groq, Mistral, Ollama, Cohere,
+OpenRouter, Perplexity, System One decision profiles, Cloudflare decision profiles, additional
+Azure/Foundry operations or media/native-tool/structured-output combinations. Shared mapper code alone is not
 qualification. See [the delivery plan](LlmTestServerDeliveryPlan.md) for the remaining work.
