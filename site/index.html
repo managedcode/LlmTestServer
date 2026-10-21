@@ -172,7 +172,8 @@
             <h3>Set the scene.</h3>
             <p>Script a model, a reply, a tool call or a failure.</p>
             <pre class="step-code"><code>.UseChatScenario(<span class="code-string">"greeting"</span>, s =&gt; s
-  .WhenUserContains(<span class="code-string">"hello"</span>)
+  .ForModel(<span class="code-string">"gpt-6.1-sol"</span>)
+        .WhenUserContains(<span class="code-string">"hello"</span>)
   .Responds(<span class="code-string">"Hello from your test!"</span>))</code></pre>
             <span class="flow-link" aria-hidden="true"><i></i></span>
           </li>
@@ -253,8 +254,8 @@
                 aria-label="Open full runtime diagnostics screenshot"
                 ><img
                   src="assets/admin-dashboard-runtime.jpg"
-                  width="1440"
-                  height="1000"
+                  width="1920"
+                  height="1080"
                   loading="lazy"
                   alt="Runtime state dialog showing configuration and diagnostic information."
               /></a>
@@ -403,7 +404,7 @@
             <figure class="chart-card insight-card insight-dots">
               <header class="chart-card-header"><div><h3>Models</h3><p>One dot per request.</p></div></header>
               <div class="insight-visual"><svg class="dots" viewBox="0 0 264 88" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="33" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="55" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="77" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="99" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="121" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="143" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="165" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="187" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="209" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="231" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="253" cy="11" r="7.5" style="fill:var(--accent)"/><circle cx="11" cy="33" r="7.5" style="fill:var(--accent)"/><circle cx="33" cy="33" r="7.5" style="fill:var(--accent)"/><circle cx="55" cy="33" r="7.5" style="fill:#161616"/><circle cx="77" cy="33" r="7.5" style="fill:#161616"/><circle cx="99" cy="33" r="7.5" style="fill:#161616"/><circle cx="121" cy="33" r="7.5" style="fill:#161616"/><circle cx="143" cy="33" r="7.5" style="fill:#161616"/><circle cx="165" cy="33" r="7.5" style="fill:#161616"/><circle cx="187" cy="33" r="7.5" style="fill:#161616"/><circle cx="209" cy="33" r="7.5" style="fill:#161616"/><circle cx="231" cy="33" r="7.5" style="fill:#161616"/><circle cx="253" cy="33" r="7.5" style="fill:#161616"/><circle cx="11" cy="55" r="7.5" style="fill:#161616"/><circle cx="33" cy="55" r="7.5" style="fill:#5b5753"/><circle cx="55" cy="55" r="7.5" style="fill:#5b5753"/><circle cx="77" cy="55" r="7.5" style="fill:#5b5753"/><circle cx="99" cy="55" r="7.5" style="fill:#5b5753"/><circle cx="121" cy="55" r="7.5" style="fill:#5b5753"/><circle cx="143" cy="55" r="7.5" style="fill:#5b5753"/><circle cx="165" cy="55" r="7.5" style="fill:#5b5753"/><circle cx="187" cy="55" r="7.5" style="fill:#5b5753"/><circle cx="209" cy="55" r="7.5" style="fill:#5b5753"/><circle cx="231" cy="55" r="7.5" style="fill:#a39d96"/><circle cx="253" cy="55" r="7.5" style="fill:#a39d96"/><circle cx="11" cy="77" r="7.5" style="fill:#a39d96"/><circle cx="33" cy="77" r="7.5" style="fill:#a39d96"/><circle cx="55" cy="77" r="7.5" style="fill:#a39d96"/><circle cx="77" cy="77" r="7.5" style="fill:#a39d96"/><circle cx="99" cy="77" r="7.5" style="fill:#a39d96"/><circle cx="121" cy="77" r="7.5" style="fill:#d4cbbf"/><circle cx="143" cy="77" r="7.5" style="fill:#d4cbbf"/><circle cx="165" cy="77" r="7.5" style="fill:#d4cbbf"/><circle cx="187" cy="77" r="7.5" style="fill:#d4cbbf"/><circle cx="209" cy="77" r="7.5" style="fill:#ece6de"/><circle cx="231" cy="77" r="7.5" style="fill:#ece6de"/><circle cx="253" cy="77" r="7.5" style="fill:#ece6de"/></svg></div>
-              <ul class="legend legend-compact legend-single" aria-label="Example requests by model"><li><span class="swatch swatch-round" style="background:var(--accent)"></span><span>gpt-4.1-mini</span><strong>14</strong></li><li><span class="swatch swatch-round" style="background:#161616"></span><span>claude-sonnet-4-5</span><strong>11</strong></li><li><span class="swatch swatch-round" style="background:#5b5753"></span><span>gpt-5-mini</span><strong>9</strong></li><li><span class="swatch swatch-round" style="background:#a39d96"></span><span>gemini-2.5-flash</span><strong>7</strong></li><li><span class="swatch swatch-round" style="background:#d4cbbf"></span><span>text-embedding-3-small</span><strong>4</strong></li><li><span class="swatch swatch-round" style="background:#ece6de"></span><span>Other</span><strong>3</strong></li></ul>
+              <ul class="legend legend-compact legend-single" aria-label="Example requests by model"><li><span class="swatch swatch-round" style="background:var(--accent)"></span><span>gpt-6.1-sol</span><strong>14</strong></li><li><span class="swatch swatch-round" style="background:#161616"></span><span>claude-sonnet-5-5</span><strong>11</strong></li><li><span class="swatch swatch-round" style="background:#5b5753"></span><span>gpt-6-luna</span><strong>9</strong></li><li><span class="swatch swatch-round" style="background:#a39d96"></span><span>gemini-3.8-flash</span><strong>7</strong></li><li><span class="swatch swatch-round" style="background:#d4cbbf"></span><span>text-embedding-3-small</span><strong>4</strong></li><li><span class="swatch swatch-round" style="background:#ece6de"></span><span>Other</span><strong>3</strong></li></ul>
             </figure>
             <figure class="chart-card insight-card insight-ring">
               <header class="chart-card-header"><div><h3>Outcomes</h3><p>Share of requests that returned 2xx.</p></div></header>
@@ -516,7 +517,7 @@
             <li><strong>Perplexity</strong><code>/perplexity/v1/sonar</code></li>
             <li class="provider-native">
               <strong>Native decision APIs</strong><code>/systemone · /cloudflare</code
-              ><span class="sdk-tag sdk-tag-muted">SystemOne · Workers AI Clef</span>
+              ><span class="sdk-tag sdk-tag-muted">TypeSafe Jev · Workers AI Clef</span>
             </li>
           </ul>
           <p class="coverage-note">
@@ -571,11 +572,12 @@ builder.Build().Run();</code></pre>
                 <pre><code id="test-code"><span class="code-keyword">var</span> control = <span class="code-keyword">new</span> LlmTestServerClient(
     app.CreateHttpClient(<span class="code-string">"llm"</span>, <span class="code-string">"http"</span>), <span class="code-string">"test-key"</span>);
 <span class="code-keyword">await</span> control.ConfigureAsync(config =&gt; config
-    .RequireBearerToken(<span class="code-string">"test-key"</span>).UseGpt41Mini()
+    .RequireBearerToken(<span class="code-string">"test-key"</span>).UseModel(<span class="code-string">"gpt-6.1-sol"</span>, LlmTestServerModelKind.Chat)
     .UseChatScenario(<span class="code-string">"greeting"</span>, scenario =&gt; scenario
+        .ForModel(<span class="code-string">"gpt-6.1-sol"</span>)
         .WhenUserContains(<span class="code-string">"hello"</span>).Responds(<span class="code-string">"Hello from your test!"</span>)));
 
-<span class="code-keyword">using var</span> chat = control.CreateChatClient();
+<span class="code-keyword">using var</span> chat = control.CreateChatClient(<span class="code-string">"gpt-6.1-sol"</span>);
 <span class="code-keyword">var</span> reply = <span class="code-keyword">await</span> chat.GetResponseAsync(
     [<span class="code-keyword">new</span> ChatMessage(ChatRole.User, <span class="code-string">"hello"</span>)]);
 <span class="code-comment">// reply.Text == "Hello from your test!"</span></code></pre>
@@ -611,8 +613,8 @@ builder.Build().Run();</code></pre>
   -H <span class="code-string">'Authorization: Bearer local-test-key'</span> \
   -H <span class="code-string">'Content-Type: application/json'</span> \
   --data <span class="code-string">'{"requiredBearerToken":"local-test-key",
-    "models":[{"id":"gpt-4.1-mini","kind":"chat"}],
-    "chatScenarios":[{"id":"greeting","modelId":"gpt-4.1-mini",
+    "models":[{"id":"gpt-6.1-sol","kind":"chat"}],
+    "chatScenarios":[{"id":"greeting","modelId":"gpt-6.1-sol",
       "responses":[{"content":"Hello from LLM Test Server"}]}]}'</span></code></pre>
               </div>
               <div class="code-panel">
@@ -625,7 +627,7 @@ builder.Build().Run();</code></pre>
 client = OpenAI(base_url=<span class="code-string">"http://localhost:8080/openai/v1"</span>,
                 api_key=<span class="code-string">"local-test-key"</span>)
 reply = client.chat.completions.create(
-    model=<span class="code-string">"gpt-4.1-mini"</span>,
+    model=<span class="code-string">"gpt-6.1-sol"</span>,
     messages=[{<span class="code-string">"role"</span>: <span class="code-string">"user"</span>, <span class="code-string">"content"</span>: <span class="code-string">"Hi"</span>}])
 <span class="code-keyword">assert</span> reply.choices[0].message.content == <span class="code-string">"Hello from LLM Test Server"</span></code></pre>
               </div>
@@ -763,7 +765,7 @@ reply = client.chat.completions.create(
             >
               100%
             </button>
-            <button type="button" class="image-viewer-close" autofocus>Close <span aria-hidden="true">×</span></button>
+            <button type="button" class="image-viewer-close">Close <span aria-hidden="true">×</span></button>
           </div>
         </header>
         <figure>

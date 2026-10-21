@@ -77,6 +77,8 @@ Rule format:
 
 ### Likes
 
+- Screenshot previews must not leave green focus outlines after pointer interaction; preserve visible keyboard focus and verify the complete open-and-close cycle, including focus returning to the screenshot link.
+
 - Keep README chat setup concrete and minimal: show meaningful, distinct replies, explain their request order, and link directly to a complete admin API reference for configuration from any language. Keep detailed API contracts and full test walkthroughs in docs/.
 - Make the README demonstrate the product's branching conversation workflows with a concise runnable state-graph example and a matching Mermaid diagram, so readers can see conditional scenarios beyond fixed response queues.
 - Use current officially documented model IDs in README SDK examples; verify the current catalogue before choosing a model instead of copying an older generation from existing fixtures.

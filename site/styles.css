@@ -56,6 +56,10 @@ a {
   border-radius: 5px;
 }
 
+a.preview-pointer-focus:focus-visible {
+  outline: none;
+}
+
 a:hover {
   color: var(--link);
 }
@@ -2063,8 +2067,7 @@ nav a,
 
 .provider-grid .provider-native {
   grid-column: span 3;
-  border-style: dashed;
-  background: transparent;
+  background: #fff;
 }
 
 .sdk-tag-muted {

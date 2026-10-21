@@ -39,6 +39,13 @@ if (imageViewer && typeof imageViewer.showModal === "function") {
   };
   let current = 0;
   let opener;
+  let openedWithPointer = false;
+  document.addEventListener("keydown", event => {
+    if (event.key === "Tab") {
+      for (const link of links) link.classList.remove("preview-pointer-focus");
+      openedWithPointer = false;
+    }
+  }, true);
   let previousOverflow;
 
   const showShot = index => {
@@ -57,10 +64,13 @@ if (imageViewer && typeof imageViewer.showModal === "function") {
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault();
       opener = link;
+      openedWithPointer = event.detail > 0;
+      link.classList.toggle("preview-pointer-focus", openedWithPointer);
       showShot(shots.findIndex(shot => shot.href === link.href));
       previousOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
       imageViewer.showModal();
+      imageViewer.focus({ preventScroll: true });
     });
   }
 
@@ -95,6 +105,7 @@ if (imageViewer && typeof imageViewer.showModal === "function") {
   });
   imageViewer.addEventListener("close", () => {
     document.body.style.overflow = previousOverflow;
+    opener?.classList.toggle("preview-pointer-focus", openedWithPointer);
     opener?.focus({ preventScroll: true });
   });
 }
