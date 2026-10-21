@@ -31,7 +31,7 @@ returns exactly what your test scripted. Your app keeps its official SDK and onl
 ## How it works
 
 1. **Start the server** — one `docker run`, or one line in your Aspire AppHost.
-2. **Script the answer** — over the management API, or with the typed .NET client.
+2. **Choose the answer** — try the built-in demo, or script your own with the typed .NET client or management API.
 3. **Call it with your SDK** — point the base URL at `http://localhost:8080/openai/v1`, `/anthropic/v1`,
    `/gemini/v1beta` or another [provider namespace](#providers).
 
@@ -41,77 +41,164 @@ Then open `http://localhost:8080` to see the request, the response and the token
 
 [![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)](#quick-start)
 [![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white)](#python)
-[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](#typescript)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](#typescript--javascript)
 [![C# / .NET](https://img.shields.io/badge/C%23%20%2F%20.NET-512BD4?style=flat-square&logo=dotnet&logoColor=white)](#c)
 [![.NET Aspire](https://img.shields.io/badge/.NET%20Aspire-512BD4?style=flat-square&logo=dotnet&logoColor=white)](#net-and-aspire)
 
 Start the server:
 
 ```sh
-docker run -p 8080:8080 -e LlmTestServer__RequiredBearerToken=test-key \
+docker run --rm --name llm-test-server -p 8080:8080 \
+  -e LlmTestServer__RequiredBearerToken=test-key \
   ghcr.io/managedcode/llm-test-server:1.0.0
 ```
 
-Script an answer:
+Configure two replies for [GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol)
+with the typed .NET control SDK. Run this setup before each language example to reload its response queue:
 
 ```sh
-curl localhost:8080/admin-api/configure -H "Authorization: Bearer test-key" --json '{
-  "requiredBearerToken": "test-key",
-  "models": [{ "id": "gpt-4.1-mini", "kind": "chat" }],
-  "chatScenarios": [{ "id": "hello", "modelId": "gpt-4.1-mini",
-                      "responses": [{ "content": "Hello from your test!" }] }]
-}'
+dotnet add package ManagedCode.LlmTestServer.Client
 ```
 
-Call it from your language. Each scripted reply is used once, so configure again before the next call.
+```csharp
+using ManagedCode.LlmTestServer.Client;
 
-### Python
-
-`pip install openai`
-
-```python
-from openai import OpenAI
-
-client = OpenAI(base_url="http://localhost:8080/openai/v1", api_key="test-key")
-reply = client.chat.completions.create(
-    model="gpt-4.1-mini",
-    messages=[{"role": "user", "content": "Hi"}],
-)
-print(reply.choices[0].message.content)  # Hello from your test!
+using var http = new HttpClient { BaseAddress = new Uri("http://localhost:8080") };
+var control = new LlmTestServerClient(http, "test-key");
+await control.ConfigureAsync(config => config
+    .RequireBearerToken("test-key")
+    .UseReasoningChatModel("gpt-6.1-sol", reasoningTokens: 8)
+    .UseChatScenario("hello", scenario => scenario
+        .ForModel("gpt-6.1-sol")
+        .Responds("blue whale", "blue ", "whale")
+        .Responds("blue whale", "blue ", "whale")));
 ```
 
-### TypeScript
+The fixture returns `blue whale` for both a normal call and a streaming call.
+For Python- or JavaScript-only test suites, the same setup is available through the
+[management API](docs/Reference/Configuration.md).
 
-`npm install openai`
-
-```ts
-import OpenAI from "openai";
-
-const client = new OpenAI({ baseURL: "http://localhost:8080/openai/v1", apiKey: "test-key" });
-const reply = await client.chat.completions.create({
-  model: "gpt-4.1-mini",
-  messages: [{ role: "user", content: "Hi" }],
-});
-console.log(reply.choices[0].message.content); // Hello from your test!
-```
+These are standard calls to the official OpenAI SDKs for [C#](https://github.com/openai/openai-dotnet),
+[Python](https://github.com/openai/openai-python) and [TypeScript/JavaScript](https://github.com/openai/openai-node).
+Your application changes only the endpoint and test API key. The server supplies the scripted response,
+stream chunks and token usage; it never calls a real model.
 
 ### C\#
 
-`dotnet add package OpenAI`
+```sh
+dotnet add package OpenAI
+```
+
+Create the client and request a complete response:
 
 ```csharp
 using System.ClientModel;
 using OpenAI;
 using OpenAI.Chat;
 
-var chat = new ChatClient("gpt-4.1-mini", new ApiKeyCredential("test-key"),
-    new OpenAIClientOptions { Endpoint = new Uri("http://localhost:8080/openai/v1") });
-ChatCompletion reply = await chat.CompleteChatAsync("Hi");
-Console.WriteLine(reply.Content[0].Text); // Hello from your test!
+var chat = new ChatClient(
+    "gpt-6.1-sol",
+    new ApiKeyCredential("test-key"),
+    new OpenAIClientOptions
+    {
+        Endpoint = new Uri("http://localhost:8080/openai/v1"),
+    });
+
+ChatCompletion reply = await chat.CompleteChatAsync("What color is the largest animal?");
+Console.WriteLine(reply.Content[0].Text); // blue whale
 ```
 
-Another provider? Use its SDK with its [namespace](docs/Reference/ProvidersAndRoutes.md). More on running the image:
-[Docker distribution](docs/Features/DockerDistribution.md).
+Stream the next response with the same client:
+
+```csharp
+await foreach (var update in chat.CompleteChatStreamingAsync("What color is the largest animal?"))
+{
+    foreach (var part in update.ContentUpdate)
+    {
+        Console.Write(part.Text);
+    }
+}
+// blue whale
+```
+
+### Python
+
+```sh
+pip install openai
+```
+
+Create the client and request a complete response:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8080/openai/v1",
+    api_key="test-key",
+)
+reply = client.chat.completions.create(
+    model="gpt-6.1-sol",
+    messages=[{"role": "user", "content": "What color is the largest animal?"}],
+)
+print(reply.choices[0].message.content)  # blue whale
+```
+
+Stream the next response with the same client:
+
+```python
+stream = client.chat.completions.create(
+    model="gpt-6.1-sol",
+    messages=[{"role": "user", "content": "What color is the largest animal?"}],
+    stream=True,
+)
+for chunk in stream:
+    if chunk.choices:
+        print(chunk.choices[0].delta.content or "", end="", flush=True)
+# blue whale
+```
+
+### TypeScript / JavaScript
+
+```sh
+npm install openai
+```
+
+The same code works in TypeScript or a JavaScript ES module (`.mjs`).
+Create the client and request a complete response:
+
+```ts
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "http://localhost:8080/openai/v1",
+  apiKey: "test-key",
+});
+const reply = await client.chat.completions.create({
+  model: "gpt-6.1-sol",
+  messages: [{ role: "user", content: "What color is the largest animal?" }],
+});
+console.log(reply.choices[0].message.content); // blue whale
+```
+
+Stream the next response with the same client:
+
+```ts
+const stream = await client.chat.completions.create({
+  model: "gpt-6.1-sol",
+  messages: [{ role: "user", content: "What color is the largest animal?" }],
+  stream: true,
+});
+for await (const chunk of stream) {
+  process.stdout.write(chunk.choices[0]?.delta.content ?? "");
+}
+// blue whale
+```
+
+Open `http://localhost:8080` to inspect both requests, their responses and token usage.
+To script your own answers, use the [typed .NET client](#script-your-own-answers) or the
+[management API](docs/Reference/Configuration.md).
+For other providers, use their official SDK with the corresponding
+[provider namespace](docs/Reference/ProvidersAndRoutes.md).
 
 ## .NET and Aspire
 
@@ -136,30 +223,79 @@ builder.AddProject<Projects.Api>("api")
 builder.Build().Run();
 ```
 
-In a test, script the answer with the typed client. Add `Aspire.Hosting.Testing` and give the test project the
-Aspire SDK (`<Project Sdk="Aspire.AppHost.Sdk/13.6.2">`) so it can start the server:
+### Script your own answers
+
+This complete C# integration test starts its own server, loads a two-reply scenario and runs a dialogue
+through the official OpenAI SDK. Aspire chooses the URL; the test needs no manually started server or Docker.
+
+In a .NET 10 TUnit test project, use `<Project Sdk="Aspire.AppHost.Sdk/13.6.2">` and install:
+
+```sh
+dotnet add package ManagedCode.LlmTestServer.Aspire
+dotnet add package ManagedCode.LlmTestServer.Client
+dotnet add package Aspire.Hosting.Testing
+dotnet add package OpenAI
+```
 
 ```csharp
+using System.ClientModel;
 using Aspire.Hosting.Testing;
 using ManagedCode.LlmTestServer.Aspire;
 using ManagedCode.LlmTestServer.Client;
-using Microsoft.Extensions.AI;
+using OpenAI;
+using OpenAI.Chat;
 
-var builder = DistributedApplicationTestingBuilder.Create([]);
-builder.AddLlmTestServer("llm").WithApiKey("test-key");
-await using var app = await builder.BuildAsync();
-await app.StartAsync();
-await app.ResourceNotifications.WaitForResourceHealthyAsync("llm");
+public sealed class ChatDialogueTests
+{
+    [Test]
+    public async Task ClientReceivesScriptedDialogue(CancellationToken cancellationToken)
+    {
+        // 1. Start the server. Aspire allocates the address and port.
+        var builder = DistributedApplicationTestingBuilder.Create([]);
+        builder.AddLlmTestServer("llm").WithApiKey("test-key");
+        await using var app = await builder.BuildAsync(cancellationToken);
+        await app.StartAsync(cancellationToken);
+        await app.ResourceNotifications.WaitForResourceHealthyAsync("llm", cancellationToken);
 
-var control = new LlmTestServerClient(app.CreateHttpClient("llm", "http"), "test-key");
-await control.ConfigureAsync(config => config
-    .RequireBearerToken("test-key")
-    .UseGpt41Mini()
-    .UseChatScenario("hello", scenario => scenario.Responds("Hello from your test!")));
+        // 2. Script the replies in the order the client will receive them.
+        using var http = app.CreateHttpClient("llm", "http");
+        var control = new LlmTestServerClient(http, "test-key");
+        await control.ConfigureAsync(config => config
+            .RequireBearerToken("test-key")
+            .UseReasoningChatModel("gpt-6.1-sol", reasoningTokens: 8)
+            .UseChatScenario("delivery", scenario => scenario
+                .ForModel("gpt-6.1-sol")
+                .Responds("Your order arrives on Friday.")
+                .Responds("Yes, delivery is free.")), cancellationToken);
 
-var reply = await control.CreateChatClient().GetResponseAsync("Hi");
-Console.WriteLine(reply.Text); // Hello from your test!
+        // 3. Call the server through the official OpenAI SDK.
+        var chat = new ChatClient("gpt-6.1-sol", new ApiKeyCredential("test-key"),
+            new OpenAIClientOptions
+            {
+                Endpoint = new Uri(http.BaseAddress!, "openai/v1"),
+            });
+        List<ChatMessage> messages = [new UserChatMessage("When will my order arrive?")];
+        ChatCompletion first = await chat.CompleteChatAsync(messages, cancellationToken: cancellationToken);
+
+        // 4. Continue the dialogue, including the previous answer in the history.
+        messages.Add(new AssistantChatMessage(first));
+        messages.Add(new UserChatMessage("Is delivery free?"));
+        ChatCompletion second = await chat.CompleteChatAsync(messages, cancellationToken: cancellationToken);
+
+        // 5. Verify the answers and that both requests matched the scenario.
+        await Assert.That(first.Content[0].Text).IsEqualTo("Your order arrives on Friday.");
+        await Assert.That(second.Content[0].Text).IsEqualTo("Yes, delivery is free.");
+        var recorded = await control.GetAssertionsAsync(cancellationToken);
+        await Assert.That(recorded.Matched).IsEqualTo(2);
+    }
+}
 ```
+
+The scenario queues exact replies; it does not infer answers from the prompts. The second SDK call sends
+the full dialogue so your application exercises the same conversation path it uses with a real provider.
+At the end of the test, disposing `app` stops the server.
+
+[Runnable test source](scripts/package-consumer/ReadmeDialoguePackageTests.cs).
 
 To host the server and dashboard inside your own ASP.NET Core app, see
 [installation and hosting](docs/Reference/Installation.md).
@@ -220,18 +356,39 @@ Supported operations differ by provider — check the [operation coverage](docs/
 | [ManagedCode.LlmTestServer.Client](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Client) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Client.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Client) | script fixtures and verify recorded requests |
 | [ManagedCode.LlmTestServer.Hosting](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Hosting) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Hosting.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Hosting) | host the server and dashboard in your ASP.NET Core app |
 | [ManagedCode.LlmTestServer](https://www.nuget.org/packages/ManagedCode.LlmTestServer) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer) | build on the provider-neutral runtime |
+| [ManagedCode.LlmTestServer.OpenAI](https://www.nuget.org/packages/ManagedCode.LlmTestServer.OpenAI) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.OpenAI.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.OpenAI) | use OpenAI wire contracts and compatibility adapters |
+| [ManagedCode.LlmTestServer.AzureOpenAI](https://www.nuget.org/packages/ManagedCode.LlmTestServer.AzureOpenAI) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.AzureOpenAI.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.AzureOpenAI) | use Azure OpenAI compatibility contracts and adapters |
+| [ManagedCode.LlmTestServer.Foundry](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Foundry) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Foundry.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Foundry) | use Microsoft Foundry compatibility contracts and adapters |
+| [ManagedCode.LlmTestServer.Anthropic](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Anthropic) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Anthropic.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Anthropic) | use Anthropic Messages contracts and adapters |
+| [ManagedCode.LlmTestServer.Gemini](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Gemini) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Gemini.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Gemini) | use Google Gemini compatibility contracts and adapters |
+| [ManagedCode.LlmTestServer.Groq](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Groq) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Groq.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Groq) | use Groq compatibility contracts and adapters |
+| [ManagedCode.LlmTestServer.Mistral](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Mistral) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Mistral.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Mistral) | use Mistral compatibility contracts and adapters |
+| [ManagedCode.LlmTestServer.Ollama](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Ollama) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Ollama.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Ollama) | use Ollama compatibility contracts and adapters |
+| [ManagedCode.LlmTestServer.Cohere](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Cohere) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Cohere.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Cohere) | use Cohere compatibility contracts and adapters |
+| [ManagedCode.LlmTestServer.Bedrock](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Bedrock) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Bedrock.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Bedrock) | use Amazon Bedrock compatibility contracts and adapters |
+| [ManagedCode.LlmTestServer.OpenRouter](https://www.nuget.org/packages/ManagedCode.LlmTestServer.OpenRouter) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.OpenRouter.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.OpenRouter) | use OpenRouter compatibility contracts and adapters |
+| [ManagedCode.LlmTestServer.DeepSeek](https://www.nuget.org/packages/ManagedCode.LlmTestServer.DeepSeek) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.DeepSeek.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.DeepSeek) | use DeepSeek compatibility contracts and adapters |
+| [ManagedCode.LlmTestServer.Perplexity](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Perplexity) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Perplexity.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Perplexity) | use Perplexity compatibility contracts and adapters |
+| [ManagedCode.LlmTestServer.SystemOne](https://www.nuget.org/packages/ManagedCode.LlmTestServer.SystemOne) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.SystemOne.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.SystemOne) | use TypeSafe/Jev native System One decision contracts |
+| [ManagedCode.LlmTestServer.Cloudflare](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Cloudflare) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Cloudflare.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Cloudflare) | use native Cloudflare Workers AI decision contracts |
 
-Each provider also has its own contracts package, such as `ManagedCode.LlmTestServer.OpenAI` or
-`ManagedCode.LlmTestServer.Anthropic` — [all packages on NuGet](https://www.nuget.org/packages?q=ManagedCode.LlmTestServer).
+## Build your next test
 
-## Learn more
+| Run the server | Shape the response | Connect your app |
+| --- | --- | --- |
+| [**Installation & hosting →**](docs/Reference/Installation.md) | [**Scenarios & fixtures →**](docs/Reference/Configuration.md) | [**Clients & SDKs →**](docs/Reference/Clients.md) |
+| Choose Docker, Aspire or your own ASP.NET Core host. | Script a dialogue, stream tokens or trigger a failure. | Call the server with the SDK your app already uses. |
 
-- [Installation and hosting](docs/Reference/Installation.md)
-- [Configuration and scenarios](docs/Reference/Configuration.md)
-- [Clients and SDKs](docs/Reference/Clients.md)
-- [Providers and routes](docs/Reference/ProvidersAndRoutes.md)
-- [Architecture](docs/Architecture.md)
+Looking for a specific API? Check [providers & routes](docs/Reference/ProvidersAndRoutes.md).
+Contributing? Start with the [architecture](docs/Architecture.md).
 
-## License
+---
 
-[MIT](LICENSE)
+<p align="center">
+  <strong>Predictable answers. Real SDKs. Tests you can trust.</strong><br>
+  Built by <a href="https://managed-code.com">Managed Code</a><br>
+  <a href="https://llmtest.managed-code.com">Website</a> ·
+  <a href="https://github.com/managedcode/LlmTestServer">GitHub</a> ·
+  <a href="LICENSE">MIT License</a><br>
+  <sub>Copyright © 2026 Managed Code</sub>
+</p>
