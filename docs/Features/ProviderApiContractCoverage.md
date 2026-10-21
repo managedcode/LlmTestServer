@@ -34,6 +34,24 @@ When provider docs change or a new route is added:
 
 ## Integration evidence
 
+### Responses include selectors (2026-10-21)
+
+The [OpenAI Responses reference](https://developers.openai.com/api/reference/resources/responses/methods/create)
+documents eight `include` selectors: `file_search_call.results`, `web_search_call.results`,
+`web_search_call.action.sources`, `message.input_image.image_url`, `computer_call_output.output.image_url`,
+`code_interpreter_call.outputs`, `reasoning.encrypted_content`, and `message.output_text.logprobs`.
+These selectors request optional output data; they do not enable native tool execution. All are accepted on
+the OpenAI, Azure OpenAI and Microsoft Foundry Responses routes, without changing native tool declaration
+or history restrictions. Selecting data absent from the configured response does not invent output items.
+
+The [Microsoft stateless history guidance](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/responses#encrypted-reasoning-items)
+documents `reasoning.encrypted_content` for caller-retained history with `store=false`.
+`ResponsesCallerManagedHistoryTests` exercises the official OpenAI SDK/MEAI adapter through a real HTTP
+tool loop and an explicit-history follow-up, both streaming and nonstreaming, on all three providers.
+The HTTP flow also rejects unknown selectors and malformed types without consuming the response queue,
+then completes and continues with all eight documented selectors. This verifies request compatibility;
+it does not claim generation of reasoning ciphertext or other unconfigured output data.
+
 Provider support is verified by running the server and calling every claimed operation through HTTP and official
 SDKs. Cover supported parameters and streaming modes, version/auth validation, success/error envelopes and state
 transitions. Contract metadata and official documentation guide these tests; source/doc scans and reflection-based

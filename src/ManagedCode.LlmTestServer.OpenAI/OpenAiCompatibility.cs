@@ -32,7 +32,7 @@ public static class OpenAiCompatibility
             ApiContract = new()
             {
                 DocumentationUrl = "https://developers.openai.com/api/reference/",
-                DocumentationRetrievedOn = "2026-09-07",
+                DocumentationRetrievedOn = "2026-10-21",
                 DocumentationVersion = "v1",
                 Operations =
                 [

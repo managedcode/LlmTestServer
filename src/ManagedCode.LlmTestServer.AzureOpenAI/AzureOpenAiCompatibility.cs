@@ -34,7 +34,7 @@ public static class AzureOpenAiCompatibility
             ApiContract = new()
             {
                 DocumentationUrl = "https://learn.microsoft.com/en-us/azure/foundry/openai/reference",
-                DocumentationRetrievedOn = "2026-10-04",
+                DocumentationRetrievedOn = "2026-10-21",
                 DocumentationVersion = "SDK-selected dated deployment API (2024-10-21 reference baseline); v1 GA inference; v1 preview video",
                 Operations =
                 [
@@ -65,7 +65,7 @@ public static class AzureOpenAiCompatibility
                         Id = LlmTestServerProviderOperationIds.AzureOpenAI.V1ResponsesCreate,
                         Method = "POST",
                         Path = "/azure-openai/openai/v1/responses",
-                        DocumentationUrl = "https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle",
+                        DocumentationUrl = "https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/responses",
                         ApiVersion = "v1",
                         SupportsStreaming = true,
                         ImplementedByHosting = true,

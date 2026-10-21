@@ -33,7 +33,7 @@ public static class MicrosoftFoundryCompatibility
             {
                 DocumentationUrl =
                     "https://learn.microsoft.com/en-us/rest/api/microsoft-foundry/modelinference/",
-                DocumentationRetrievedOn = "2026-10-04",
+                DocumentationRetrievedOn = "2026-10-21",
                 DocumentationVersion = "Azure AI Model Inference; OpenAI v1 GA",
                 Operations =
                 [
@@ -64,7 +64,7 @@ public static class MicrosoftFoundryCompatibility
                         Id = LlmTestServerProviderOperationIds.MicrosoftFoundry.V1ResponsesCreate,
                         Method = "POST",
                         Path = "/microsoft-foundry/openai/v1/responses",
-                        DocumentationUrl = "https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle",
+                        DocumentationUrl = "https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/responses",
                         ApiVersion = "v1",
                         SupportsStreaming = true,
                         ImplementedByHosting = true,

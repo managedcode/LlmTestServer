@@ -59,8 +59,12 @@ internal static class OpenAiNativeWebSearchValidation
             Array(include);
             foreach (var entry in include.EnumerateArray())
             {
-                Choice(entry, _sourcesInclude, OpenAiNativeFileCodeValidation._resultsInclude, OpenAiNativeFileCodeValidation._outputsInclude);
-                if (!enabled) { throw new JsonException("Unsupported include."); }
+                // Output selectors do not enable native tools. In particular, caller-managed
+                // Responses history uses encrypted reasoning on Azure and Foundry too.
+                Choice(entry, _sourcesInclude, "web_search_call.results",
+                    OpenAiNativeFileCodeValidation._resultsInclude, OpenAiNativeFileCodeValidation._outputsInclude,
+                    "reasoning.encrypted_content", "message.input_image.image_url",
+                    "computer_call_output.output.image_url", "message.output_text.logprobs");
             }
         }
         if (body.TryGetProperty("tool_choice", out var choice) && choice.ValueKind == JsonValueKind.Object

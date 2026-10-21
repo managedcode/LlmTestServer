@@ -40,7 +40,7 @@ have been removed. This inventory is documentation; tests do not read it to asse
 | Tool/schema operation variants, JSON and streaming, negative then successful recovery | `ProviderCapabilityEvidenceTests.ClaimedToolAndSchemaCases_ExecutePositiveAndNegativeHttpEvidenceAsync` |
 | Tool selection, local references, invalid arguments, structured stream concatenation | `ToolFixtureValidationTests` |
 | Parallel-tool request limits and malformed-schema/nullable/nested constraints | `FollowUpEndpointTests`, `ToolFixtureClientTests` |
-| Official SDK/MEAI function invocation, tool-result continuation and model changes | `ToolFixtureClientTests`, `LlmTestServerResponsesContinuationTests` |
+| Official SDK/MEAI function invocation, tool-result continuation, model changes, caller-managed stateless history and documented include selectors | `ToolFixtureClientTests`, `LlmTestServerResponsesContinuationTests`, `ResponsesCallerManagedHistoryTests` |
 | Video CRUD/content/delete/reset/provider isolation | `ReviewVideoRegressionTests`, `OpenAiEndpointTests`, `AzureSdkCompatibilityTests` |
 | Native Jev/Kev/OpenAI/Clef responses, errors, images, bounds and parameter variants | `DecisionEndpointTests`, `DecisionRuntimeTests`, `DecisionValidationTests`, `DecisionQuestionTests`, `DecisionInputTests`, `DecisionFixtureContractTests` |
 | Jev multipart/image/box/long-context contracts | `Jev114EndpointTests`, `Jev114MultipartTests`, `TypeSafeVisionContractTests` |
