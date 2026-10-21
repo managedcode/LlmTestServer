@@ -3,246 +3,124 @@
 [![CI](https://github.com/managedcode/LlmTestServer/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/managedcode/LlmTestServer/actions/workflows/ci.yml)
 [![Release](https://github.com/managedcode/LlmTestServer/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/managedcode/LlmTestServer/actions/workflows/release.yml)
 [![NuGet](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.svg?style=flat-square&logo=nuget)](https://www.nuget.org/packages/ManagedCode.LlmTestServer)
+[![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Fmanagedcode%2Fllm--test--server-2496ED?style=flat-square&logo=docker&logoColor=white)](https://github.com/orgs/managedcode/packages/container/package/llm-test-server)
 [![License](https://img.shields.io/github/license/managedcode/LlmTestServer.svg?style=flat-square)](LICENSE)
 
-**A local, deterministic LLM provider for .NET tests, with a dashboard that shows where every token goes.**
+**Deterministic LLM APIs for your tests — in .NET, Python, TypeScript or any other stack.
+See exactly what your app sent and where every token went.**
 
-**Website:** [llmtest.managed-code.com](https://llmtest.managed-code.com) · .NET packages and a Docker image for any other stack.
+[llmtest.managed-code.com](https://llmtest.managed-code.com)
 
-[![Token flow of a five-request conversation: system prompt, tool schemas, user, assistant, tool calls and tool results flowing into cache read, cache write, uncached input, response and reasoning](docs/images/showcase-token-flow.jpg)](docs/images/showcase-token-flow.jpg)
+[![Where the tokens of a five-request conversation go: system prompt, tool schemas and history flowing into prompt-cache reads, writes, response and reasoning](docs/images/showcase-token-flow.jpg)](docs/images/showcase-token-flow.jpg)
 
-[What it is](#what-it-is) · [Token usage and cache hits](#token-usage-and-prompt-cache-hits) · [Quick start](#quick-start) · [Capabilities](#what-you-can-do) · [Providers](#providers) · [TypeSafe / Jev](#typesafe-and-jev) · [Docs](#learn-more)
+| Every request, in context | All traffic at a glance |
+| --- | --- |
+| [![Request inspector with the conversation, tool call and highlighted payloads](docs/images/showcase-overview.jpg)](docs/images/showcase-overview.jpg) | [![Traffic insights: providers, outcomes and prompt cache as charts](docs/images/showcase-insights.jpg)](docs/images/showcase-insights.jpg) |
 
 ## What it is
 
-LLM Test Server is a small ASP.NET Core server that speaks the HTTP APIs of 13 LLM providers, each under its own
-namespace: `/openai/v1`, `/anthropic/v1`, `/gemini/v1beta`, `/azure-openai`, and so on. Your application keeps its
-official SDK or `Microsoft.Extensions.AI` client and only changes the base URL. Every answer, tool call, stream chunk
-and failure comes from a fixture your test configures, so the same test produces the same result on every run — with
-no external model calls and no production credentials. Run it from an Aspire AppHost, inside your own ASP.NET Core host,
-or as a standalone container.
+LLM Test Server is a local server that answers like an LLM provider — OpenAI, Anthropic, Gemini and ten more — but
+returns exactly what your test scripted. Your app keeps its official SDK and only changes the base URL.
 
-Native decision APIs are included too: **TypeSafe Jev**, Kev through System One, and Cloudflare Clef.
-Use the typed client from `ManagedCode.LlmTestServer.Client` with the contracts in
-`ManagedCode.LlmTestServer.SystemOne` — see the [TypeSafe/Jev example](docs/Reference/Clients.md#typesafe-jev-through-system-one).
+- **The same answer on every run.** Script replies, streams, tool calls, rate limits and content filters.
+- **Your real code path.** Requests travel through the provider SDKs and wire formats you use in production.
+- **Every token visible.** The dashboard splits each prompt into system prompt, tool schemas, history and tool results,
+  and shows how much the prompt cache served.
+- **Any stack.** NuGet packages and an Aspire integration for .NET; one Docker image for everything else.
 
-## Why use it
+## How it works
 
-- **Deterministic tests for LLM features.** Script answers, tool calls, multi-turn conversations, streams, rate limits
-  and content filters instead of mocking SDK internals.
-- **Your real integration code runs.** Requests travel through the same provider SDKs and wire formats your
-  application uses in production.
-- **Proof of what your application sent.** Every request is recorded with its messages, payloads, usage and outcome;
-  tests can query, export and verify that journal.
-- **Token and cache visibility.** See how much of each prompt is system text, tool schemas or tool results, and how
-  much of it the prompt cache served.
-- **Safe in parallel.** Isolated sessions give each test its own configuration, queues, cache and journal on one
-  shared server.
+1. **Start the server** — one `docker run`, or one line in your Aspire AppHost.
+2. **Script the answer** — over the management API, or with the typed .NET client.
+3. **Call it with your SDK** — point the base URL at `http://localhost:8080/openai/v1`, `/anthropic/v1`,
+   `/gemini/v1beta` or another [provider namespace](#providers).
 
-## Token usage and prompt-cache hits
-
-Every chat request gets deterministic token usage from the server's tokenizer, and the provider response carries it in
-that provider's own usage fields. Three things are tracked for each request:
-
-- **What the input is made of.** Input tokens are split by role — system prompt, tool schemas, user, assistant text,
-  tool-call arguments and tool results. The parts add up exactly to the reported input and are recorded as
-  `InputComposition` on the request's usage.
-- **How the prompt cache served it.** A repeated prompt prefix reports cache reads; the first request that makes a
-  prefix cacheable reports cache writes. Thresholds follow each provider (for example 1,024 tokens in 128-token steps on
-  OpenAI-compatible routes, 2,048 on Gemini, and explicit cache markers on Anthropic and Bedrock).
-- **What the model produced.** Output tokens, with reasoning tokens for reasoning-capable fixture models reported
-  separately.
-
-Read it from a test through the request journal (`GET /admin-api/requests`):
-
-```csharp
-var journal = await control.GetRequestsAsync();
-foreach (var request in journal.Requests)
-{
-    if (request.Usage is not { InputComposition: { } parts } usage) continue;
-    Console.WriteLine($"{request.ModelId}: {usage.InputTokens} input = {parts.SystemTokens} system + " +
-        $"{parts.ToolDefinitionTokens} tool schemas + {parts.UserTokens} user + {parts.AssistantTokens} assistant + " +
-        $"{parts.ToolCallTokens} tool calls + {parts.ToolResultTokens} tool results + {parts.OtherTokens} other; " +
-        $"{usage.CachedInputTokens} read from cache, {usage.CacheCreationInputTokens} written");
-}
-```
-
-Or open the dashboard: the **Tokens** tab draws the flow above for one request or a whole labeled conversation, with
-context-mix and prompt-cache donuts and per-request context growth. **Traffic insights** (`/?view=insights`) charts
-all recorded traffic by provider, model, outcome, latency, cache and context mix; clicking a slice filters the inbox.
-
-[![Traffic insights: donuts, capsule bars and columns across providers, models, outcomes, cache and latency](docs/images/showcase-insights.jpg)](docs/images/showcase-insights.jpg)
-
-Details: [dashboard analytics](docs/Features/DashboardAnalytics.md) ·
-[token usage and prompt-cache accounting](docs/Reference/TokenUsageAndPromptCache.md).
+Then open `http://localhost:8080` to see the request, the response and the token flow.
 
 ## Quick start
 
-[![C# / .NET](https://img.shields.io/badge/C%23%20%2F%20.NET-512BD4?style=flat-square&logo=dotnet&logoColor=white)](#dotnet-quick-start)
-[![JavaScript](https://img.shields.io/badge/JavaScript-222222?style=flat-square&logo=javascript&logoColor=F7DF1E)](#javascript-quick-start)
-[![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white)](#python-quick-start)
+[![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)](#quick-start)
+[![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white)](#python)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](#typescript)
+[![C# / .NET](https://img.shields.io/badge/C%23%20%2F%20.NET-512BD4?style=flat-square&logo=dotnet&logoColor=white)](#c)
+[![.NET Aspire](https://img.shields.io/badge/.NET%20Aspire-512BD4?style=flat-square&logo=dotnet&logoColor=white)](#net-and-aspire)
 
-| Run it with | Install |
-| --- | --- |
-| [![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)](#docker-quick-start)<br>Any language or stack | `docker run -p 8080:8080 ghcr.io/managedcode/llm-test-server:1.0.0` |
-| [![.NET Aspire](https://img.shields.io/badge/.NET%20Aspire-512BD4?style=flat-square&logo=dotnet&logoColor=white)](#aspire-quick-start)<br>AppHost and integration tests | `dotnet add package ManagedCode.LlmTestServer.Aspire` |
-| [![.NET](https://img.shields.io/badge/.NET-512BD4?style=flat-square&logo=dotnet&logoColor=white)](#dotnet-quick-start)<br>Test configuration and verification | `dotnet add package ManagedCode.LlmTestServer.Client` |
-
-<a id="docker-quick-start"></a>
-
-### With Docker, from any language
-
-Start the server. The dashboard opens at `http://localhost:8080/`.
+Start the server:
 
 ```sh
-docker run --rm -p 8080:8080 \
-  -e LlmTestServer__RequiredBearerToken=local-test-key \
+docker run -p 8080:8080 -e LlmTestServer__RequiredBearerToken=test-key \
   ghcr.io/managedcode/llm-test-server:1.0.0
 ```
 
-Choose a quick start below. Each example configures its own fixture, calls the server through the official
-OpenAI SDK and prints `Hello from your fixture`. The key is a local test value; no provider account is needed.
-
-<a id="dotnet-quick-start"></a>
-
-### .NET — official OpenAI SDK
-
-In a .NET 10 console app:
+Script an answer:
 
 ```sh
-dotnet add package ManagedCode.LlmTestServer.Client
-dotnet add package OpenAI
+curl localhost:8080/admin-api/configure -H "Authorization: Bearer test-key" --json '{
+  "requiredBearerToken": "test-key",
+  "models": [{ "id": "gpt-4.1-mini", "kind": "chat" }],
+  "chatScenarios": [{ "id": "hello", "modelId": "gpt-4.1-mini",
+                      "responses": [{ "content": "Hello from your test!" }] }]
+}'
 ```
 
-Save as `Program.cs`, then run `dotnet run`:
+Call it from your language. Each scripted reply is used once, so configure again before the next call.
+
+### Python
+
+`pip install openai`
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:8080/openai/v1", api_key="test-key")
+reply = client.chat.completions.create(
+    model="gpt-4.1-mini",
+    messages=[{"role": "user", "content": "Hi"}],
+)
+print(reply.choices[0].message.content)  # Hello from your test!
+```
+
+### TypeScript
+
+`npm install openai`
+
+```ts
+import OpenAI from "openai";
+
+const client = new OpenAI({ baseURL: "http://localhost:8080/openai/v1", apiKey: "test-key" });
+const reply = await client.chat.completions.create({
+  model: "gpt-4.1-mini",
+  messages: [{ role: "user", content: "Hi" }],
+});
+console.log(reply.choices[0].message.content); // Hello from your test!
+```
+
+### C\#
+
+`dotnet add package OpenAI`
 
 ```csharp
 using System.ClientModel;
-using ManagedCode.LlmTestServer.Client;
 using OpenAI;
 using OpenAI.Chat;
 
-using var http = new HttpClient { BaseAddress = new Uri("http://localhost:8080/") };
-var control = new LlmTestServerClient(http, "local-test-key");
-await control.ConfigureAsync(config => config
-    .RequireBearerToken("local-test-key")
-    .UseGpt41Mini()
-    .UseChatScenario("hello", scenario => scenario
-        .WhenUserContains("Hello")
-        .Responds("Hello from your fixture")));
-
-var chat = new ChatClient("gpt-4.1-mini", new ApiKeyCredential("local-test-key"),
-    new OpenAIClientOptions { Endpoint = new Uri(http.BaseAddress!, "openai/v1") });
-ChatCompletion reply = await chat.CompleteChatAsync([new UserChatMessage("Hello")]);
-Console.WriteLine(reply.Content[0].Text); // Hello from your fixture
+var chat = new ChatClient("gpt-4.1-mini", new ApiKeyCredential("test-key"),
+    new OpenAIClientOptions { Endpoint = new Uri("http://localhost:8080/openai/v1") });
+ChatCompletion reply = await chat.CompleteChatAsync("Hi");
+Console.WriteLine(reply.Content[0].Text); // Hello from your test!
 ```
 
-<a id="javascript-quick-start"></a>
+Another provider? Use its SDK with its [namespace](docs/Reference/ProvidersAndRoutes.md). More on running the image:
+[Docker distribution](docs/Features/DockerDistribution.md).
 
-### JavaScript — official OpenAI SDK
-
-Requires Node.js 20 or later:
-
-```sh
-npm install openai
-```
-
-Save as `example.mjs`, then run `node example.mjs`:
-
-```javascript
-import OpenAI from "openai";
-
-const baseURL = "http://localhost:8080";
-const apiKey = "local-test-key";
-
-// Configure the test fixture through the server's management API.
-const configured = await fetch(`${baseURL}/admin-api/configure`, {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${apiKey}`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    requiredBearerToken: apiKey,
-    models: [{ id: "gpt-4.1-mini", kind: "chat" }],
-    chatScenarios: [{
-      id: "hello",
-      modelId: "gpt-4.1-mini",
-      responses: [{ content: "Hello from your fixture" }],
-    }],
-  }),
-});
-if (!configured.ok) throw new Error(await configured.text());
-
-const client = new OpenAI({ baseURL: `${baseURL}/openai/v1`, apiKey });
-const reply = await client.chat.completions.create({
-  model: "gpt-4.1-mini",
-  messages: [{ role: "user", content: "Hello" }],
-});
-console.log(reply.choices[0].message.content); // Hello from your fixture
-```
-
-<a id="python-quick-start"></a>
-
-### Python — official OpenAI SDK
-
-```sh
-python -m pip install openai httpx
-```
-
-Save as `example.py`, then run `python example.py`:
-
-```python
-import httpx
-from openai import OpenAI
-
-base_url = "http://localhost:8080"
-api_key = "local-test-key"
-
-# Configure the test fixture through the server's management API.
-configured = httpx.post(
-    f"{base_url}/admin-api/configure",
-    headers={"Authorization": f"Bearer {api_key}"},
-    json={
-        "requiredBearerToken": api_key,
-        "models": [{"id": "gpt-4.1-mini", "kind": "chat"}],
-        "chatScenarios": [{
-            "id": "hello",
-            "modelId": "gpt-4.1-mini",
-            "responses": [{"content": "Hello from your fixture"}],
-        }],
-    },
-)
-configured.raise_for_status()
-
-with OpenAI(base_url=f"{base_url}/openai/v1", api_key=api_key) as client:
-    reply = client.chat.completions.create(
-        model="gpt-4.1-mini",
-        messages=[{"role": "user", "content": "Hello"}],
-    )
-    print(reply.choices[0].message.content)  # Hello from your fixture
-```
-
-Open [the dashboard](http://localhost:8080/) to inspect the request, response and token usage.
-The management API configures fixtures; the official SDK sends the provider request.
-For other providers, use their SDK and [provider endpoint](docs/Reference/ProvidersAndRoutes.md).
-
-More: [Docker distribution](docs/Features/DockerDistribution.md) ·
-[official JavaScript SDK](https://github.com/openai/openai-node) ·
-[official Python SDK](https://github.com/openai/openai-python).
-
-<a id="aspire-quick-start"></a>
-
-### With .NET and Aspire
+## .NET and Aspire
 
 ```sh
 dotnet add package ManagedCode.LlmTestServer.Aspire
 dotnet add package ManagedCode.LlmTestServer.Client
 ```
 
-#### In an Aspire AppHost
-
-`AddLlmTestServer()` starts the packaged .NET service; Docker is not required.
+In your AppHost — the server runs as a .NET process, no Docker needed:
 
 ```csharp
 using ManagedCode.LlmTestServer.Aspire;
@@ -251,7 +129,6 @@ var builder = DistributedApplication.CreateBuilder(args);
 var llm = builder.AddLlmTestServer().WithApiKey("test-key");
 
 builder.AddProject<Projects.Api>("api")
-    .WithReference(llm)
     .WithEnvironment("OPENAI_ENDPOINT", llm.GetOpenAiEndpoint())
     .WithEnvironment("OPENAI_API_KEY", "test-key")
     .WaitFor(llm);
@@ -259,17 +136,14 @@ builder.AddProject<Projects.Api>("api")
 builder.Build().Run();
 ```
 
-#### In a test
-
-Add `ManagedCode.LlmTestServer.Aspire`, `ManagedCode.LlmTestServer.Client` and `Aspire.Hosting.Testing`, then
-configure a response and call it:
+In a test, script the answer with the typed client. Add `Aspire.Hosting.Testing` and give the test project the
+Aspire SDK (`<Project Sdk="Aspire.AppHost.Sdk/13.6.2">`) so it can start the server:
 
 ```csharp
 using Aspire.Hosting.Testing;
 using ManagedCode.LlmTestServer.Aspire;
 using ManagedCode.LlmTestServer.Client;
 using Microsoft.Extensions.AI;
-using ChatMessage = Microsoft.Extensions.AI.ChatMessage;
 
 var builder = DistributedApplicationTestingBuilder.Create([]);
 builder.AddLlmTestServer("llm").WithApiKey("test-key");
@@ -278,64 +152,47 @@ await app.StartAsync();
 await app.ResourceNotifications.WaitForResourceHealthyAsync("llm");
 
 var control = new LlmTestServerClient(app.CreateHttpClient("llm", "http"), "test-key");
-await control.ConfigureAsync(config => config.RequireBearerToken("test-key").UseGpt41Mini()
-    .UseChatScenario("greeting", scenario => scenario.WhenUserContains("hello").Responds("Hello from your test!")));
-using var chat = control.CreateChatClient();
-var reply = await chat.GetResponseAsync([new ChatMessage(ChatRole.User, "hello")]); // "Hello from your test!"
+await control.ConfigureAsync(config => config
+    .RequireBearerToken("test-key")
+    .UseGpt41Mini()
+    .UseChatScenario("hello", scenario => scenario.Responds("Hello from your test!")));
+
+var reply = await control.CreateChatClient().GetResponseAsync("Hi");
+Console.WriteLine(reply.Text); // Hello from your test!
 ```
 
-Your application can use its official SDK against the same server. In the Aspire test above, use its allocated
-endpoint and the same fixture key — for example with OpenAI:
+To host the server and dashboard inside your own ASP.NET Core app, see
+[installation and hosting](docs/Reference/Installation.md).
 
-```csharp
-using System.ClientModel;
-using OpenAI;
-using OpenAI.Chat;
+## Token usage and prompt-cache hits
 
-await control.ResetAsync(); // Reuse the configured fixture for this separate SDK example.
-using var providerHttp = app.CreateHttpClient("llm", "http");
-var openAiChat = new ChatClient("gpt-4.1-mini", new ApiKeyCredential("test-key"),
-    new OpenAIClientOptions { Endpoint = new Uri(providerHttp.BaseAddress!, "openai/v1") });
-ChatCompletion completion = await openAiChat.CompleteChatAsync([new UserChatMessage("hello")]);
-Console.WriteLine($"{completion.Usage.InputTokenCount} input tokens, " +
-    $"{completion.Usage.InputTokenDetails.CachedTokenCount} from cache");
-```
+Every chat request gets deterministic usage from the server's tokenizer, returned in each provider's own usage fields.
 
-You can also embed the server and dashboard in your own ASP.NET Core host — see
-[hosting options](docs/Reference/Installation.md#aspnet-core-startup).
+- **What the input is made of** — system prompt, tool schemas, user, assistant, tool calls and tool results; the parts
+  add up exactly to the reported input.
+- **What the prompt cache served** — cache reads and writes follow each provider's rules.
+- **What the model produced** — output tokens, with reasoning tokens counted on their own.
+
+The dashboard's **Tokens** tab draws it for one request or a whole conversation, and **Traffic insights** charts all
+recorded calls. Tests read the same numbers from the request journal. Details:
+[token usage and prompt cache](docs/Reference/TokenUsageAndPromptCache.md) ·
+[dashboard analytics](docs/Features/DashboardAnalytics.md).
 
 ## What you can do
 
-| Capability | What it covers | Guide |
-| --- | --- | --- |
-| Chat scenarios | Contains or exact prompt matching, queued replies, streaming chunks, delays, scripted errors, per-scenario keys | [Configuration](docs/Reference/Configuration.md) |
-| Tool calls and structured output | Function calls validated against your schemas, JSON responses, well-known tools, tool failures | [Tools](docs/Features/ToolAndStructuredFixtures.md) · [Well-known tools](docs/Features/WellKnownFunctionTools.md) · [Tool faults](docs/Features/ToolFaultFixtures.md) |
-| Multi-turn conversations | Typed step graphs with branches, tool-result checks and terminal states | [Conversation DSL](docs/Features/ConversationDSL.md) |
-| Streaming | Provider-native SSE and NDJSON streams with usage where the provider reports it, plus delivery faults | [Stream delivery faults](docs/Features/StreamDeliveryFaults.md) |
-| Failure paths | 429 rate limits and content filters on every provider family | [Fault simulation](docs/Reference/Configuration.md#fault-simulation) |
-| More than text | Embeddings, images, speech, transcription, translation and video jobs | [Modalities](docs/Reference/Configuration.md#modalities) |
-| Native provider tools | OpenAI web search, file search and code; Anthropic web search; Responses continuation | [OpenAI web search](docs/Features/OpenAiNativeWebSearch.md) · [File/code](docs/Features/OpenAiNativeFileCode.md) · [Anthropic](docs/Features/AnthropicNativeWebSearch.md) · [Continuation](docs/Features/ResponsesContinuation.md) |
-| Parallel tests | Isolated sessions with their own configuration, queues, cache and journal | [Test sessions](docs/Features/TestSessions.md) |
-| Verification | Query and export the request journal, verify counts, order and tool arguments, fix IDs and clocks | [Verification and determinism](docs/Features/RequestVerificationAndDeterminism.md) |
-| Native decision APIs | TypeSafe Jev, Kev (System One), Cloudflare Clef, OpenAI Decisions | [Decision contracts](docs/Features/DecisionModels.md) · [Jev 1.14](docs/Features/Jev114.md) |
-| Official SDKs | OpenAI, Azure OpenAI, Foundry, Anthropic, Google Gen AI, Bedrock and `Microsoft.Extensions.AI` | [Clients and SDKs](docs/Reference/Clients.md) · [SDK compatibility](docs/Features/ProviderSdkCompatibility.md) |
+| Capability | Guide |
+| --- | --- |
+| Chat scenarios: prompt matching, queued replies, streaming chunks, delays, scripted errors | [Configuration](docs/Reference/Configuration.md) |
+| Tool calls and structured output, including failing tools | [Tools](docs/Features/ToolAndStructuredFixtures.md) · [Tool faults](docs/Features/ToolFaultFixtures.md) |
+| Multi-turn conversations as typed step graphs | [Conversation DSL](docs/Features/ConversationDSL.md) |
+| Rate limits (429) and content filters on every provider | [Fault simulation](docs/Reference/Configuration.md#fault-simulation) |
+| Embeddings, images, speech, transcription and video | [Modalities](docs/Reference/Configuration.md#modalities) |
+| Parallel tests with isolated sessions | [Test sessions](docs/Features/TestSessions.md) |
+| Verify what was sent: journal queries, counts, order, tool arguments | [Verification](docs/Features/RequestVerificationAndDeterminism.md) |
 
-Everything is a fixture you choose: nothing is hidden behind retries or randomness, and the server never calls a real
-model.
-
-## Dashboard tour
-
-The dashboard at `/` is a request inbox: one row per provider call, with the full request, response, conversation,
-payloads, stream chunks, tokens and runtime result one click away.
-
-| Request overview | Conversation | Runtime diagnostics |
-| --- | --- | --- |
-| [![Request overview with conversation strip, tool-call card and highlighted arguments](docs/images/showcase-overview.jpg)](docs/images/showcase-overview.jpg) | [![Conversation with per-message token bars](docs/images/showcase-conversation.jpg)](docs/images/showcase-conversation.jpg) | [![Runtime diagnostics with assertion and fixture charts](docs/images/admin-dashboard-runtime.jpg)](docs/images/admin-dashboard-runtime.jpg) |
-| What was sent, what came back, and what it cost in tokens. | Each turn with its role and token share. | Fixtures, provider routes, assertions and the event timeline. |
+The server never calls a real model, and nothing is hidden behind retries or randomness.
 
 ## Providers
-
-Each provider family lives under its own namespace and keeps its native request and response shapes.
 
 | Provider | Namespace | Provider | Namespace |
 | --- | --- | --- | --- |
@@ -345,69 +202,35 @@ Each provider family lives under its own namespace and keeps its native request 
 | Anthropic | `/anthropic` | Amazon Bedrock | `/bedrock` |
 | Gemini | `/gemini` | OpenRouter | `/openrouter` |
 | Groq | `/groq` | DeepSeek | `/deepseek` |
-| Perplexity | `/perplexity` | TypeSafe Jev / Kev (System One) | `/systemone` |
-| Cloudflare Clef / Clef Flash | `/cloudflare` | | |
+| Perplexity | `/perplexity` | TypeSafe Jev / Kev | `/systemone` |
+| Cloudflare Clef | `/cloudflare` | | |
 
-Operation coverage differs by provider and grows over time. A provider being listed does not mean every API of that
-provider is implemented — check the [operation coverage](docs/Features/ProviderApiContractCoverage.md) and
-[routes reference](docs/Reference/ProvidersAndRoutes.md) for the exact contracts.
+Supported operations differ by provider — check the [operation coverage](docs/Features/ProviderApiContractCoverage.md).
 
-## TypeSafe and Jev
-
-**TypeSafe is the provider; Jev is its model family. System One is the native API.**
-Use `ManagedCode.LlmTestServer.SystemOne` for its request and response contracts, and
-`ManagedCode.LlmTestServer.Client` for `control.CreateSystemOneClient()`.
-The native server route is `POST /systemone/v1/systemone`.
-
-Configure deterministic answers for predicates, choices, scores and Jev 1.14 bounding boxes.
-JSON image assets and multipart uploads are supported with explicit image opt-in.
-Kev uses the same protocol package with its own compatibility profile.
-
-[Configure and call Jev from a test](docs/Reference/Clients.md#typesafe-jev-through-system-one) ·
-[Jev 1.14 images and limits](docs/Features/Jev114.md) ·
-[Native decision fixtures](docs/Features/DecisionModels.md)
+**TypeSafe** is the provider and **Jev** its model family; System One is the native API at
+`POST /systemone/v1/systemone`. Use `ManagedCode.LlmTestServer.SystemOne` for its contracts and
+`control.CreateSystemOneClient()` from the Client package —
+[TypeSafe/Jev example](docs/Reference/Clients.md#typesafe-jev-through-system-one).
 
 ## Packages
 
-Start with **Aspire** for orchestration, **Client** for test setup, or **Hosting** to embed the server.
-Each badge shows the latest published NuGet version.
-
-| Package | NuGet | Use it for |
+| Package | NuGet | Use it to |
 | --- | --- | --- |
-| [`ManagedCode.LlmTestServer.Aspire`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Aspire) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Aspire.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Aspire) | Start the server from an Aspire AppHost or integration test. |
-| [`ManagedCode.LlmTestServer.Client`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Client) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Client.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Client) | Configure fixtures, reset state and verify recorded requests. |
-| [`ManagedCode.LlmTestServer.Hosting`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Hosting) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Hosting.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Hosting) | Host the server and Blazor dashboard in your ASP.NET Core app. |
-| [`ManagedCode.LlmTestServer`](https://www.nuget.org/packages/ManagedCode.LlmTestServer) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer) | Build on the provider-neutral runtime, scenarios and assertions. |
+| [ManagedCode.LlmTestServer.Aspire](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Aspire) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Aspire.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Aspire) | start the server from an Aspire AppHost or test |
+| [ManagedCode.LlmTestServer.Client](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Client) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Client.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Client) | script fixtures and verify recorded requests |
+| [ManagedCode.LlmTestServer.Hosting](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Hosting) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Hosting.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Hosting) | host the server and dashboard in your ASP.NET Core app |
+| [ManagedCode.LlmTestServer](https://www.nuget.org/packages/ManagedCode.LlmTestServer) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer) | build on the provider-neutral runtime |
 
-Provider packages contain protocol contracts and compatibility profiles. Choose the provider your app uses;
-see [operation coverage](docs/Features/ProviderApiContractCoverage.md) for supported APIs.
-
-| Provider package | NuGet | Provider |
-| --- | --- | --- |
-| [`ManagedCode.LlmTestServer.OpenAI`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.OpenAI) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.OpenAI.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.OpenAI) | OpenAI |
-| [`ManagedCode.LlmTestServer.AzureOpenAI`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.AzureOpenAI) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.AzureOpenAI.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.AzureOpenAI) | Azure OpenAI |
-| [`ManagedCode.LlmTestServer.Foundry`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Foundry) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Foundry.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Foundry) | Microsoft Foundry |
-| [`ManagedCode.LlmTestServer.Anthropic`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Anthropic) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Anthropic.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Anthropic) | Anthropic |
-| [`ManagedCode.LlmTestServer.Gemini`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Gemini) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Gemini.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Gemini) | Google Gemini |
-| [`ManagedCode.LlmTestServer.Groq`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Groq) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Groq.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Groq) | Groq |
-| [`ManagedCode.LlmTestServer.Mistral`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Mistral) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Mistral.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Mistral) | Mistral |
-| [`ManagedCode.LlmTestServer.Ollama`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Ollama) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Ollama.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Ollama) | Ollama |
-| [`ManagedCode.LlmTestServer.Cohere`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Cohere) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Cohere.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Cohere) | Cohere |
-| [`ManagedCode.LlmTestServer.Bedrock`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Bedrock) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Bedrock.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Bedrock) | Amazon Bedrock |
-| [`ManagedCode.LlmTestServer.OpenRouter`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.OpenRouter) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.OpenRouter.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.OpenRouter) | OpenRouter |
-| [`ManagedCode.LlmTestServer.DeepSeek`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.DeepSeek) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.DeepSeek.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.DeepSeek) | DeepSeek |
-| [`ManagedCode.LlmTestServer.Perplexity`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Perplexity) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Perplexity.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Perplexity) | Perplexity |
-| [`ManagedCode.LlmTestServer.SystemOne`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.SystemOne) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.SystemOne.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.SystemOne) | TypeSafe Jev / Kev — native System One API |
-| [`ManagedCode.LlmTestServer.Cloudflare`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Cloudflare) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Cloudflare.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Cloudflare) | Cloudflare Clef / Clef Flash |
+Each provider also has its own contracts package, such as `ManagedCode.LlmTestServer.OpenAI` or
+`ManagedCode.LlmTestServer.Anthropic` — [all packages on NuGet](https://www.nuget.org/packages?q=ManagedCode.LlmTestServer).
 
 ## Learn more
 
-- [Installation and hosting](docs/Reference/Installation.md) — Docker, Aspire and ASP.NET Core hosting
-- [Configuration and scenarios](docs/Reference/Configuration.md) — models, scenarios, modalities, faults, assertions
-- [Clients and SDKs](docs/Reference/Clients.md) — control client, official SDKs, `Microsoft.Extensions.AI`, TypeSafe client
-- [Token usage and prompt cache](docs/Reference/TokenUsageAndPromptCache.md) and [dashboard analytics](docs/Features/DashboardAnalytics.md)
-- [Providers, packages and routes](docs/Reference/ProvidersAndRoutes.md) and [operation coverage](docs/Features/ProviderApiContractCoverage.md)
-- [Architecture](docs/Architecture.md), [test inventory](docs/Testing/AcceptanceCriteriaTestInventory.md)
+- [Installation and hosting](docs/Reference/Installation.md)
+- [Configuration and scenarios](docs/Reference/Configuration.md)
+- [Clients and SDKs](docs/Reference/Clients.md)
+- [Providers and routes](docs/Reference/ProvidersAndRoutes.md)
+- [Architecture](docs/Architecture.md)
 
 ## License
 
