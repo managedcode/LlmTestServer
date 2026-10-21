@@ -78,11 +78,17 @@ Details: [dashboard analytics](docs/Features/DashboardAnalytics.md) ·
 
 ## Quick start
 
-| You use | Install |
+[![C# / .NET](https://img.shields.io/badge/C%23%20%2F%20.NET-512BD4?style=flat-square&logo=dotnet&logoColor=white)](#dotnet-quick-start)
+[![JavaScript](https://img.shields.io/badge/JavaScript-222222?style=flat-square&logo=javascript&logoColor=F7DF1E)](#javascript-quick-start)
+[![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white)](#python-quick-start)
+
+| Run it with | Install |
 | --- | --- |
-| Any language or stack | `docker run -p 8080:8080 ghcr.io/managedcode/llm-test-server:1.0.0` |
-| .NET with Aspire | `dotnet add package ManagedCode.LlmTestServer.Aspire` |
-| .NET tests | `dotnet add package ManagedCode.LlmTestServer.Client` |
+| [![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)](#docker-quick-start)<br>Any language or stack | `docker run -p 8080:8080 ghcr.io/managedcode/llm-test-server:1.0.0` |
+| [![.NET Aspire](https://img.shields.io/badge/.NET%20Aspire-512BD4?style=flat-square&logo=dotnet&logoColor=white)](#aspire-quick-start)<br>AppHost and integration tests | `dotnet add package ManagedCode.LlmTestServer.Aspire` |
+| [![.NET](https://img.shields.io/badge/.NET-512BD4?style=flat-square&logo=dotnet&logoColor=white)](#dotnet-quick-start)<br>Test configuration and verification | `dotnet add package ManagedCode.LlmTestServer.Client` |
+
+<a id="docker-quick-start"></a>
 
 ### With Docker, from any language
 
@@ -96,6 +102,8 @@ docker run --rm -p 8080:8080 \
 
 Choose a quick start below. Each example configures its own fixture, calls the server through the official
 OpenAI SDK and prints `Hello from your fixture`. The key is a local test value; no provider account is needed.
+
+<a id="dotnet-quick-start"></a>
 
 ### .NET — official OpenAI SDK
 
@@ -128,6 +136,8 @@ var chat = new ChatClient("gpt-4.1-mini", new ApiKeyCredential("local-test-key")
 ChatCompletion reply = await chat.CompleteChatAsync([new UserChatMessage("Hello")]);
 Console.WriteLine(reply.Content[0].Text); // Hello from your fixture
 ```
+
+<a id="javascript-quick-start"></a>
 
 ### JavaScript — official OpenAI SDK
 
@@ -171,6 +181,8 @@ const reply = await client.chat.completions.create({
 });
 console.log(reply.choices[0].message.content); // Hello from your fixture
 ```
+
+<a id="python-quick-start"></a>
 
 ### Python — official OpenAI SDK
 
@@ -218,6 +230,8 @@ For other providers, use their SDK and [provider endpoint](docs/Reference/Provid
 More: [Docker distribution](docs/Features/DockerDistribution.md) ·
 [official JavaScript SDK](https://github.com/openai/openai-node) ·
 [official Python SDK](https://github.com/openai/openai-python).
+
+<a id="aspire-quick-start"></a>
 
 ### With .NET and Aspire
 

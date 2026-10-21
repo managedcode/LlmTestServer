@@ -4,15 +4,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageVersion Include="Anthropic" Version="12.58.0" />
+    <PackageVersion Include="Anthropic" Version="12.60.0" />
     <PackageVersion Include="Google.GenAI" Version="1.26.1" />
-    <PackageVersion Include="AWSSDK.BedrockRuntime" Version="4.0.101.11" />
-    <PackageVersion Include="AWSSDK.Core" Version="4.0.102.11" />
+    <PackageVersion Include="AWSSDK.BedrockRuntime" Version="4.0.101.12" />
+    <PackageVersion Include="AWSSDK.Core" Version="4.0.102.12" />
     <PackageVersion Include="Azure.AI.Inference" Version="1.0.0-beta.5" />
     <PackageVersion Include="Azure.AI.OpenAI" Version="2.9.0-beta.1" />
     <PackageVersion Include="Azure.Core" Version="1.63.0" />
-    <PackageVersion Include="Aspire.Hosting" Version="13.6.1" />
-    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.6.1" />
+    <PackageVersion Include="Aspire.Hosting" Version="13.6.2" />
+    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.6.2" />
     <PackageVersion Include="MessagePack" Version="3.1.12" />
     <PackageVersion Include="DotNet.ReproducibleBuilds" Version="2.0.5" />
     <PackageVersion Include="Microsoft.Bcl.Memory" Version="10.0.13" />
@@ -31,6 +31,6 @@
     <PackageVersion Include="MetadataExtractor" Version="2.9.3" />
     <PackageVersion Include="JsonSchema.Net" Version="9.4.1" />
     <PackageVersion Include="Microsoft.Playwright" Version="1.63.0" />
-    <PackageVersion Include="TUnit" Version="1.75.0" />
+    <PackageVersion Include="TUnit" Version="1.76.0" />
   </ItemGroup>
 </Project>

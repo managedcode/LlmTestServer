@@ -7,9 +7,9 @@ replace SDK serialization, parsing, streaming or error handling.
 
 | Client | Pinned package | Added running-server evidence |
 | --- | --- | --- |
-| Anthropic | `Anthropic` 12.58.0 | Native web search JSON/SSE, citations, assistant history and all six native search errors |
+| Anthropic | `Anthropic` 12.60.0 | Native web search JSON/SSE, citations, assistant history and all six native search errors |
 | Google Gemini | `Google.GenAI` 1.26.1 | GenerateContent JSON/SSE, signed function rounds, batch embeddings, dimensions, auth, filters and error recovery (36 cases) |
-| Amazon Bedrock | `AWSSDK.BedrockRuntime` 4.0.101.11 | Converse, ConverseStream, InvokeModel, InvokeModelWithResponseStream, tool rounds and rate-limit recovery |
+| Amazon Bedrock | `AWSSDK.BedrockRuntime` 4.0.101.12 | Converse, ConverseStream, InvokeModel, InvokeModelWithResponseStream, tool rounds and rate-limit recovery |
 | OpenAI-compatible routes | `OpenAI` 2.14.0 | Groq, OpenRouter, Mistral and DeepSeek function rounds, JSON/SSE, provider errors and explicit recovery |
 
 The last row proves compatibility with the official **OpenAI client** at those route roots. It does
