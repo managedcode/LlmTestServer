@@ -404,7 +404,7 @@ public sealed partial class LlmTestServerRuntime
             {
                 completed = RetainChatResponse(request, LlmTestServerChatResult.Success(request.ModelId, scenario.Id,
                     response.Content, successfulStreamChunks) with
-                { OutputDisposition = response.OutputDisposition, StreamDelivery = response.StreamDelivery, ToolCalls = [.. response.ToolCalls], OutputItems = LlmTestServerResponseItems.Snapshot(response.OutputItems), WireMetadata = GetResponseMetadata() }, bearerToken);
+                { WebSearchRequests = response.WebSearchRequests, OutputDisposition = response.OutputDisposition, StreamDelivery = response.StreamDelivery, ToolCalls = [.. response.ToolCalls], OutputItems = LlmTestServerResponseItems.Snapshot(response.OutputItems), WireMetadata = GetResponseMetadata() }, bearerToken);
                 if (!completed.IsSuccess)
                 {
                     RollBackResponse(scenario, responsePosition, generation, conversationLease);

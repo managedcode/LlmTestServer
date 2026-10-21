@@ -147,7 +147,8 @@ public static partial class OpenAiWireMapper
         string responseId,
         long created,
         OpenAiCacheUsageShape cacheUsageShape = OpenAiCacheUsageShape.None,
-        IReadOnlyCollection<string>? includedProperties = null
+        IReadOnlyCollection<string>? includedProperties = null,
+        bool azureToolUsage = false
     )
     {
         return new()
@@ -156,6 +157,8 @@ public static partial class OpenAiWireMapper
             CreatedAt = created,
             Model = result.ModelId,
             Output = CreateResponseOutput(result, includedProperties),
+            ToolUsage = azureToolUsage && result.WebSearchRequests is { } requests
+                ? new() { WebSearch = new() { NumberOfRequests = requests } } : null,
             Status = result.OutputDisposition?.Kind == LlmTestServerOutputDispositionKind.Filtered ? "incomplete" : "completed",
             IncompleteDetails = result.OutputDisposition?.Kind == LlmTestServerOutputDispositionKind.Filtered ? new() : null,
             Usage = new OpenAiResponseUsage

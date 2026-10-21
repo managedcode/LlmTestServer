@@ -624,6 +624,7 @@ public sealed partial class LlmTestServerConfigurationBuilder
 
     private static LlmTestServerScenarioResponse SnapshotResponse(LlmTestServerScenarioResponse response)
     {
+        if (response.WebSearchRequests < 0) { throw new ArgumentOutOfRangeException(nameof(response), "Billable search requests must be nonnegative."); }
         ArgumentNullException.ThrowIfNull(response);
         ArgumentNullException.ThrowIfNull(response.Content);
         ArgumentNullException.ThrowIfNull(response.StreamChunks);

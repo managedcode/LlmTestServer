@@ -39,7 +39,6 @@ public sealed partial class NativeWebSearchIntegrationTests
     }
 
     [Test]
-    [Arguments("/azure-openai/openai/v1/responses")]
     [Arguments("/microsoft-foundry/openai/v1/responses")]
     [Arguments("/groq/openai/v1/responses")]
     [Arguments("/openrouter/api/v1/responses")]

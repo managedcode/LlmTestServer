@@ -28,6 +28,10 @@ flowchart LR
     Stream --> SDK
 ```
 
+## Azure OpenAI Responses
+
+`/azure-openai/openai/v1/responses` accepts the bounded completed web/file/code fixtures described below. Configure Azure billable web requests independently using `WithWebSearchRequests(int?)`; JSON and terminal SSE expose `tool_usage.web_search.num_requests`. Null omits unavailable usage; zero remains an explicit provider quantity. See [Azure metering fixtures](OpenAiNativeWebSearch.md#azure-billable-request-fixtures). No container session or duration charge is inferred from code output items.
+
 ## OpenAI Responses
 
 Endpoint: upstream `POST /v1/responses`; hosted namespace `/openai/v1/responses`. Standard Bearer authentication.

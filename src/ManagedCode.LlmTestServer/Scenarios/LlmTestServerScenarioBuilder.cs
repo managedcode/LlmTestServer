@@ -45,6 +45,14 @@ public sealed class LlmTestServerScenarioBuilder(string id)
         return this;
     }
 
+    public LlmTestServerScenarioBuilder WithWebSearchRequests(int? requests)
+    {
+        if (requests < 0) { throw new ArgumentOutOfRangeException(nameof(requests)); }
+        if (_scenario.Responses.Count == 0) { throw new InvalidOperationException("WithWebSearchRequests requires a preceding response."); }
+        _scenario.Responses[^1] = _scenario.Responses[^1] with { WebSearchRequests = requests };
+        return this;
+    }
+
     public LlmTestServerScenarioBuilder Responds(string content, params string[] streamChunks)
     {
         ArgumentNullException.ThrowIfNull(content);

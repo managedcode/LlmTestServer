@@ -20,6 +20,7 @@ public sealed class LlmTestServerConversationStepBuilder(string id)
     public LlmTestServerConversationStepBuilder WhenLatestJson(string path, string expectedJson) { _match.JsonFields.Add(new() { Path = path, EqualsJson = expectedJson }); return this; }
     public LlmTestServerConversationStepBuilder WhenLatestJsonValue<T>(string path, T value) { return WhenLatestJson(path, JsonSerializer.Serialize(value)); }
     public LlmTestServerConversationStepBuilder RespondsWithItems(params LlmTestServerResponseItem[] items) { _response.RespondsWithItems(items); return this; }
+    public LlmTestServerConversationStepBuilder WithWebSearchRequests(int? requests) { _response.WithWebSearchRequests(requests); return this; }
     public LlmTestServerConversationStepBuilder Responds(string text, params string[] chunks) { _response.Responds(text, chunks); return this; }
     public LlmTestServerConversationStepBuilder RespondsJson(string json) { _response.RespondsJson(json); return this; }
     public LlmTestServerConversationStepBuilder CallsTool(string name, string argumentsJson, string callId = "call_fixture") { _response.CallsTool(name, argumentsJson, callId); return this; }

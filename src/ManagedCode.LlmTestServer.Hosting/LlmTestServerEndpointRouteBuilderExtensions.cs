@@ -1156,7 +1156,10 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         CancellationToken cancellationToken
     )
     {
-        var allowNativeTools = context.Request.Path.Equals("/openai/v1/responses", StringComparison.Ordinal);
+        var azureToolUsage = context.Request.Path.StartsWithSegments(ProviderRoutes.AzureOpenAI) &&
+            context.GetEndpoint()?.Metadata.GetMetadata<LlmTestServerProviderOperationMetadata>()
+                ?.OperationId == LlmTestServerProviderOperationIds.AzureOpenAI.V1ResponsesCreate;
+        var allowNativeTools = azureToolUsage || context.Request.Path.Equals("/openai/v1/responses", StringComparison.Ordinal);
         var read = await ReadJsonAsync<OpenAiResponseRequest>(context, cancellationToken,
                 validation: allowNativeTools ? OpenAiRequestValidation.ValidateNativeResponse : OpenAiRequestValidation.ValidateResponse)
             .ConfigureAwait(false);
@@ -1226,13 +1229,14 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
                     created,
                     cacheUsageShape,
                     cancellationToken,
-                    request.Include
+                    request.Include,
+                    azureToolUsage
                 )
                 .ConfigureAwait(false);
             return Results.Empty;
         }
 
-        return Results.Json(OpenAiWireMapper.ToResponse(result, responseId, created, cacheUsageShape, request.Include));
+        return Results.Json(OpenAiWireMapper.ToResponse(result, responseId, created, cacheUsageShape, request.Include, azureToolUsage));
     }
 
     private static async Task<IResult> CompleteAnthropicMessageAsync(

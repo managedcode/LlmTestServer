@@ -130,7 +130,6 @@ public sealed partial class NativeFileCodeIntegrationTests
     }
 
     [Test]
-    [Arguments(false, "/azure-openai/openai/v1/responses")]
     [Arguments(false, "/groq/openai/v1/responses")]
     [Arguments(true, "/microsoft-foundry/openai/v1/responses")]
     [Arguments(true, "/openrouter/api/v1/responses")]

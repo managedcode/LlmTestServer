@@ -100,12 +100,12 @@ public static partial class OpenAiWireMapper
 
     public static IEnumerable<object> ToResponseStreamEvents(LlmTestServerChatResult result, string responseId,
         long created, OpenAiCacheUsageShape cacheUsageShape = OpenAiCacheUsageShape.None,
-        IReadOnlyCollection<string>? includedProperties = null)
+        IReadOnlyCollection<string>? includedProperties = null, bool azureToolUsage = false)
     {
-        var response = ToResponse(result, responseId, created, cacheUsageShape, includedProperties);
+        var response = ToResponse(result, responseId, created, cacheUsageShape, includedProperties, azureToolUsage);
         var sequence = 0;
-        yield return new { type = "response.created", sequence_number = sequence++, response = response with { Status = "in_progress", IncompleteDetails = null, Output = [] } };
-        yield return new { type = "response.in_progress", sequence_number = sequence++, response = response with { Status = "in_progress", IncompleteDetails = null, Output = [] } };
+        yield return new { type = "response.created", sequence_number = sequence++, response = response with { Status = "in_progress", IncompleteDetails = null, Output = [], ToolUsage = null } };
+        yield return new { type = "response.in_progress", sequence_number = sequence++, response = response with { Status = "in_progress", IncompleteDetails = null, Output = [], ToolUsage = null } };
         for (var index = 0; index < response.Output.Count; index++)
         {
             var item = response.Output[index];

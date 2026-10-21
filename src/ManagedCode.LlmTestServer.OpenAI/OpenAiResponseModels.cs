@@ -60,6 +60,10 @@ public sealed record OpenAiResponse
     [JsonPropertyName("usage")]
     public OpenAiResponseUsage Usage { get; init; } = new();
 
+    [JsonPropertyName("tool_usage")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public OpenAiResponseToolUsage? ToolUsage { get; init; }
+
     [JsonPropertyName("incomplete_details")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public OpenAiResponseIncompleteDetails? IncompleteDetails { get; init; }

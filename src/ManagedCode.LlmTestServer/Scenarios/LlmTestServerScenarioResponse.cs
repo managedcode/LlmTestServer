@@ -2,6 +2,9 @@ namespace ManagedCode.LlmTestServer.Scenarios;
 
 public sealed record LlmTestServerScenarioResponse
 {
+    /// <summary>Explicit provider-reported billable web-search requests; null omits the meter.</summary>
+    public int? WebSearchRequests { get; init; }
+
     public List<LlmTestServerResponseItem> OutputItems { get; init; } = [];
 
     public List<LlmTestServerToolCall> ToolCalls { get; init; } = [];

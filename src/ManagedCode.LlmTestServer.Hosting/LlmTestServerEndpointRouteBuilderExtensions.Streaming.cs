@@ -80,14 +80,15 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         long created,
         OpenAiCacheUsageShape cacheUsageShape,
         CancellationToken cancellationToken,
-        IReadOnlyCollection<string>? includedProperties = null
+        IReadOnlyCollection<string>? includedProperties = null,
+        bool azureToolUsage = false
     )
     {
         context.Response.StatusCode = StatusCodes.Status200OK;
         context.Response.ContentType = "text/event-stream";
 
         LlmTestServerStreamDeliveryEvidence.Begin(context, result.StreamDelivery);
-        foreach (var streamEvent in OpenAiWireMapper.ToResponseStreamEvents(result, responseId, created, cacheUsageShape, includedProperties))
+        foreach (var streamEvent in OpenAiWireMapper.ToResponseStreamEvents(result, responseId, created, cacheUsageShape, includedProperties, azureToolUsage))
         {
             await WriteResponseSseDataAsync(context, streamEvent, cancellationToken).ConfigureAwait(false);
             if (result.StreamDelivery is not null)

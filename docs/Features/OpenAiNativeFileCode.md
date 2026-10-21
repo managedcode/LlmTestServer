@@ -12,7 +12,7 @@ These fixtures serve `POST /openai/v1/responses`. They return configured native 
 | `file_search` | `gpt-4o-mini` | [Official file-search cookbook](https://developers.openai.com/cookbook/examples/file_search_responses) |
 | `code_interpreter` | `gpt-4.1` | [Official tool cookbook](https://developers.openai.com/cookbook/examples/mcp/mcp_tool_guide) |
 
-The pairings are separate. A current request cannot declare multiple native families whose supported model sets have no common member. Raw model checks apply to current declarations and named choices; completed prior tool outputs and include selectors alone do not re-qualify a past tool against the current model. The core independently checks the qualified native surface and selected fixture. Other provider namespaces and Chat Completions reject native declarations/history.
+The pairings are separate. A current request cannot declare multiple native families whose supported model sets have no common member. Raw model checks apply to current declarations and named choices; completed prior tool outputs and include selectors alone do not re-qualify a past tool against the current model. The core independently checks the qualified native surface and selected fixture. Azure OpenAI Responses also accepts these bounded native declarations at `/azure-openai/openai/v1/responses`; other provider namespaces and Chat Completions reject them. Azure code results retain the exact fixture container identity and do not invent session counts or durations.
 
 ## Configure a file-search fixture
 

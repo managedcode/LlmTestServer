@@ -116,7 +116,7 @@ retention remains bounded and explicitly marks omitted payload evidence.
 
 This slice makes no support claim for `web_search_preview`, open/find actions, native tool failures,
 non-ASCII citation-offset semantics, external-web-access/return-token-budget controls,
-resource lifecycle or native tools on other provider namespaces. File search and code interpreter use their
+resource lifecycle or native tools on provider namespaces other than Azure OpenAI Responses. File search and code interpreter use their
 separate [bounded fixture contract](OpenAiNativeFileCode.md). Remaining contracts are tracked in the
 [native contract inventory](NativeBuiltInToolContractInventory.md).
 
@@ -153,3 +153,33 @@ release or main merge is asserted by these local results.
 The independent code-only checkout passed 965/965 server integrations after the ordinary-response regression fix, with 91.96% production line coverage, 77.38% branch coverage and 94.38% method coverage. Canonical formatting and Release build passed with 0 warnings/errors. These results exclude the parallel owner analytics/visual work. Evidence: `artifacts/delivery/native-isolated-final-{format,build,coverage}.log`.
 
 The same code-only checkout packed all 19 packages; the fresh installed NuGet/Aspire/official SDK/Chromium consumer passed 2/2. Its .NET SDK-built linux/arm64 image passed actual HTTP native JSON/SSE and terminal-evidence acceptance. Evidence: `artifacts/delivery/native-isolated-{pack,consumer,container-publish,container-smoke}.log`; container evidence `artifacts/native-code-validation/artifacts/container-verification/220fcd85c2a76ed5`. No public package/image publication is claimed.
+
+## Azure billable request fixtures
+
+Azure OpenAI Responses accepts the same native web/file/code declarations at
+`/azure-openai/openai/v1/responses`. Configure Azure's exact billable search quantity separately
+from output actions; one `web_search_call` may represent three Bing requests:
+
+```csharp
+await control.ConfigureAsync(config => config.UseGpt41Mini()
+    .UseChatScenario("azure-search", scenario => scenario
+        .RespondsWithItems(
+            new LlmTestServerResponseWebSearchItem { Id = "ws_meter", Queries = ["fixture facts"] },
+            new LlmTestServerResponseMessageItem { Content = "Scripted answer." })
+        .WithWebSearchRequests(3)));
+```
+
+`WithWebSearchRequests(int?)` also works on conversation steps. The public scenario response
+field is `WebSearchRequests` (`webSearchRequests` in configuration JSON). Null or omission means
+usage unavailable; zero is an explicit provider zero; negative quantities are rejected before
+configuration changes. Azure JSON and terminal SSE responses emit `tool_usage.web_search.num_requests`.
+Early stream responses omit this final meter. OpenAI responses retain their native output items and
+omit Azure-specific usage. The official Responses SDK preserves Azure's extension in its JSON model.
+
+This quantity is never calculated from output items, queries or search actions. This follows
+[Azure's billable usage contract](https://learn.microsoft.com/azure/foundry/openai/how-to/web-search#web-search-usage-and-billing).
+OpenAI search charges use their own output-call semantics, while Anthropic's existing basic web-search
+fixtures expose `usage.server_tool_use.web_search_requests`; neither is converted into an Azure meter.
+Code interpreter fixtures preserve their configured container ID and native outputs. They do not invent
+per-response container sessions or billing duration: container/session accounting requires a separate
+lifecycle contract from the provider rather than a count of code calls.
