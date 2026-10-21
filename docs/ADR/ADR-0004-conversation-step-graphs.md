@@ -2,7 +2,7 @@
 
 Status: Accepted; implemented and locally qualified, public delivery pending
 Date: 2026-10-20
-Related: [conversation DSL](../Features/ConversationDSL.md), [delivery E3](../Features/LlmTestServerDeliveryPlan.md),
+Related: [conversation DSL](../Features/ConversationDSL.md),
 [test sessions](../Features/TestSessions.md), [architecture](../Architecture.md)
 
 ## Decision and context

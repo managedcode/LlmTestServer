@@ -174,7 +174,7 @@ Explicit prior native output items and `previous_response_id` use the existing h
 
 Request queries and JSON/NDJSON exports retain typed declarations, results, citations and assistant output groups within the existing diagnostic budgets. Nested data is copied; omitted evidence is marked truncated. Function `ResponseToolCalls` stays separate. Native declaration/filter/resource options remain preserved in fingerprints, provider-scoped prompt-cache identity and normalized usage. Cache reads/writes and reasoning remain subsets of input/output totals.
 
-The local qualification below covers the focused suites, full server/coverage gate, clean installed-package Aspire/SDK consumer and actual container smoke. Public delivery remains pending. Native failed/incomplete results, unqualified model pairings, other providers and resource lifecycle remain in [the contract inventory](NativeBuiltInToolContractInventory.md) and [delivery plan](LlmTestServerDeliveryPlan.md). Related design: [ADR-0006](../ADR/ADR-0006-ordered-native-tool-output.md).
+The local qualification below covers the focused suites, full server/coverage gate, clean installed-package Aspire/SDK consumer and actual container smoke. Public delivery remains pending. Native failed/incomplete results, unqualified model pairings, other providers and resource lifecycle remain in [the contract inventory](NativeBuiltInToolContractInventory.md). Related design: [ADR-0006](../ADR/ADR-0006-ordered-native-tool-output.md).
 
 ## Code-only qualification
 

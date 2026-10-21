@@ -153,6 +153,11 @@ h3 {
   font-size: 15px;
 }
 
+/* Decorative glows may extend past the viewport; clip them without creating a scroll container. */
+main {
+  overflow-x: clip;
+}
+
 /* Header */
 
 .topbar {
@@ -205,6 +210,39 @@ h3 {
   box-shadow: 0 4px 12px rgb(22 22 22 / 18%);
 }
 
+.brand-group {
+  display: inline-flex;
+  gap: 14px;
+  align-items: center;
+  min-width: 0;
+}
+
+.brand-by {
+  padding-left: 14px;
+  border-left: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 520;
+  white-space: nowrap;
+}
+
+.brand-by:hover {
+  color: var(--ink);
+}
+
+.topbar-actions {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.svg-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
 nav {
   display: flex;
   gap: 28px;
@@ -212,6 +250,11 @@ nav {
   margin-left: auto;
   color: var(--text-soft);
   font-size: 13px;
+}
+
+nav a,
+.topbar .button {
+  white-space: nowrap;
 }
 
 /* Buttons and links */
@@ -248,6 +291,29 @@ nav {
   padding: 8px 14px;
   border-radius: 9px;
   font-size: 12px;
+}
+
+.button-ghost {
+  gap: 9px;
+  border: 1px solid var(--line);
+  background: rgb(255 255 255 / 72%);
+  box-shadow: 0 1px 2px rgb(22 22 22 / 6%);
+}
+
+.button-ghost:hover {
+  border-color: var(--ink);
+  background: var(--surface);
+}
+
+.github-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: currentcolor;
+}
+
+.button:has(.github-icon) {
+  gap: 10px;
 }
 
 .actions {
@@ -354,15 +420,42 @@ nav {
   white-space: nowrap;
 }
 
-.install-prompt {
-  color: var(--accent);
-  font-family: var(--code-font);
-  font-size: 12px;
-}
-
 .install-chip .copy-button {
   color: var(--ink);
   background: var(--accent);
+}
+
+.install-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  justify-items: start;
+  margin-top: 28px;
+}
+
+.install-list .install-chip {
+  margin-top: 0;
+}
+
+/* The Docker command is the longest line in the hero; let the chips use the column gap instead of truncating it. */
+.hero .install-list {
+  margin-right: -72px;
+}
+
+.install-list .install-chip code {
+  font-size: 11.5px;
+}
+
+.install-tag {
+  flex: none;
+  min-width: 46px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  color: var(--accent);
+  background: rgb(255 255 255 / 8%);
+  font-family: var(--code-font);
+  font-size: 11px;
+  text-align: center;
 }
 
 .hero-stage {
@@ -2365,6 +2458,10 @@ summary {
     gap: 36px;
   }
 
+  .hero .install-list {
+    margin-right: 0;
+  }
+
   .section-heading,
   .faq-section {
     gap: 50px;
@@ -2396,6 +2493,12 @@ summary {
 
   .float-cache {
     right: -8px;
+  }
+}
+
+@media (width <= 1080px) {
+  .brand-by {
+    display: none;
   }
 }
 
@@ -2522,6 +2625,16 @@ summary {
   }
 }
 
+@media (width <= 780px) {
+  .topbar nav {
+    display: none;
+  }
+
+  .topbar-actions {
+    margin-left: auto;
+  }
+}
+
 @media (width <= 640px) {
   .topbar {
     height: 60px;
@@ -2532,8 +2645,18 @@ summary {
     display: none;
   }
 
-  .topbar .button-small {
+  .topbar-actions {
     margin-left: auto;
+  }
+
+  .brand-by,
+  .topbar .button-label {
+    display: none;
+  }
+
+  .topbar .button-ghost {
+    width: 38px;
+    padding-inline: 0;
   }
 
   .brand {
@@ -2572,6 +2695,10 @@ summary {
 
   .install-chip {
     display: flex;
+  }
+
+  .install-list {
+    justify-items: stretch;
   }
 
   .install-chip code {

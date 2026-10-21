@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent
-DEFAULT_URL = "https://managedcode.github.io/LlmTestServer"
+DEFAULT_URL = "https://llmtest.managed-code.com"
 parser = argparse.ArgumentParser()
 parser.add_argument("--base-url", default=DEFAULT_URL)
 args = parser.parse_args()
@@ -26,6 +26,10 @@ shutil.copytree(ROOT / "assets", output / "assets")
 for name in ("showcase-token-flow.jpg", "showcase-overview.jpg", "showcase-insights.jpg", "admin-dashboard-runtime.jpg"):
     shutil.copyfile(ROOT.parent / "docs" / "images" / name, output / "assets" / name)
 (output / ".nojekyll").touch()
+# Custom domain for the launch site. Pages deployed by Actions take the domain from the repository
+# Pages settings; the CNAME file keeps the artifact self-describing and is skipped for github.io hosts.
+if not parsed.netloc.endswith(".github.io"):
+    (output / "CNAME").write_text(parsed.netloc + "\n")
 (output / "robots.txt").write_text(f"User-agent: *\nAllow: /\nSitemap: {base_url}/sitemap.xml\n")
 (output / "sitemap.xml").write_text(
     '<?xml version="1.0" encoding="UTF-8"?>\n'

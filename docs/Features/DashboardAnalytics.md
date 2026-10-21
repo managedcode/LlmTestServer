@@ -67,4 +67,4 @@ Requests without usage, such as model discovery, stay in the request count but c
 
 Analytics use the same bounded request snapshot as the inspector. Short notices appear above the charts when earlier conversation requests were evicted, requests are still pending, usage is missing, or payloads were shortened; token counts stay complete when only payload previews were shortened. The dashboard adds no analytics endpoint; callers can inspect the underlying journal through the existing [query/export/verification APIs](RequestVerificationAndDeterminism.md).
 
-See [architecture](../Architecture.md), [conversation DSL](ConversationDSL.md) and [delivery plan](LlmTestServerDeliveryPlan.md). Running-server dashboard HTTP tests and browser tests provide the integration evidence.
+See [architecture](../Architecture.md) and [conversation DSL](ConversationDSL.md). Running-server dashboard HTTP tests and browser tests provide the integration evidence.

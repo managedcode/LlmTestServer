@@ -77,8 +77,7 @@ Evidence logs: `artifacts/delivery/e4-build-final.log`, `e4-coverage-final.log`,
 
 E3 [CI 39446187097](https://github.com/managedcode/LlmTestServer/actions/runs/39446187097) passed at `3aae4db`.
 E4 has not yet been pushed to branch CI. Local NuGet acceptance does not prove public-feed publication.
-The [delivery plan](../Features/LlmTestServerDeliveryPlan.md) retains E5–E13, public NuGet/GHCR and launch
-acceptance as unfinished. Add actual server flows for new behavior and preserve the 90% coverage gate.
+Add actual server flows for new behavior and preserve the 90% coverage gate.
 
 Each implemented operation must be exercised with every supported parameter, positive and invalid/boundary
 values, supported streaming modes, auth/version handling and stateful continuation where applicable. A passing

@@ -3,7 +3,7 @@
 Status: Accepted; implemented and locally qualified, public delivery pending
 Date: 2026-10-20
 Related: [feature contract](../Features/RequestVerificationAndDeterminism.md),
-[delivery E4](../Features/LlmTestServerDeliveryPlan.md), [architecture](../Architecture.md),
+[architecture](../Architecture.md),
 [session ownership](ADR-0003-isolated-test-sessions.md), [conversation graphs](ADR-0004-conversation-step-graphs.md).
 
 ## Context and decision
@@ -90,6 +90,6 @@ session/provider counters. Wire timestamps and real observation timestamps must 
 The feature's [verification commands](../Features/RequestVerificationAndDeterminism.md#verification-and-completion-criteria)
 include the full integration/format/Release build/coverage gates. Local E4 qualification passed 812/812
 integration tests, 91.66% production line coverage, final Release build with zero warnings/errors, all 19 package
-builds and the independent clean installed Aspire/official SDK/Chromium consumer (1/1). Evidence is recorded
-in the [delivery ledger](../Features/LlmTestServerDeliveryPlan.md#11-журнал-реалізації). E4 branch CI and public
+builds and the independent clean installed Aspire/official SDK/Chromium consumer (1/1). Evidence logs are listed in the
+[feature contract](../Features/RequestVerificationAndDeterminism.md). E4 branch CI and public
 publication remain pending; local package acceptance is not public-release evidence.

@@ -3,7 +3,7 @@
 Status: Implemented and locally qualified through running-server integrations and an independent installed-package
 consumer. E4 branch CI and public release remain pending.
 Related: [architecture](../Architecture.md), [ADR-0005](../ADR/ADR-0005-request-evidence-and-wire-determinism.md),
-[delivery E4](LlmTestServerDeliveryPlan.md), [conversations](ConversationDSL.md), [sessions](TestSessions.md).
+[conversations](ConversationDSL.md), [sessions](TestSessions.md).
 
 ## Purpose and boundaries
 
@@ -184,7 +184,6 @@ the final Release build had zero warnings/errors. All 19 packages packed, and an
 consumer exercised packaged Aspire, official SDKs, query/export/verification/fixed metadata and Chromium (1/1).
 Evidence: `artifacts/delivery/e4-build-final.log`, `e4-coverage-final.log`, `e4-pack.log`, `e4-consumer.log`.
 These local package checks do not establish public-feed availability. E4 branch CI has not run yet.
-See the [delivery ledger](LlmTestServerDeliveryPlan.md#11-журнал-реалізації) for subsequent delivery status.
 
 ```sh
 dotnet format ManagedCode.LlmTestServer.slnx --verify-no-changes --no-restore

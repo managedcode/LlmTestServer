@@ -257,4 +257,4 @@ including in-stream API error events and separately qualified semantics for othe
 This document does not claim output-policy support for Bedrock, Groq, Mistral, Ollama, Cohere,
 OpenRouter, Perplexity, System One decision profiles, Cloudflare decision profiles, additional
 Azure/Foundry operations or media/native-tool/structured-output combinations. Shared mapper code alone is not
-qualification. See [the delivery plan](LlmTestServerDeliveryPlan.md) for the remaining work.
+qualification.

@@ -56,7 +56,7 @@ can shrink or grow the reservation within that budget; deletion releases it. Exp
 the lifetime boundary. There is no timer expiration or persistence.
 
 The default browser dashboard continues to inspect the default runtime. A session selector and session/step
-visualization remain part of the later dashboard work in the delivery plan.
+visualization are not covered by this contract.
 
 ## Verification
 

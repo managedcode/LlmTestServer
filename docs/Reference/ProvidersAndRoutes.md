@@ -59,7 +59,6 @@ See [conversation graphs](../Features/ConversationDSL.md) and
 [request verification and determinism](../Features/RequestVerificationAndDeterminism.md) for typed APIs,
 HTTP contracts, retention limits and terminal-marker applicability. Explicit fixture timestamps retain their
 configured values.
-Public publication and remaining roadmap features are tracked in the [delivery plan](../Features/LlmTestServerDeliveryPlan.md).
 
 ## Provider Packages
 

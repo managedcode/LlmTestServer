@@ -7,6 +7,8 @@
 
 **A local, deterministic LLM provider for .NET tests, with a dashboard that shows where every token goes.**
 
+**Website:** [llmtest.managed-code.com](https://llmtest.managed-code.com) · .NET packages and a Docker image for any other stack.
+
 [![Token flow of a five-request conversation: system prompt, tool schemas, user, assistant, tool calls and tool results flowing into cache read, cache write, uncached input, response and reasoning](docs/images/showcase-token-flow.jpg)](docs/images/showcase-token-flow.jpg)
 
 [What it is](#what-it-is) · [Token usage and cache hits](#token-usage-and-prompt-cache-hits) · [Quick start](#quick-start) · [Capabilities](#what-you-can-do) · [Providers](#providers) · [TypeSafe / Jev](#typesafe-and-jev) · [Docs](#learn-more)
@@ -76,19 +78,155 @@ Details: [dashboard analytics](docs/Features/DashboardAnalytics.md) ·
 
 ## Quick start
 
-> **Status:** the v1.0.0 NuGet packages and container image are not published yet. Until they are, build and pack
-> the repository (version `0.1.18`) and use the local feed — see [installation](docs/Reference/Installation.md).
+| You use | Install |
+| --- | --- |
+| Any language or stack | `docker run -p 8080:8080 ghcr.io/managedcode/llm-test-server:1.0.0` |
+| .NET with Aspire | `dotnet add package ManagedCode.LlmTestServer.Aspire` |
+| .NET tests | `dotnet add package ManagedCode.LlmTestServer.Client` |
 
-Install the libraries in your existing AppHost or integration-test project from the locally packed feed:
+### With Docker, from any language
+
+Start the server. The dashboard opens at `http://localhost:8080/`.
 
 ```sh
-dotnet add package ManagedCode.LlmTestServer.Aspire --version 0.1.18 --no-restore
-dotnet add package ManagedCode.LlmTestServer.Client --version 0.1.18 --no-restore
-dotnet restore --source /absolute/path/to/LlmTestServer/artifacts/packages \
-  --source https://api.nuget.org/v3/index.json
+docker run --rm -p 8080:8080 \
+  -e LlmTestServer__RequiredBearerToken=local-test-key \
+  ghcr.io/managedcode/llm-test-server:1.0.0
 ```
 
-### In an Aspire AppHost
+Choose a quick start below. Each example configures its own fixture, calls the server through the official
+OpenAI SDK and prints `Hello from your fixture`. The key is a local test value; no provider account is needed.
+
+### .NET — official OpenAI SDK
+
+In a .NET 10 console app:
+
+```sh
+dotnet add package ManagedCode.LlmTestServer.Client
+dotnet add package OpenAI
+```
+
+Save as `Program.cs`, then run `dotnet run`:
+
+```csharp
+using System.ClientModel;
+using ManagedCode.LlmTestServer.Client;
+using OpenAI;
+using OpenAI.Chat;
+
+using var http = new HttpClient { BaseAddress = new Uri("http://localhost:8080/") };
+var control = new LlmTestServerClient(http, "local-test-key");
+await control.ConfigureAsync(config => config
+    .RequireBearerToken("local-test-key")
+    .UseGpt41Mini()
+    .UseChatScenario("hello", scenario => scenario
+        .WhenUserContains("Hello")
+        .Responds("Hello from your fixture")));
+
+var chat = new ChatClient("gpt-4.1-mini", new ApiKeyCredential("local-test-key"),
+    new OpenAIClientOptions { Endpoint = new Uri(http.BaseAddress!, "openai/v1") });
+ChatCompletion reply = await chat.CompleteChatAsync([new UserChatMessage("Hello")]);
+Console.WriteLine(reply.Content[0].Text); // Hello from your fixture
+```
+
+### JavaScript — official OpenAI SDK
+
+Requires Node.js 20 or later:
+
+```sh
+npm install openai
+```
+
+Save as `example.mjs`, then run `node example.mjs`:
+
+```javascript
+import OpenAI from "openai";
+
+const baseURL = "http://localhost:8080";
+const apiKey = "local-test-key";
+
+// Configure the test fixture through the server's management API.
+const configured = await fetch(`${baseURL}/admin-api/configure`, {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    requiredBearerToken: apiKey,
+    models: [{ id: "gpt-4.1-mini", kind: "chat" }],
+    chatScenarios: [{
+      id: "hello",
+      modelId: "gpt-4.1-mini",
+      responses: [{ content: "Hello from your fixture" }],
+    }],
+  }),
+});
+if (!configured.ok) throw new Error(await configured.text());
+
+const client = new OpenAI({ baseURL: `${baseURL}/openai/v1`, apiKey });
+const reply = await client.chat.completions.create({
+  model: "gpt-4.1-mini",
+  messages: [{ role: "user", content: "Hello" }],
+});
+console.log(reply.choices[0].message.content); // Hello from your fixture
+```
+
+### Python — official OpenAI SDK
+
+```sh
+python -m pip install openai httpx
+```
+
+Save as `example.py`, then run `python example.py`:
+
+```python
+import httpx
+from openai import OpenAI
+
+base_url = "http://localhost:8080"
+api_key = "local-test-key"
+
+# Configure the test fixture through the server's management API.
+configured = httpx.post(
+    f"{base_url}/admin-api/configure",
+    headers={"Authorization": f"Bearer {api_key}"},
+    json={
+        "requiredBearerToken": api_key,
+        "models": [{"id": "gpt-4.1-mini", "kind": "chat"}],
+        "chatScenarios": [{
+            "id": "hello",
+            "modelId": "gpt-4.1-mini",
+            "responses": [{"content": "Hello from your fixture"}],
+        }],
+    },
+)
+configured.raise_for_status()
+
+with OpenAI(base_url=f"{base_url}/openai/v1", api_key=api_key) as client:
+    reply = client.chat.completions.create(
+        model="gpt-4.1-mini",
+        messages=[{"role": "user", "content": "Hello"}],
+    )
+    print(reply.choices[0].message.content)  # Hello from your fixture
+```
+
+Open [the dashboard](http://localhost:8080/) to inspect the request, response and token usage.
+The management API configures fixtures; the official SDK sends the provider request.
+For other providers, use their SDK and [provider endpoint](docs/Reference/ProvidersAndRoutes.md).
+
+More: [Docker distribution](docs/Features/DockerDistribution.md) ·
+[official JavaScript SDK](https://github.com/openai/openai-node) ·
+[official Python SDK](https://github.com/openai/openai-python).
+
+### With .NET and Aspire
+
+```sh
+dotnet add package ManagedCode.LlmTestServer.Aspire
+dotnet add package ManagedCode.LlmTestServer.Client
+```
+
+#### In an Aspire AppHost
 
 `AddLlmTestServer()` starts the packaged .NET service; Docker is not required.
 
@@ -107,7 +245,7 @@ builder.AddProject<Projects.Api>("api")
 builder.Build().Run();
 ```
 
-### In a test
+#### In a test
 
 Add `ManagedCode.LlmTestServer.Aspire`, `ManagedCode.LlmTestServer.Client` and `Aspire.Hosting.Testing`, then
 configure a response and call it:
@@ -149,30 +287,8 @@ Console.WriteLine($"{completion.Usage.InputTokenCount} input tokens, " +
     $"{completion.Usage.InputTokenDetails.CachedTokenCount} from cache");
 ```
 
-### As a standalone container
-
-Build the image with the .NET SDK (use `linux-x64` in both RID arguments on amd64), run it, then configure it over
-HTTP — any language can drive it:
-
-```sh
-dotnet publish samples/ManagedCode.LlmTestServer.Service/ManagedCode.LlmTestServer.Service.csproj \
-  --configuration Release --runtime linux-arm64 --self-contained false \
-  /t:PublishContainer -p:ContainerRuntimeIdentifiers=linux-arm64 -p:ContainerImageTag=local -p:UseAppHost=false
-docker run --rm -p 8080:8080 -e LlmTestServer__RequiredBearerToken=local-test-key managedcode/llm-test-server:local
-```
-
-```sh
-curl --fail-with-body http://localhost:8080/admin-api/configure \
-  -H 'Authorization: Bearer local-test-key' -H 'Content-Type: application/json' \
-  --data '{"requiredBearerToken":"local-test-key","models":[{"id":"gpt-4.1-mini","kind":"chat"}],"chatScenarios":[{"id":"hello","modelId":"gpt-4.1-mini","responses":[{"content":"Hello from your fixture"}]}]}'
-curl --fail-with-body http://localhost:8080/openai/v1/chat/completions \
-  -H 'Authorization: Bearer local-test-key' -H 'Content-Type: application/json' \
-  --data '{"model":"gpt-4.1-mini","messages":[{"role":"user","content":"Hello"}]}'
-```
-
-Open `http://localhost:8080/` for the dashboard. When a key is configured it protects provider routes and
-`/admin-api/*`. More: [Docker distribution](docs/Features/DockerDistribution.md),
-[embedding in ASP.NET Core](docs/Reference/Installation.md#aspnet-core-startup).
+You can also embed the server and dashboard in your own ASP.NET Core host — see
+[hosting options](docs/Reference/Installation.md#aspnet-core-startup).
 
 ## What you can do
 
@@ -239,36 +355,45 @@ Kev uses the same protocol package with its own compatibility profile.
 
 ## Packages
 
-| Package | Use it for |
-| --- | --- |
-| `ManagedCode.LlmTestServer.Aspire` | Add the server to an AppHost or Aspire test with `AddLlmTestServer()`. |
-| `ManagedCode.LlmTestServer.Client` | Configure, reset, query and verify from tests; `IChatClient`, embedding and image clients. |
-| `ManagedCode.LlmTestServer.Hosting` | Embed the server and dashboard in your own ASP.NET Core host. |
-| `ManagedCode.LlmTestServer` | The provider-neutral runtime: models, scenarios, usage and assertions. |
-| `ManagedCode.LlmTestServer.<Provider>` | Wire contracts for each provider family listed above. |
-| `ManagedCode.LlmTestServer.SystemOne` | Native TypeSafe Jev and Kev contracts for the System One API. |
-| `ManagedCode.LlmTestServer.Cloudflare` | Native Cloudflare Clef and Clef Flash decision contracts. |
+Start with **Aspire** for orchestration, **Client** for test setup, or **Hosting** to embed the server.
+Each badge shows the latest published NuGet version.
 
-The full list with NuGet links is in [providers, packages and routes](docs/Reference/ProvidersAndRoutes.md#packages).
+| Package | NuGet | Use it for |
+| --- | --- | --- |
+| [`ManagedCode.LlmTestServer.Aspire`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Aspire) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Aspire.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Aspire) | Start the server from an Aspire AppHost or integration test. |
+| [`ManagedCode.LlmTestServer.Client`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Client) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Client.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Client) | Configure fixtures, reset state and verify recorded requests. |
+| [`ManagedCode.LlmTestServer.Hosting`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Hosting) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Hosting.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Hosting) | Host the server and Blazor dashboard in your ASP.NET Core app. |
+| [`ManagedCode.LlmTestServer`](https://www.nuget.org/packages/ManagedCode.LlmTestServer) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer) | Build on the provider-neutral runtime, scenarios and assertions. |
+
+Provider packages contain protocol contracts and compatibility profiles. Choose the provider your app uses;
+see [operation coverage](docs/Features/ProviderApiContractCoverage.md) for supported APIs.
+
+| Provider package | NuGet | Provider |
+| --- | --- | --- |
+| [`ManagedCode.LlmTestServer.OpenAI`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.OpenAI) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.OpenAI.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.OpenAI) | OpenAI |
+| [`ManagedCode.LlmTestServer.AzureOpenAI`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.AzureOpenAI) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.AzureOpenAI.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.AzureOpenAI) | Azure OpenAI |
+| [`ManagedCode.LlmTestServer.Foundry`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Foundry) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Foundry.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Foundry) | Microsoft Foundry |
+| [`ManagedCode.LlmTestServer.Anthropic`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Anthropic) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Anthropic.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Anthropic) | Anthropic |
+| [`ManagedCode.LlmTestServer.Gemini`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Gemini) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Gemini.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Gemini) | Google Gemini |
+| [`ManagedCode.LlmTestServer.Groq`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Groq) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Groq.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Groq) | Groq |
+| [`ManagedCode.LlmTestServer.Mistral`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Mistral) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Mistral.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Mistral) | Mistral |
+| [`ManagedCode.LlmTestServer.Ollama`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Ollama) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Ollama.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Ollama) | Ollama |
+| [`ManagedCode.LlmTestServer.Cohere`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Cohere) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Cohere.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Cohere) | Cohere |
+| [`ManagedCode.LlmTestServer.Bedrock`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Bedrock) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Bedrock.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Bedrock) | Amazon Bedrock |
+| [`ManagedCode.LlmTestServer.OpenRouter`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.OpenRouter) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.OpenRouter.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.OpenRouter) | OpenRouter |
+| [`ManagedCode.LlmTestServer.DeepSeek`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.DeepSeek) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.DeepSeek.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.DeepSeek) | DeepSeek |
+| [`ManagedCode.LlmTestServer.Perplexity`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Perplexity) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Perplexity.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Perplexity) | Perplexity |
+| [`ManagedCode.LlmTestServer.SystemOne`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.SystemOne) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.SystemOne.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.SystemOne) | TypeSafe Jev / Kev — native System One API |
+| [`ManagedCode.LlmTestServer.Cloudflare`](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Cloudflare) | [![NuGet version](https://img.shields.io/nuget/v/ManagedCode.LlmTestServer.Cloudflare.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/ManagedCode.LlmTestServer.Cloudflare) | Cloudflare Clef / Clef Flash |
 
 ## Learn more
 
-- [Installation and hosting](docs/Reference/Installation.md) — local feed, container, ASP.NET Core, Aspire, building from source
+- [Installation and hosting](docs/Reference/Installation.md) — Docker, Aspire and ASP.NET Core hosting
 - [Configuration and scenarios](docs/Reference/Configuration.md) — models, scenarios, modalities, faults, assertions
 - [Clients and SDKs](docs/Reference/Clients.md) — control client, official SDKs, `Microsoft.Extensions.AI`, TypeSafe client
 - [Token usage and prompt cache](docs/Reference/TokenUsageAndPromptCache.md) and [dashboard analytics](docs/Features/DashboardAnalytics.md)
 - [Providers, packages and routes](docs/Reference/ProvidersAndRoutes.md) and [operation coverage](docs/Features/ProviderApiContractCoverage.md)
-- [Architecture](docs/Architecture.md), [test inventory](docs/Testing/AcceptanceCriteriaTestInventory.md) and [delivery plan](docs/Features/LlmTestServerDeliveryPlan.md)
-
-## Build from source
-
-```sh
-dotnet restore ManagedCode.LlmTestServer.slnx
-dotnet build ManagedCode.LlmTestServer.slnx --configuration Release --no-restore
-dotnet test --project tests/ManagedCode.LlmTestServer.Tests/ManagedCode.LlmTestServer.Tests.csproj --configuration Release --no-build
-```
-
-Packing, coverage and package verification are described in [installation](docs/Reference/Installation.md#build-and-test).
+- [Architecture](docs/Architecture.md), [test inventory](docs/Testing/AcceptanceCriteriaTestInventory.md)
 
 ## License
 

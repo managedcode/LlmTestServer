@@ -2,7 +2,7 @@
 
 Status: Implemented and locally qualified
 Date: 2026-10-20
-Related feature: [delivery plan E2](../Features/LlmTestServerDeliveryPlan.md)
+Related feature: [test sessions](../Features/TestSessions.md)
 
 ## Context and decision
 

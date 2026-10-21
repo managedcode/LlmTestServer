@@ -3,7 +3,6 @@
 Status: Accepted; bounded OpenAI web/file/code contracts locally qualified; public delivery pending
 Date: 2026-10-20
 Related: [native tool inventory](../Features/NativeBuiltInToolContractInventory.md),
-[delivery plan](../Features/LlmTestServerDeliveryPlan.md),
 [conversation graphs](ADR-0004-conversation-step-graphs.md),
 [request evidence](ADR-0005-request-evidence-and-wire-determinism.md).
 

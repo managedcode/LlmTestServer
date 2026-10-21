@@ -9,7 +9,7 @@
       name="description"
       content="A deterministic LLM API mock server for .NET and Aspire. Script responses, streaming, tool calls and failures, then inspect every request and where its tokens went."
     />
-    <link rel="canonical" href="https://managedcode.github.io/LlmTestServer/" />
+    <link rel="canonical" href="https://llmtest.managed-code.com/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="LLM Test Server" />
     <meta property="og:title" content="LLM Test Server · Your tests. Your responses." />
@@ -17,8 +17,8 @@
       property="og:description"
       content="Deterministic LLM API tests for .NET and Aspire. Script the response, inspect the request and see where every token goes."
     />
-    <meta property="og:url" content="https://managedcode.github.io/LlmTestServer/" />
-    <meta property="og:image" content="https://managedcode.github.io/LlmTestServer/assets/og.png" />
+    <meta property="og:url" content="https://llmtest.managed-code.com/" />
+    <meta property="og:image" content="https://llmtest.managed-code.com/assets/og.png" />
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
@@ -32,7 +32,7 @@
       name="twitter:description"
       content="Deterministic LLM API tests for .NET and Aspire. Script the response, inspect the request and see where every token goes."
     />
-    <meta name="twitter:image" content="https://managedcode.github.io/LlmTestServer/assets/og.png" />
+    <meta name="twitter:image" content="https://llmtest.managed-code.com/assets/og.png" />
     <meta
       name="twitter:image:alt"
       content="LLM Test Server: deterministic LLM API tests for .NET and Aspire, with the request dashboard and a token flow chart."
@@ -46,37 +46,63 @@
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
+    <svg class="svg-sprite" aria-hidden="true">
+      <symbol id="github-mark" viewBox="0 0 16 16">
+        <path
+          d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"
+        />
+      </symbol>
+    </svg>
     <header class="topbar">
-      <a class="brand" href="#top" aria-label="LLM Test Server home"
-        ><img class="brand-mark" src="assets/mark.svg" width="32" height="32" alt="" /><span>LLM Test Server</span></a
-      >
+      <div class="brand-group">
+        <a class="brand" href="#top" aria-label="LLM Test Server home"
+          ><img class="brand-mark" src="assets/mark.svg" width="32" height="32" alt="" /><span>LLM Test Server</span></a
+        ><a class="brand-by" href="https://managed-code.com">by Managed Code</a>
+      </div>
       <nav aria-label="Primary navigation">
         <a href="#features">Features</a>
         <a href="#analytics">Token analytics</a>
         <a href="#providers">Providers</a>
-        <a href="https://github.com/managedcode/LlmTestServer">GitHub <span aria-hidden="true">↗</span></a>
+        <a href="#get-started">Docker</a>
       </nav>
-      <a class="button button-small" href="#get-started">Get started <span aria-hidden="true">→</span></a>
+      <div class="topbar-actions">
+        <a class="button button-small button-ghost" href="https://github.com/managedcode/LlmTestServer"
+          ><svg class="github-icon" width="16" height="16" aria-hidden="true"><use href="#github-mark" /></svg><span class="button-label">GitHub</span></a
+        ><a class="button button-small" href="#get-started">Get started <span aria-hidden="true">→</span></a>
+      </div>
     </header>
 
     <main id="main">
       <section class="hero section-wrap" id="top" aria-labelledby="hero-title">
         <div class="hero-copy">
-          <p class="hero-pill"><span class="status-dot" aria-hidden="true"></span> .NET 10 · Aspire · Docker</p>
+          <p class="hero-pill">
+            <span class="status-dot" aria-hidden="true"></span> .NET-native · Docker for any stack
+          </p>
           <h1 id="hero-title">Your tests.<br />Your <span class="accent-text">responses.</span></h1>
-          <p class="hero-definition">A deterministic LLM API server for .NET tests.</p>
+          <p class="hero-definition">
+            A deterministic LLM API server for your tests — in .NET, Python, Node, Go or any language that speaks HTTP.
+          </p>
           <p class="hero-lede">
             Script responses, streaming, tool calls and failures. Call it with your regular provider SDK, then see
             exactly what your application sent and where every token went.
           </p>
           <div class="actions">
             <a class="button" href="#get-started">Get started <span aria-hidden="true">→</span></a
-            ><a class="text-link" href="#dashboard">Explore the dashboard <span aria-hidden="true">↓</span></a>
+            ><a class="button button-ghost" href="https://github.com/managedcode/LlmTestServer"
+              ><svg class="github-icon" width="16" height="16" aria-hidden="true"><use href="#github-mark" /></svg>View on GitHub</a
+            >
           </div>
-          <div class="install-chip">
-            <span class="install-prompt" aria-hidden="true">$</span>
-            <code id="hero-install">dotnet add package ManagedCode.LlmTestServer.Aspire</code>
-            <button type="button" class="copy-button" data-copy="hero-install" hidden>Copy</button>
+          <div class="install-list">
+            <div class="install-chip">
+              <span class="install-tag">.NET</span>
+              <code id="hero-install">dotnet add package ManagedCode.LlmTestServer.Aspire</code>
+              <button type="button" class="copy-button" data-copy="hero-install" hidden>Copy</button>
+            </div>
+            <div class="install-chip">
+              <span class="install-tag">Docker</span>
+              <code id="hero-docker">docker run -p 8080:8080 ghcr.io/managedcode/llm-test-server:1.0.0</code>
+              <button type="button" class="copy-button" data-copy="hero-docker" hidden>Copy</button>
+            </div>
           </div>
         </div>
         <figure class="hero-stage">
@@ -505,14 +531,17 @@
         <div class="section-wrap">
           <div class="section-intro">
             <p class="eyebrow">Get started</p>
-            <h2 id="start-title">A local server.<br />A familiar workflow.</h2>
-            <p>Run it from your Aspire AppHost without Docker, or start the standalone container.</p>
+            <h2 id="start-title">A local server.<br />Any stack.</h2>
+            <p>
+              On .NET, add it to your Aspire AppHost. Everywhere else, run the Docker image and point your provider SDK
+              at it.
+            </p>
           </div>
           <div class="start-grid">
             <article class="start-card">
               <header>
-                <span class="start-badge">Default</span>
-                <h3>Aspire AppHost</h3>
+                <span class="start-badge">.NET · Aspire</span>
+                <h3>Add it to your AppHost</h3>
                 <p>Aspire starts the packaged .NET server and allocates its endpoint. No container runtime needed.</p>
               </header>
               <div class="code-panel">
@@ -520,7 +549,8 @@
                   <span>Terminal</span
                   ><button type="button" class="copy-button" data-copy="install-code" hidden>Copy</button>
                 </div>
-                <pre><code id="install-code">dotnet add package ManagedCode.LlmTestServer.Aspire</code></pre>
+                <pre><code id="install-code">dotnet add package ManagedCode.LlmTestServer.Aspire
+dotnet add package ManagedCode.LlmTestServer.Client</code></pre>
               </div>
               <div class="code-panel">
                 <div class="code-heading">
@@ -530,21 +560,37 @@
                 <pre><code id="apphost-code"><span class="code-keyword">using</span> ManagedCode.LlmTestServer.Aspire;
 
 <span class="code-keyword">var</span> builder = DistributedApplication.CreateBuilder(args);
-builder.AddLlmTestServer(<span class="code-string">"llm-test-server"</span>)
-       .WithApiKey(<span class="code-string">"test-key"</span>);
+builder.AddLlmTestServer(<span class="code-string">"llm"</span>).WithApiKey(<span class="code-string">"test-key"</span>);
 builder.Build().Run();</code></pre>
               </div>
-              <a class="inline-link" href="https://github.com/managedcode/LlmTestServer#first-passing-test"
+              <div class="code-panel">
+                <div class="code-heading">
+                  <span>ChatTests.cs</span
+                  ><button type="button" class="copy-button" data-copy="test-code" hidden>Copy</button>
+                </div>
+                <pre><code id="test-code"><span class="code-keyword">var</span> control = <span class="code-keyword">new</span> LlmTestServerClient(
+    app.CreateHttpClient(<span class="code-string">"llm"</span>, <span class="code-string">"http"</span>), <span class="code-string">"test-key"</span>);
+<span class="code-keyword">await</span> control.ConfigureAsync(config =&gt; config
+    .RequireBearerToken(<span class="code-string">"test-key"</span>).UseGpt41Mini()
+    .UseChatScenario(<span class="code-string">"greeting"</span>, scenario =&gt; scenario
+        .WhenUserContains(<span class="code-string">"hello"</span>).Responds(<span class="code-string">"Hello from your test!"</span>)));
+
+<span class="code-keyword">using var</span> chat = control.CreateChatClient();
+<span class="code-keyword">var</span> reply = <span class="code-keyword">await</span> chat.GetResponseAsync(
+    [<span class="code-keyword">new</span> ChatMessage(ChatRole.User, <span class="code-string">"hello"</span>)]);
+<span class="code-comment">// reply.Text == "Hello from your test!"</span></code></pre>
+              </div>
+              <a class="inline-link" href="https://github.com/managedcode/LlmTestServer#in-a-test"
                 >Open the complete integration test <span aria-hidden="true">↗</span></a
               >
             </article>
             <article class="start-card">
               <header>
-                <span class="start-badge start-badge-muted">Standalone</span>
-                <h3>Docker + management API</h3>
+                <span class="start-badge start-badge-muted">Any language · Docker</span>
+                <h3>Run the container</h3>
                 <p>
-                  The v1.0.0 image serves provider routes, the dashboard and <code>/admin-api</code>. Load fixtures with
-                  one request.
+                  Python, Node, Go, Java or anything else: the image serves the same provider routes, dashboard and
+                  <code>/admin-api</code>. Load fixtures with one request.
                 </p>
               </header>
               <div class="code-panel">
@@ -569,10 +615,24 @@ builder.Build().Run();</code></pre>
     "chatScenarios":[{"id":"greeting","modelId":"gpt-4.1-mini",
       "responses":[{"content":"Hello from LLM Test Server"}]}]}'</span></code></pre>
               </div>
+              <div class="code-panel">
+                <div class="code-heading">
+                  <span>test_chat.py</span
+                  ><button type="button" class="copy-button" data-copy="python-code" hidden>Copy</button>
+                </div>
+                <pre><code id="python-code"><span class="code-keyword">from</span> openai <span class="code-keyword">import</span> OpenAI
+
+client = OpenAI(base_url=<span class="code-string">"http://localhost:8080/openai/v1"</span>,
+                api_key=<span class="code-string">"local-test-key"</span>)
+reply = client.chat.completions.create(
+    model=<span class="code-string">"gpt-4.1-mini"</span>,
+    messages=[{<span class="code-string">"role"</span>: <span class="code-string">"user"</span>, <span class="code-string">"content"</span>: <span class="code-string">"Hi"</span>}])
+<span class="code-keyword">assert</span> reply.choices[0].message.content == <span class="code-string">"Hello from LLM Test Server"</span></code></pre>
+              </div>
               <a
                 class="inline-link"
-                href="https://github.com/managedcode/LlmTestServer/blob/main/docs/Features/DockerDistribution.md"
-                >Docker distribution guide <span aria-hidden="true">↗</span></a
+                href="https://github.com/managedcode/LlmTestServer#with-docker-from-any-language"
+                >Docker quick start <span aria-hidden="true">↗</span></a
               >
             </article>
           </div>
@@ -605,10 +665,17 @@ builder.Build().Run();</code></pre>
             </p>
           </details>
           <details>
+            <summary>Is it only for .NET?</summary>
+            <p>
+              No. The Docker image serves the same provider routes, dashboard and management API to any language. Point
+              your Python, Node, Go or Java provider SDK at the container and configure fixtures over HTTP.
+            </p>
+          </details>
+          <details>
             <summary>Do I need Docker?</summary>
             <p>
-              No. The default package-owned Aspire integration starts the packaged .NET server and exposes its allocated
-              resource endpoint. The container image is an explicit alternative.
+              Not on .NET. The package-owned Aspire integration starts the packaged .NET server and exposes its
+              allocated resource endpoint. For other stacks, the container image is the way in.
             </p>
           </details>
           <details>
@@ -659,9 +726,11 @@ builder.Build().Run();</code></pre>
           <h2 id="closing-title">Know what you send.<br />Choose what comes back.</h2>
           <p>Start the server, script a response and inspect your first request.</p>
           <div class="actions">
-            <a class="button" href="#get-started">Get started <span aria-hidden="true">→</span></a
-            ><a class="text-link" href="https://github.com/managedcode/LlmTestServer"
-              >View on GitHub <span aria-hidden="true">↗</span></a
+            <a class="button" href="https://github.com/managedcode/LlmTestServer"
+              ><svg class="github-icon" width="16" height="16" aria-hidden="true"><use href="#github-mark" /></svg>Open
+              on GitHub <span aria-hidden="true">↗</span></a
+            ><a class="text-link" href="https://github.com/managedcode/LlmTestServer#quick-start"
+              >Read the quick start <span aria-hidden="true">↗</span></a
             >
           </div>
         </div>
@@ -671,7 +740,10 @@ builder.Build().Run();</code></pre>
       <a class="brand" href="#top"
         ><img class="brand-mark" src="assets/mark.svg" width="26" height="26" alt="" />LLM Test Server</a
       >
-      <p>Built by <a href="https://github.com/managedcode">ManagedCode</a>.</p>
+      <p>
+        Built by <a href="https://managed-code.com">Managed Code</a> ·
+        <a href="https://github.com/managedcode">github.com/managedcode</a>
+      </p>
       <div>
         <a href="https://github.com/managedcode/LlmTestServer#readme">Documentation</a
         ><a href="https://github.com/managedcode/LlmTestServer/blob/main/LICENSE">License</a

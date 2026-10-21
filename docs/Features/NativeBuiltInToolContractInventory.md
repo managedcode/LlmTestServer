@@ -6,7 +6,7 @@ Scope: first E5 native search, file retrieval and code execution contracts for O
 Anthropic Messages and Gemini generateContent. The bounded OpenAI completed-search subset is described in [its feature contract](OpenAiNativeWebSearch.md).
 The additional [bounded file/code contract](OpenAiNativeFileCode.md) is implemented and locally qualified; public delivery remains pending.
 Unresolved cells and other providers below remain prerequisites/proposed contracts, not support claims.
-Related: [delivery plan](LlmTestServerDeliveryPlan.md), [conversation DSL](ConversationDSL.md),
+Related: [conversation DSL](ConversationDSL.md),
 [request verification](RequestVerificationAndDeterminism.md), [existing function-tool fixtures](ToolAndStructuredFixtures.md).
 
 ## Implementation boundaries

@@ -2,7 +2,7 @@
 
 The first native-tool slice implements a **scripted completed search** for `gpt-4.1-mini` on
 `POST /openai/v1/responses`. Its focused suite passes **99 running-server HTTP and official SDK cases** with a Release build containing
-**zero warnings and zero errors**. Local qualification and the independent code-only checkpoint are recorded below and in the [delivery plan](LlmTestServerDeliveryPlan.md).
+**zero warnings and zero errors**. Local qualification and the independent code-only checkpoint are recorded below.
 
 The server returns native `web_search_call` items, assistant text, URL citations and native streaming events.
 Search queries, source URLs and answer text come from configuration. No URL is fetched and no search is executed.
@@ -118,7 +118,7 @@ This slice makes no support claim for `web_search_preview`, open/find actions, n
 non-ASCII citation-offset semantics, external-web-access/return-token-budget controls,
 resource lifecycle or native tools on other provider namespaces. File search and code interpreter use their
 separate [bounded fixture contract](OpenAiNativeFileCode.md). Remaining contracts are tracked in the
-[native contract inventory](NativeBuiltInToolContractInventory.md) and delivery plan.
+[native contract inventory](NativeBuiltInToolContractInventory.md).
 
 ## Contract sources and integration evidence
 
@@ -147,7 +147,7 @@ Running-server coverage:
 
 Evidence logs are repository-owned under `artifacts/delivery/native-web-*`; container evidence is in
 `artifacts/container-verification/2cd0409b3d183025`. The full working-tree count includes parallel owner analytics
-work; a code-only checkpoint and its exact-head CI are tracked separately in the delivery plan. No NuGet/GHCR
+work. No NuGet/GHCR
 release or main merge is asserted by these local results.
 
 The independent code-only checkout passed 965/965 server integrations after the ordinary-response regression fix, with 91.96% production line coverage, 77.38% branch coverage and 94.38% method coverage. Canonical formatting and Release build passed with 0 warnings/errors. These results exclude the parallel owner analytics/visual work. Evidence: `artifacts/delivery/native-isolated-final-{format,build,coverage}.log`.
