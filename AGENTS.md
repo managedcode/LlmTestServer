@@ -77,6 +77,8 @@ Rule format:
 
 ### Likes
 
+- Keep README chat setup concrete and minimal: show meaningful, distinct replies, explain their request order, and link directly to a complete admin API reference for configuration from any language. Keep detailed API contracts and full test walkthroughs in docs/.
+- Make the README demonstrate the product's branching conversation workflows with a concise runnable state-graph example and a matching Mermaid diagram, so readers can see conditional scenarios beyond fixed response queues.
 - Use current officially documented model IDs in README SDK examples; verify the current catalogue before choosing a model instead of copying an older generation from existing fixtures.
 - Keep the README Packages table complete: list every NuGet package individually, including every provider package, with its own package link, version badge and short purpose so users can discover the full package surface directly.
 - Finish the README with task-oriented documentation links and a compact branded footer containing the MIT license, copyright attribution and Managed Code link; avoid a bare Learn more list followed by an isolated license link.

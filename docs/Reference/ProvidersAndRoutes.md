@@ -121,8 +121,8 @@ for the current coverage rules and behavior-test inventory.
 | Cloudflare (Clef/flash) | `/cloudflare` | `/cloudflare/client/v4/accounts/{accountId}/ai/run/@cf/cloudflare/clef`, `clef-flash` |
 
 The Blazor server-side rendered browser control panel lives at `/`. JSON control endpoints live under
-`/admin-api`: `GET /admin-api/models`, `GET /admin-api/assertions`,
-`POST /admin-api/configure`, and `POST /admin-api/reset`.
+`/admin-api`; see the [complete admin API reference](AdminApi.md) for configuration, reset, models,
+assertions, request queries/exports, verification, conversation diagnostics and isolated sessions.
 
 Audio speech returns a deterministic WAV fixture by default. When
 `requiredBearerToken` is configured, all provider and control endpoints require

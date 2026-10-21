@@ -2,6 +2,8 @@
 
 Models, chat scenarios, modalities, fault simulation, runtime reconfiguration and assertions. Back to the [README](../../README.md).
 
+For HTTP setup from any language, endpoint payloads, authentication and responses, see the [admin API reference](AdminApi.md).
+
 ## Configuration Model
 
 LLM Test Server is configured with one `LlmTestServerConfiguration`.
@@ -317,56 +319,9 @@ If the current runtime already has a bearer token, the configure request must us
 
 ### Configure With Raw JSON
 
-`POST /admin-api/configure` accepts readable enum values such as `"chat"` and `"contains"`:
-
-```bash
-curl -X POST http://localhost:5000/admin-api/configure \
-  -H "content-type: application/json" \
-  -H "authorization: Bearer test-key" \
-  -d '{
-    "requiredBearerToken": "test-key",
-    "models": [
-      { "id": "docs-chat", "kind": "chat" },
-      { "id": "docs-embedding", "kind": "embedding" },
-      { "id": "docs-image", "kind": "image" },
-      { "id": "docs-audio", "kind": "audio" }
-    ],
-    "chatScenarios": [
-      {
-        "id": "docs-blue-whale",
-        "modelId": "docs-chat",
-        "match": {
-          "mode": "contains",
-          "messages": [
-            { "role": "user", "content": "largest animal" }
-          ]
-        },
-        "responses": [
-          {
-            "content": "blue whale",
-            "streamChunks": [ "blue ", "whale" ]
-          }
-        ]
-      }
-    ],
-    "defaultEmbeddingVector": [ 0.125, 0.25 ],
-    "defaultAudioMediaType": "audio/wav"
-  }'
-```
-
-Then call the configured model:
-
-```bash
-curl -X POST http://localhost:5000/openai/v1/chat/completions \
-  -H "content-type: application/json" \
-  -H "authorization: Bearer test-key" \
-  -d '{
-    "model": "docs-chat",
-    "messages": [
-      { "role": "user", "content": "What is the largest animal?" }
-    ]
-  }'
-```
+Use `POST /admin-api/configure` from any HTTP client. See the
+[complete HTTP chat setup](AdminApi.md#configure-a-chat) for a runnable request, configuration properties,
+authentication and reset behavior. After setup, call a provider endpoint through its official SDK.
 
 ## Assertions And Reset
 

@@ -6,6 +6,9 @@ Related: [architecture](../Architecture.md), [ADR-0004](../ADR/ADR-0004-conversa
 [sessions](TestSessions.md), [structured/tool fixtures](ToolAndStructuredFixtures.md),
 [Responses continuation](ResponsesContinuation.md).
 
+Start with the [branching support example and diagram](../../README.md#test-conversations-that-branch),
+or configure its [equivalent JSON graph through the admin API](../Reference/AdminApi.md#configure-a-branching-conversation).
+
 ## Purpose and ownership
 
 A conversation adds conditions to each step of a deterministic chat workflow. A step can reply with text,
