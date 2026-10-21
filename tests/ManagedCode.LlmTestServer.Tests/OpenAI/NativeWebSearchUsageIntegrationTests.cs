@@ -7,6 +7,7 @@ using System.Text.Json;
 using ManagedCode.LlmTestServer.Client;
 using ManagedCode.LlmTestServer.Control;
 using ManagedCode.LlmTestServer.Tests.TestSupport;
+using Microsoft.Extensions.AI;
 using OpenAI.Responses;
 
 namespace ManagedCode.LlmTestServer.Tests.OpenAI;
@@ -77,6 +78,48 @@ public sealed partial class NativeWebSearchIntegrationTests
         await Assert.That(result).IsNotNull();
         using var json = JsonDocument.Parse(ModelReaderWriter.Write(result!, ModelReaderWriterOptions.Json).ToMemory());
         await Assert.That(json.RootElement.GetProperty("tool_usage").GetProperty("web_search").GetProperty("num_requests").GetInt32()).IsEqualTo(3);
+    }
+
+    [Test]
+    [Arguments(-1, false)]
+    [Arguments(0, false)]
+    [Arguments(3, false)]
+    [Arguments(-1, true)]
+    [Arguments(0, true)]
+    [Arguments(3, true)]
+    public async Task AzureResponses_MeaiNativeSearchAcceptsConfiguredDeploymentAliasAsync(int count, bool streaming)
+    {
+        const string deployment = "configured-hosted-model";
+        using var host = await LlmTestServerTestHost.StartAsync();
+        using var http = host.GetTestClient();
+        await new LlmTestServerClient(http).ConfigureAsync(config => config.UseChatModel(deployment).UseChatScenario("azure-meai-meter",
+            scenario => scenario.ForModel(deployment).RespondsWithItems(Items()).WithWebSearchRequests(count < 0 ? null : count)));
+        using var client = new ResponsesClient(new ApiKeyCredential("provider-key"), new ResponsesClientOptions
+        {
+            Endpoint = new Uri(http.BaseAddress!, "/azure-openai/openai/v1/"),
+            Transport = new HttpClientPipelineTransport(http),
+        }).AsIChatClient(deployment);
+        var options = new ChatOptions
+        {
+            Tools = [new HostedWebSearchTool()],
+            MaxOutputTokens = 128,
+            RawRepresentationFactory = _ => new CreateResponseOptions { MaxToolCallCount = 1 },
+        };
+        ResponseResult? result = null;
+        if (streaming)
+        {
+            await foreach (var update in client.GetStreamingResponseAsync([new(ChatRole.User, "start")], options))
+            {
+                if (update.RawRepresentation is StreamingResponseCompletedUpdate completed) { result = completed.Response; }
+            }
+        }
+        else { result = (await client.GetResponseAsync([new(ChatRole.User, "start")], options)).RawRepresentation as ResponseResult; }
+        await Assert.That(result).IsNotNull();
+        using var json = JsonDocument.Parse(ModelReaderWriter.Write(result!, ModelReaderWriterOptions.Json).ToMemory());
+        var wire = json.RootElement;
+        await Assert.That(wire.GetProperty("output").EnumerateArray().Count(item => item.GetProperty("type").GetString() == "web_search_call")).IsEqualTo(1);
+        await Assert.That(wire.TryGetProperty("tool_usage", out var usage)).IsEqualTo(count >= 0);
+        if (count >= 0) { await Assert.That(usage.GetProperty("web_search").GetProperty("num_requests").GetInt32()).IsEqualTo(count); }
     }
 
     [Test]

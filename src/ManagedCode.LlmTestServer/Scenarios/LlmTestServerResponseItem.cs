@@ -63,7 +63,7 @@ public sealed record LlmTestServerUrlCitation : LlmTestServerResponseCitation
 }
 
 public enum LlmTestServerNativeToolContract { OpenAiResponsesWebSearch, OpenAiResponsesFileSearch, OpenAiResponsesCodeInterpreter, AnthropicMessagesWebSearch20250305 }
-public enum LlmTestServerNativeToolSurface { OpenAiResponses, AnthropicMessages }
+public enum LlmTestServerNativeToolSurface { OpenAiResponses, AnthropicMessages, AzureOpenAiResponses }
 public enum LlmTestServerNativeToolInclude { WebSearchSources, FileSearchResults, CodeInterpreterOutputs }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

@@ -21,7 +21,12 @@ public static class OpenAiRequestValidation
         return Check(body, value => Validate(value, true, nativeTools: true));
     }
 
-    private static void Validate(JsonElement body, bool responses, bool nativeTools = false)
+    public static LlmTestServerRequestValidationResult ValidateAzureNativeResponse(JsonElement body)
+    {
+        return Check(body, value => Validate(value, true, nativeTools: true, azureDeployment: true));
+    }
+
+    private static void Validate(JsonElement body, bool responses, bool nativeTools = false, bool azureDeployment = false)
     {
         if (body.TryGetProperty("functions", out _) || body.TryGetProperty("function_call", out _))
         {
@@ -65,7 +70,7 @@ public static class OpenAiRequestValidation
         {
             ValidateFormat(format, true);
         }
-        if (responses) { OpenAiNativeWebSearchValidation.ValidateResponseOptions(body, nativeTools); }
+        if (responses) { OpenAiNativeWebSearchValidation.ValidateResponseOptions(body, nativeTools, azureDeployment); }
         var field = responses ? "input" : "messages";
         if (!body.TryGetProperty(field, out var messages)) { return; }
         if (messages.ValueKind == JsonValueKind.Object) { ValidateRefusalHistory(messages, responses); return; }

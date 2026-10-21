@@ -157,7 +157,11 @@ The same code-only checkout packed all 19 packages; the fresh installed NuGet/As
 ## Azure billable request fixtures
 
 Azure OpenAI Responses accepts the same native web/file/code declarations at
-`/azure-openai/openai/v1/responses`. Configure Azure's exact billable search quantity separately
+`/azure-openai/openai/v1/responses`. Azure requests use the deployment alias registered through
+`UseChatModel(deploymentName)`; they do not require a public OpenAI model-family spelling.
+The explicit Azure native surface retains normal configured-model admission, tool declarations and fixture validation.
+The OpenAI endpoint retains its qualified model pairings. Real MEAI `HostedWebSearchTool` JSON and streaming
+requests support a configured deployment alias with `max_tool_calls` and `max_output_tokens`. Configure Azure's exact billable search quantity separately
 from output actions; one `web_search_call` may represent three Bing requests:
 
 ```csharp

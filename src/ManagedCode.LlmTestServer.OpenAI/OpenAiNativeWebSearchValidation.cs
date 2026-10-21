@@ -45,7 +45,7 @@ internal static class OpenAiNativeWebSearchValidation
         return type is "web_search_call" or "file_search_call" or "code_interpreter_call";
     }
 
-    internal static void ValidateResponseOptions(JsonElement body, bool enabled)
+    internal static void ValidateResponseOptions(JsonElement body, bool enabled, bool azureDeployment = false)
     {
         var tools = OptionalArray(body, "tools").ToArray();
         var contracts = new HashSet<string>(StringComparer.Ordinal);
@@ -111,7 +111,7 @@ internal static class OpenAiNativeWebSearchValidation
                 OpenAiNativeFileCodeValidation._codeType => LlmTestServerKnownModelIds.Gpt41,
                 _ => LlmTestServerKnownModelIds.Gpt41Mini,
             };
-            if (!enabled || body.GetProperty("model").GetString() != model)
+            if (!enabled || !azureDeployment && body.GetProperty("model").GetString() != model)
             { throw new JsonException("Native tool requires a supported Responses model."); }
         }
     }

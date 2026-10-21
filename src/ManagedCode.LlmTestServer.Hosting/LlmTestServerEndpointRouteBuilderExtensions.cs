@@ -1161,7 +1161,8 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
                 ?.OperationId == LlmTestServerProviderOperationIds.AzureOpenAI.V1ResponsesCreate;
         var allowNativeTools = azureToolUsage || context.Request.Path.Equals("/openai/v1/responses", StringComparison.Ordinal);
         var read = await ReadJsonAsync<OpenAiResponseRequest>(context, cancellationToken,
-                validation: allowNativeTools ? OpenAiRequestValidation.ValidateNativeResponse : OpenAiRequestValidation.ValidateResponse)
+                validation: azureToolUsage ? OpenAiRequestValidation.ValidateAzureNativeResponse
+                    : allowNativeTools ? OpenAiRequestValidation.ValidateNativeResponse : OpenAiRequestValidation.ValidateResponse)
             .ConfigureAwait(false);
         if (read.Error is not null)
         {
@@ -1200,6 +1201,8 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
                     context,
                     OpenAiWireMapper.ToRuntimeRequest(request, promptCachePolicy, allowNativeTools) with
                     {
+                        NativeToolSurface = azureToolUsage ? LlmTestServerNativeToolSurface.AzureOpenAiResponses
+                            : allowNativeTools ? LlmTestServerNativeToolSurface.OpenAiResponses : null,
                         HistoryNamespace = context.Request.Path.Value!.Split('/', StringSplitOptions.RemoveEmptyEntries)[0],
                         PreviousResponseId = request.PreviousResponseId,
                         StoreResponse = promptCachePolicy != LlmTestServerPromptCachePolicy.OpenRouter && request.Store != false

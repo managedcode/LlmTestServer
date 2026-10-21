@@ -23,7 +23,7 @@ public sealed partial class LlmTestServerRuntime
         if (calls.Count == 0 && citations.Count == 0 && !nativeHistory && declarations.Count == 0 && request.RequiredNativeTool is null) { return null; }
         if (request.NativeToolSurface == LlmTestServerNativeToolSurface.AnthropicMessages)
         { return ValidateAnthropicNativeFixture(request, response, declarations, calls, citations); }
-        if (request.NativeToolSurface != LlmTestServerNativeToolSurface.OpenAiResponses) { return "Native fixtures require the qualified OpenAI Responses surface."; }
+        if (request.NativeToolSurface is not (LlmTestServerNativeToolSurface.OpenAiResponses or LlmTestServerNativeToolSurface.AzureOpenAiResponses)) { return "Native fixtures require the qualified OpenAI Responses surface."; }
         if (declarations.Select(tool => tool.Contract).Distinct().Count() != declarations.Count
             || request.NativeIncludes.Any(include => !Enum.IsDefined(include))) { return "Native declarations and includes must use supported contracts."; }
         if (response.OutputItems.Concat(request.Messages.SelectMany(message => message.OutputItems)).Any(item =>
@@ -40,7 +40,8 @@ public sealed partial class LlmTestServerRuntime
                 LlmTestServerNativeToolContract.OpenAiResponsesCodeInterpreter => LlmTestServerKnownModelIds.Gpt41,
                 _ => null,
             };
-            if (!string.Equals(request.ModelId, model, StringComparison.Ordinal)) { return "Native tool declaration is unsupported for this fixture model."; }
+            if (model is null || request.NativeToolSurface != LlmTestServerNativeToolSurface.AzureOpenAiResponses
+                && !string.Equals(request.ModelId, model, StringComparison.Ordinal)) { return "Native tool declaration is unsupported for this fixture model."; }
         }
         if (calls.Any(call => !declarations.Any(tool => tool.Contract == LlmTestServerResponseItems.Contract(call))))
         { return "The fixture calls a native tool that was not declared."; }

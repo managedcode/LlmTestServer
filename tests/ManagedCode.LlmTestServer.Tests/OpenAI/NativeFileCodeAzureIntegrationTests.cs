@@ -8,17 +8,28 @@ namespace ManagedCode.LlmTestServer.Tests.OpenAI;
 public sealed partial class NativeFileCodeIntegrationTests
 {
     [Test]
-    [Arguments(false, false)]
-    [Arguments(false, true)]
-    [Arguments(true, false)]
-    [Arguments(true, true)]
-    public async Task AzureResponses_PreservesNativeFileCodeAndContainerIdentityAsync(bool code, bool streaming)
+    [Arguments(false, false, false)]
+    [Arguments(false, true, false)]
+    [Arguments(true, false, false)]
+    [Arguments(true, true, false)]
+    [Arguments(false, false, true)]
+    [Arguments(false, true, true)]
+    [Arguments(true, false, true)]
+    [Arguments(true, true, true)]
+    public async Task AzureResponses_PreservesNativeFileCodeAndContainerIdentityAsync(bool code, bool streaming, bool deploymentAlias)
     {
         using var host = await LlmTestServerTestHost.StartAsync();
         using var http = host.GetTestClient();
-        await new LlmTestServerClient(http).ConfigureAsync(Configuration(code));
+        var control = new LlmTestServerClient(http);
+        if (deploymentAlias)
+        {
+            await control.ConfigureAsync(config => config.UseChatModel("configured-native-deployment")
+                .UseChatScenario("azure-native-alias", scenario => scenario.ForModel("configured-native-deployment").RespondsWithItems(Items(code))));
+        }
+        else { await control.ConfigureAsync(Configuration(code)); }
         var request = Request(code);
         request["stream"] = streaming;
+        if (deploymentAlias) { request["model"] = "configured-native-deployment"; }
         using var response = await http.PostAsJsonAsync("/azure-openai/openai/v1/responses", request);
         response.EnsureSuccessStatusCode();
         JsonElement terminal;
