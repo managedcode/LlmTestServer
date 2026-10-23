@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ManagedCode.LlmTestServer.Determinism;
 using ManagedCode.LlmTestServer.Runtime;
 using ManagedCode.LlmTestServer.Scenarios;
@@ -44,9 +45,9 @@ public static class CohereWireMapper
         };
     }
 
-    public static object ToMessageStartEvent(LlmTestServerResponseMetadata? metadata = null)
+    public static JsonElement ToMessageStartEvent(LlmTestServerResponseMetadata? metadata = null)
     {
-        return new
+        return JsonSerializer.SerializeToElement(new
         {
             type = "message-start",
             id = CreateResponseId(metadata),
@@ -54,12 +55,12 @@ public static class CohereWireMapper
             {
                 message = new { role = "assistant" },
             },
-        };
+        });
     }
 
-    public static object ToContentStartEvent()
+    public static JsonElement ToContentStartEvent()
     {
-        return new
+        return JsonSerializer.SerializeToElement(new
         {
             type = "content-start",
             index = 0,
@@ -70,12 +71,12 @@ public static class CohereWireMapper
                     content = new CohereContentBlock(),
                 },
             },
-        };
+        });
     }
 
-    public static object ToContentDeltaEvent(string text)
+    public static JsonElement ToContentDeltaEvent(string text)
     {
-        return new
+        return JsonSerializer.SerializeToElement(new
         {
             type = "content-delta",
             index = 0,
@@ -86,21 +87,21 @@ public static class CohereWireMapper
                     content = new { text },
                 },
             },
-        };
+        });
     }
 
-    public static object ToContentEndEvent()
+    public static JsonElement ToContentEndEvent()
     {
-        return new
+        return JsonSerializer.SerializeToElement(new
         {
             type = "content-end",
             index = 0,
-        };
+        });
     }
 
-    public static object ToMessageEndEvent(LlmTestServerChatResult result)
+    public static JsonElement ToMessageEndEvent(LlmTestServerChatResult result)
     {
-        return new
+        return JsonSerializer.SerializeToElement(new
         {
             type = "message-end",
             delta = new
@@ -108,7 +109,7 @@ public static class CohereWireMapper
                 finish_reason = result.ToolCalls.Count > 0 ? "TOOL_CALL" : "COMPLETE",
                 usage = CreateUsage(result.Usage),
             },
-        };
+        });
     }
 
     private static CohereToolCall ToToolCall(LlmTestServerToolCall call)
@@ -116,14 +117,14 @@ public static class CohereWireMapper
         return new() { Id = call.Id, Function = new() { Name = call.Name, Arguments = call.ArgumentsJson } };
     }
 
-    public static IEnumerable<object> ToToolStreamEvents(LlmTestServerChatResult result)
+    public static IEnumerable<JsonElement> ToToolStreamEvents(LlmTestServerChatResult result)
     {
         for (var index = 0; index < result.ToolCalls.Count; index++)
         {
             var call = result.ToolCalls[index];
-            yield return new { type = "tool-call-start", index, delta = new { message = new { tool_calls = ToToolCall(call) with { Function = new() { Name = call.Name, Arguments = "" } } } } };
-            yield return new { type = "tool-call-delta", index, delta = new { message = new { tool_calls = new { function = new { arguments = call.ArgumentsJson } } } } };
-            yield return new { type = "tool-call-end", index };
+            yield return JsonSerializer.SerializeToElement(new { type = "tool-call-start", index, delta = new { message = new { tool_calls = ToToolCall(call) with { Function = new() { Name = call.Name, Arguments = "" } } } } });
+            yield return JsonSerializer.SerializeToElement(new { type = "tool-call-delta", index, delta = new { message = new { tool_calls = new { function = new { arguments = call.ArgumentsJson } } } } });
+            yield return JsonSerializer.SerializeToElement(new { type = "tool-call-end", index });
         }
     }
 

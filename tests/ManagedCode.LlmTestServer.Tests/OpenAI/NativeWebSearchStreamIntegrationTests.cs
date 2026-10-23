@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using ManagedCode.LlmTestServer.Client;
+using ManagedCode.LlmTestServer.Scenarios;
 using ManagedCode.LlmTestServer.Tests.TestSupport;
 using OpenAI.Responses;
 
@@ -42,6 +43,13 @@ public sealed partial class NativeWebSearchIntegrationTests
         var trace = (await control.GetRequestsAsync()).Requests.Single();
         await Assert.That(trace.IsStreaming).IsTrue();
         await Assert.That(trace.TerminalMarkerObserved).IsTrue();
+        await Assert.That(trace.ResponseToolCalls.Count).IsEqualTo(0);
+        var retainedMessage = (LlmTestServerResponseMessageItem)trace.ResponseOutputItems[1];
+        await Assert.That(retainedMessage.Content).IsEqualTo(text.ToString());
+        var retainedCitation = (LlmTestServerUrlCitation)retainedMessage.Citations.Single();
+        await Assert.That(retainedCitation.Url).IsEqualTo(_sourceUrl);
+        await Assert.That(retainedCitation.StartIndex).IsEqualTo(0);
+        await Assert.That(retainedCitation.EndIndex).IsEqualTo(5);
     }
 
     [Test]

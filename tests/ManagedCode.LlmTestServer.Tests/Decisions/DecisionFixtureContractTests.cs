@@ -63,15 +63,38 @@ public sealed class DecisionFixtureContractTests
     }
 
     [Test]
-    public async Task OpenAiFixtures_PreserveSelectedValueAndIndependentConfidenceAsync()
+    [Arguments("\"other-id\"")]
+    [Arguments("true")]
+    [Arguments("false")]
+    public async Task OpenAiFixtures_PreserveSelectedValueAndIndependentConfidenceAsync(string selectedValueJson)
     {
+        var selected = JsonSerializer.Deserialize<JsonElement>(selectedValueJson);
+        var selectedId = selected.ValueKind == JsonValueKind.String
+            ? ManagedCode.LlmTestServer.OpenAI.OpenAiDecisionFixtureIds.ForChoiceValue(selected.GetString()!)
+            : ManagedCode.LlmTestServer.OpenAI.OpenAiDecisionFixtureIds.ForChoiceValue(selected.GetBoolean());
+        var otherId = ManagedCode.LlmTestServer.OpenAI.OpenAiDecisionFixtureIds.ForChoiceValue("opaque-id");
         var scenario = DecisionEndpointTests.Scenario("gpt-6-luna");
-        scenario.Answers["1"] = scenario.Answers["1"] with { Choice = ManagedCode.LlmTestServer.OpenAI.OpenAiDecisionFixtureIds.ForChoiceValue("other-id"), Confidence = 0.4 };
+        scenario.Answers["1"] = scenario.Answers["1"] with
+        {
+            Choice = selectedId,
+            Confidence = 0.4,
+            Probabilities = new() { [selectedId] = 0.95, [otherId] = 0.05 },
+        };
         using var host = await LlmTestServerTestHost.StartAsync(builder => builder.AddOpenAiDecisionModel("gpt-6-luna").AddDecisionScenario(scenario));
-        using var client = host.GetTestClient(); using var response = await client.PostAsJsonAsync(DecisionEndpointTests.PathFor("gpt-6-luna"), DecisionEndpointTests.Body("gpt-6-luna")); response.EnsureSuccessStatusCode();
-        var answer = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("answers")[1];
-        await Assert.That(answer.GetProperty("choice").GetString()).IsEqualTo("other-id");
+        using var client = host.GetTestClient();
+        var body = DecisionEndpointTests.Body("gpt-6-luna");
+        body["questions"]![1]!["choices"] = new JsonArray(
+            new JsonObject { ["value"] = JsonNode.Parse(selectedValueJson), ["description"] = "selected" },
+            new JsonObject { ["value"] = "opaque-id", ["description"] = "other" });
+        using var response = await client.PostAsJsonAsync(DecisionEndpointTests.PathFor("gpt-6-luna"), body);
+        response.EnsureSuccessStatusCode();
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var answer = payload.GetProperty("answers")[1];
+        await Assert.That(answer.GetProperty("choice").GetRawText()).IsEqualTo(selected.GetRawText());
+        var probabilities = answer.GetProperty("probabilities").EnumerateArray().ToArray();
+        await Assert.That(probabilities.Single(entry => entry.GetProperty("probability").GetDouble() == 0.95).GetProperty("value").GetRawText()).IsEqualTo(selected.GetRawText());
         await Assert.That(answer.GetProperty("confidence").GetDouble()).IsEqualTo(0.4);
+        await Assert.That(payload.GetProperty("answers")[2].GetProperty("probabilities")[0].GetProperty("value").ValueKind).IsEqualTo(JsonValueKind.Number);
     }
 
     [Test]

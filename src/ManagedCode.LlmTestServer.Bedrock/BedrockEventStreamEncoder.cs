@@ -6,9 +6,9 @@ namespace ManagedCode.LlmTestServer.Bedrock;
 /// <summary>Encodes a Bedrock event using the official AWS event-stream framing implementation.</summary>
 public static class BedrockEventStreamEncoder
 {
-    public static byte[] Encode(object streamEvent, JsonSerializerOptions? options = null)
+    public static byte[] Encode<T>(T streamEvent, JsonSerializerOptions? options = null)
     {
-        var envelope = JsonSerializer.SerializeToElement(streamEvent, options);
+        var envelope = JsonSerializer.SerializeToElement(streamEvent, streamEvent?.GetType() ?? typeof(T), options);
         var properties = envelope.EnumerateObject();
         if (!properties.MoveNext())
         {

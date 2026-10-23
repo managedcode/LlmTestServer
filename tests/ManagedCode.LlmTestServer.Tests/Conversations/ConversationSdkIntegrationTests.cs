@@ -1,6 +1,7 @@
 using System.ClientModel;
 using System.ClientModel.Primitives;
 using System.Net.Http.Json;
+using System.Text.Json;
 using ManagedCode.LlmTestServer.Client;
 using ManagedCode.LlmTestServer.Models;
 using ManagedCode.LlmTestServer.Tests.TestSupport;
@@ -112,14 +113,32 @@ public sealed class ConversationSdkIntegrationTests
         var body = new { model = LlmTestServerKnownModelIds.Gpt41Mini, input = "continue", previous_response_id = firstId };
         using var second = await conversation.HttpClient.PostAsJsonAsync("/openai/v1/responses", body);
         second.EnsureSuccessStatusCode();
-        var secondId = (await second.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetString();
+        var persisted = await second.Content.ReadFromJsonAsync<JsonElement>();
+        var secondId = persisted.GetProperty("id").GetString();
         using var replay = await conversation.HttpClient.PostAsJsonAsync("/openai/v1/responses", new
         { model = LlmTestServerKnownModelIds.Gpt41Mini, input = "continue", previous_response_id = firstId, stream = replayStreaming });
         replay.EnsureSuccessStatusCode();
         var replayText = await replay.Content.ReadAsStringAsync();
-        await Assert.That(replayText).Contains(secondId!);
-        await Assert.That(replayText).Contains(replayStreaming ? "response.completed" : "second answer");
-        await Assert.That((await conversation.Control.GetConversationsAsync()).Single().ExecutedSteps).IsEqualTo(2);
+        JsonElement replayed;
+        if (replayStreaming)
+        {
+            var frames = replayText.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Where(line => line.StartsWith("data: ", StringComparison.Ordinal))
+                .Select(line => JsonSerializer.Deserialize<JsonElement>(line[6..])).ToArray();
+            await Assert.That(frames.Select(frame => frame.GetProperty("sequence_number").GetInt32())
+                .SequenceEqual(Enumerable.Range(0, frames.Length))).IsTrue();
+            await Assert.That(string.Concat(frames.Where(frame => frame.GetProperty("type").GetString() == "response.output_text.delta")
+                .Select(frame => frame.GetProperty("delta").GetString()))).IsEqualTo("second answer");
+            replayed = frames.Single(frame => frame.GetProperty("type").GetString() == "response.completed").GetProperty("response");
+        }
+        else { replayed = JsonSerializer.Deserialize<JsonElement>(replayText); }
+        await Assert.That(replayed.GetProperty("id").GetString()).IsEqualTo(secondId);
+        await Assert.That(replayed.GetProperty("status").GetString()).IsEqualTo("completed");
+        await Assert.That(replayed.GetProperty("output").GetRawText()).IsEqualTo(persisted.GetProperty("output").GetRawText());
+        await Assert.That(replayed.GetProperty("usage").GetRawText()).IsEqualTo(persisted.GetProperty("usage").GetRawText());
+        var retained = (await conversation.Control.GetConversationsAsync()).Single();
+        await Assert.That(retained.ExecutedSteps).IsEqualTo(2);
+        await Assert.That(retained.IsTerminal).IsTrue();
         await Assert.That((await conversation.Control.GetAssertionsAsync()).Events.Last().IsReplay).IsTrue();
     }
 }

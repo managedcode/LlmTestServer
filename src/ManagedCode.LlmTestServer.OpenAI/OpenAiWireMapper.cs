@@ -180,13 +180,13 @@ public static partial class OpenAiWireMapper
         };
     }
 
-    public static object ToResponseCreatedEvent(
+    public static JsonElement ToResponseCreatedEvent(
         LlmTestServerChatResult result,
         string responseId,
         long created
     )
     {
-        return new
+        return JsonSerializer.SerializeToElement(new
         {
             type = "response.created",
             response = new
@@ -197,80 +197,78 @@ public static partial class OpenAiWireMapper
                 model = result.ModelId,
                 status = "in_progress",
             },
-        };
+        });
     }
 
-    public static object ToResponseOutputItemAddedEvent(string responseId, LlmTestServerResponseMetadata? metadata = null)
+    public static JsonElement ToResponseOutputItemAddedEvent(string responseId, LlmTestServerResponseMetadata? metadata = null)
     {
-        return new
+        return JsonSerializer.SerializeToElement(new
         {
             type = "response.output_item.added",
             response_id = responseId,
             output_index = 0,
             item = (OpenAiResponseOutputItem)CreateOutputMessage(string.Empty, completed: false, metadata),
-        };
+        });
     }
 
-    public static object ToResponseContentPartAddedEvent(string responseId)
+    public static JsonElement ToResponseContentPartAddedEvent(string responseId)
     {
-        return new
+        return JsonSerializer.SerializeToElement(new
         {
             type = "response.content_part.added",
             response_id = responseId,
             output_index = 0,
             content_index = 0,
             part = (OpenAiResponseContentPart)new OpenAiResponseOutputText(),
-        };
+        });
     }
 
-    public static object ToResponseContentPartDeltaEvent(string responseId, string delta)
+    public static JsonElement ToResponseContentPartDeltaEvent(string responseId, string delta)
     {
-        return new
+        return JsonSerializer.SerializeToElement(new
         {
             type = "response.output_text.delta",
             response_id = responseId,
             output_index = 0,
             content_index = 0,
             delta,
-        };
+        });
     }
 
-    public static object ToResponseOutputItemDoneEvent(string responseId, LlmTestServerChatResult result)
+    public static JsonElement ToResponseOutputItemDoneEvent(string responseId, LlmTestServerChatResult result)
     {
-        return new
+        return JsonSerializer.SerializeToElement(new
         {
             type = "response.output_item.done",
             response_id = responseId,
             output_index = 0,
             item = (OpenAiResponseOutputItem)CreateOutputMessage(result.Content, completed: true, result.WireMetadata),
-        };
+        });
     }
 
-    public static object ToResponseDoneEvent(
+    public static JsonElement ToResponseDoneEvent(
         LlmTestServerChatResult result,
         string responseId,
         long created,
         OpenAiCacheUsageShape cacheUsageShape = OpenAiCacheUsageShape.None
     )
     {
-        return new
+        return JsonSerializer.SerializeToElement(new
         {
             type = result.OutputDisposition?.Kind == LlmTestServerOutputDispositionKind.Filtered ? "response.incomplete" : "response.completed",
             response = ToResponse(result, responseId, created, cacheUsageShape),
-        };
+        });
     }
 
-    public static object ToModelsResponse(IEnumerable<LlmTestServerModel> models)
+    public static OpenAiModelListResponse ToModelsResponse(IEnumerable<LlmTestServerModel> models)
     {
-        return new
+        return new()
         {
-            @object = "list",
-            data = models.Select(model => new
+            Data = models.Select(model => new OpenAiModelDescriptor
             {
-                id = model.Id,
-                @object = "model",
-                owned_by = model.OwnedBy,
-                metadata = new { kind = model.Kind.ToString().ToLowerInvariant() },
+                Id = model.Id,
+                OwnedBy = model.OwnedBy,
+                Metadata = new() { Kind = model.Kind.ToString().ToLowerInvariant() },
             }),
         };
     }
@@ -317,7 +315,7 @@ public static partial class OpenAiWireMapper
         };
     }
 
-    public static object ToImageStreamingEvent(
+    public static OpenAiImageStreamingEvent ToImageStreamingEvent(
         string eventType,
         string dataUri,
         bool completed,
@@ -328,37 +326,24 @@ public static partial class OpenAiWireMapper
         LlmTestServerResponseMetadata? metadata = null
     )
     {
-        var payload = new Dictionary<string, object?>
+        return new()
         {
-            ["type"] = eventType,
-            ["b64_json"] = ReadBase64Payload(dataUri),
-            ["created_at"] = (metadata ?? LlmTestServerResponseMetadata.Live()).CreatedAt.ToUnixTimeSeconds(),
-            ["size"] = size ?? "1024x1024",
-            ["quality"] = quality ?? "auto",
-            ["background"] = background ?? "auto",
-            ["output_format"] = outputFormat ?? "png",
-        };
-
-        if (completed)
-        {
-            payload["usage"] = new
+            Type = eventType,
+            Base64Json = ReadBase64Payload(dataUri),
+            CreatedAt = (metadata ?? LlmTestServerResponseMetadata.Live()).CreatedAt.ToUnixTimeSeconds(),
+            Size = size ?? "1024x1024",
+            Quality = quality ?? "auto",
+            Background = background ?? "auto",
+            OutputFormat = outputFormat ?? "png",
+            Usage = completed ? new()
             {
-                total_tokens = 1,
-                input_tokens = 1,
-                output_tokens = 0,
-                input_tokens_details = new
-                {
-                    text_tokens = 1,
-                    image_tokens = 0,
-                },
-            };
-        }
-        else
-        {
-            payload["partial_image_index"] = 0;
-        }
-
-        return payload;
+                TotalTokens = 1,
+                InputTokens = 1,
+                OutputTokens = 0,
+                InputTokensDetails = new() { TextTokens = 1, ImageTokens = 0 },
+            } : null,
+            PartialImageIndex = completed ? null : 0,
+        };
     }
 
     public static OpenAiVideoResponse ToVideoResponse(LlmTestServerVideoResult result)
@@ -514,23 +499,14 @@ public static partial class OpenAiWireMapper
         };
     }
 
-    public static object ToTranscriptTextDeltaEvent(string delta)
+    public static OpenAiTranscriptTextDeltaEvent ToTranscriptTextDeltaEvent(string delta)
     {
-        return new
-        {
-            type = "transcript.text.delta",
-            delta,
-        };
+        return new() { Delta = delta };
     }
 
-    public static object ToTranscriptTextDoneEvent(LlmTestServerTranscriptionResult result)
+    public static OpenAiTranscriptTextDoneEvent ToTranscriptTextDoneEvent(LlmTestServerTranscriptionResult result)
     {
-        return new
-        {
-            type = "transcript.text.done",
-            text = result.Text,
-            usage = ToAudioTranscriptionUsage(result.Usage),
-        };
+        return new() { Text = result.Text, Usage = ToAudioTranscriptionUsage(result.Usage) };
     }
 
     public static OpenAiErrorResponse ToError(string code, string message)

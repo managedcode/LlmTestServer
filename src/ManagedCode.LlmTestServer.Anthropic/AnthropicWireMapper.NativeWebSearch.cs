@@ -102,7 +102,7 @@ public static partial class AnthropicWireMapper
         };
     }
 
-    public static IEnumerable<object> ToOrderedContentStreamEvents(LlmTestServerChatResult result)
+    public static IEnumerable<JsonElement> ToOrderedContentStreamEvents(LlmTestServerChatResult result)
     {
         var content = ToOrderedContent(result);
         for (var index = 0; index < content.Count; index++)
@@ -110,28 +110,28 @@ public static partial class AnthropicWireMapper
             var block = content[index];
             if (block.Type is "server_tool_use" or "tool_use")
             {
-                yield return new { type = "content_block_start", index, content_block = block with { Input = JsonSerializer.SerializeToElement(new { }) } };
-                yield return new { type = "content_block_delta", index, delta = new { type = "input_json_delta", partial_json = block.Input!.Value.GetRawText() } };
+                yield return JsonSerializer.SerializeToElement(new { type = "content_block_start", index, content_block = block with { Input = JsonSerializer.SerializeToElement(new { }) } });
+                yield return JsonSerializer.SerializeToElement(new { type = "content_block_delta", index, delta = new { type = "input_json_delta", partial_json = block.Input!.Value.GetRawText() } });
             }
             else if (block.Type == "text")
             {
-                yield return new { type = "content_block_start", index, content_block = block with { Text = string.Empty, Citations = block.Citations is null ? null : [] } };
+                yield return JsonSerializer.SerializeToElement(new { type = "content_block_start", index, content_block = block with { Text = string.Empty, Citations = block.Citations is null ? null : [] } });
                 var plan = (LlmTestServerResponseMessageItem)result.OutputItems[index];
                 IReadOnlyList<string> chunks = plan.StreamChunks.Count > 0 ? plan.StreamChunks : [plan.Content];
                 foreach (var chunk in chunks)
                 {
-                    yield return new { type = "content_block_delta", index, delta = new { type = "text_delta", text = chunk } };
+                    yield return JsonSerializer.SerializeToElement(new { type = "content_block_delta", index, delta = new { type = "text_delta", text = chunk } });
                 }
                 foreach (var citation in block.Citations ?? [])
                 {
-                    yield return new { type = "content_block_delta", index, delta = new { type = "citations_delta", citation } };
+                    yield return JsonSerializer.SerializeToElement(new { type = "content_block_delta", index, delta = new { type = "citations_delta", citation } });
                 }
             }
             else
             {
-                yield return new { type = "content_block_start", index, content_block = block };
+                yield return JsonSerializer.SerializeToElement(new { type = "content_block_start", index, content_block = block });
             }
-            yield return new { type = "content_block_stop", index };
+            yield return JsonSerializer.SerializeToElement(new { type = "content_block_stop", index });
         }
     }
 

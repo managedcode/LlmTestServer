@@ -101,15 +101,15 @@ public static class BedrockWireMapper
             yield return new() { Role = "tool", ToolCallId = block.ToolResult!.ToolUseId, Content = string.Concat(block.ToolResult.Content.Select(value => value.TryGetProperty("text", out var text) ? text.GetString() : value.GetRawText())) };
         }
     }
-    public static IEnumerable<object> ToToolStreamEvents(LlmTestServerChatResult result, int offset = 0)
+    public static IEnumerable<JsonElement> ToToolStreamEvents(LlmTestServerChatResult result, int offset = 0)
     {
         for (var position = 0; position < result.ToolCalls.Count; position++)
         {
             var contentBlockIndex = position + offset;
             var call = result.ToolCalls[position];
-            yield return new { contentBlockStart = new { contentBlockIndex, start = new { toolUse = new { toolUseId = call.Id, name = call.Name } } } };
-            yield return new { contentBlockDelta = new { contentBlockIndex, delta = new { toolUse = new { input = call.ArgumentsJson } } } };
-            yield return new { contentBlockStop = new { contentBlockIndex } };
+            yield return JsonSerializer.SerializeToElement(new { contentBlockStart = new { contentBlockIndex, start = new { toolUse = new { toolUseId = call.Id, name = call.Name } } } });
+            yield return JsonSerializer.SerializeToElement(new { contentBlockDelta = new { contentBlockIndex, delta = new { toolUse = new { input = call.ArgumentsJson } } } });
+            yield return JsonSerializer.SerializeToElement(new { contentBlockStop = new { contentBlockIndex } });
         }
     }
 
@@ -157,44 +157,44 @@ public static class BedrockWireMapper
         };
     }
 
-    public static object ToConverseMessageStartEvent()
+    public static JsonElement ToConverseMessageStartEvent()
     {
-        return new { messageStart = new { role = "assistant" } };
+        return JsonSerializer.SerializeToElement(new { messageStart = new { role = "assistant" } });
     }
 
-    public static object ToConverseContentBlockStartEvent()
+    public static JsonElement ToConverseContentBlockStartEvent()
     {
-        return new
+        return JsonSerializer.SerializeToElement(new
         {
             contentBlockStart = new { contentBlockIndex = 0, start = new { } },
-        };
+        });
     }
 
-    public static object ToConverseContentBlockDeltaEvent(string text)
+    public static JsonElement ToConverseContentBlockDeltaEvent(string text)
     {
-        return new
+        return JsonSerializer.SerializeToElement(new
         {
             contentBlockDelta = new
             {
                 contentBlockIndex = 0,
                 delta = new { text },
             },
-        };
+        });
     }
 
-    public static object ToConverseContentBlockStopEvent()
+    public static JsonElement ToConverseContentBlockStopEvent()
     {
-        return new { contentBlockStop = new { contentBlockIndex = 0 } };
+        return JsonSerializer.SerializeToElement(new { contentBlockStop = new { contentBlockIndex = 0 } });
     }
 
-    public static object ToConverseMessageStopEvent(bool toolUse = false)
+    public static JsonElement ToConverseMessageStopEvent(bool toolUse = false)
     {
-        return new { messageStop = new { stopReason = toolUse ? "tool_use" : "end_turn" } };
+        return JsonSerializer.SerializeToElement(new { messageStop = new { stopReason = toolUse ? "tool_use" : "end_turn" } });
     }
 
-    public static object ToConverseMetadataEvent(LlmTestServerChatResult result)
+    public static JsonElement ToConverseMetadataEvent(LlmTestServerChatResult result)
     {
-        return new
+        return JsonSerializer.SerializeToElement(new
         {
             metadata = new
             {
@@ -209,19 +209,19 @@ public static class BedrockWireMapper
                 },
                 metrics = new { latencyMs = 0 },
             },
-        };
+        });
     }
 
-    public static object ToInvokeStreamChunk(string outputText)
+    public static JsonElement ToInvokeStreamChunk(string outputText)
     {
         var payload = JsonSerializer.Serialize(new { outputText });
-        return new
+        return JsonSerializer.SerializeToElement(new
         {
             chunk = new
             {
                 bytes = Convert.ToBase64String(Encoding.UTF8.GetBytes(payload)),
             },
-        };
+        });
     }
 
     public static BedrockErrorResponse ToError(string message)

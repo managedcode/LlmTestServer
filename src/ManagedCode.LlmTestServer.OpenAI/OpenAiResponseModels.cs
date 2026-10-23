@@ -127,7 +127,7 @@ public sealed record OpenAiResponseOutputText : OpenAiResponseContentPart
     public string Text { get; init; } = string.Empty;
 
     [JsonPropertyName("annotations")]
-    public List<object> Annotations { get; init; } = [];
+    public List<JsonElement> Annotations { get; init; } = [];
 }
 
 public sealed record OpenAiResponseUsage

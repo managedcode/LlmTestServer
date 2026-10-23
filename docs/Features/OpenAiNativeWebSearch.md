@@ -187,3 +187,9 @@ fixtures expose `usage.server_tool_use.web_search_requests`; neither is converte
 Code interpreter fixtures preserve their configured container ID and native outputs. They do not invent
 per-response container sessions or billing duration: container/session accounting requires a separate
 lifecycle contract from the provider rather than a count of code calls.
+
+## Native JSON wire mapping
+
+`OpenAiWireMapper.ToResponseStreamEvents` returns a lazy `IEnumerable<JsonElement>`; the six same-contract Responses event helpers and Responses text annotations expose native protocol JSON as well. Their known payloads are constructed once through System.Text.Json at the final wire boundary. Event order, sequence numbers, IDs, explicit nulls, citations, terminal output and usage retain their existing protocol meaning.
+
+The remaining four single-result helpers expose concrete models: model lists, image-stream events and the two transcription text events. Image completion usage and partial-image indexes retain their mutually exclusive fields; verbose transcription keeps a typed segment collection, currently emitted empty. Decision choices and probability values use native JSON scalars to preserve caller-authored strings and booleans and numeric score indexes. No custom converter or serializer configuration is added. Running-server HTTP/SDK regressions compare streamed terminal data with independent supported responses and retained conversation evidence where applicable.

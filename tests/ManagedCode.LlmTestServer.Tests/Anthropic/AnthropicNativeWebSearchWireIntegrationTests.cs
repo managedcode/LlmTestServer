@@ -63,23 +63,57 @@ public sealed partial class AnthropicNativeWebSearchIntegrationTests
         var baseline = await CompleteAsync(http);
         using var response = await http.PostAsJsonAsync("/anthropic/v1/messages", Request(true)); response.EnsureSuccessStatusCode();
         var blocks = new JsonArray(); var input = ""; var stopped = new List<int>(); var messageStopped = false; var usageCount = -1;
+        var chunks = new List<string>(); var citationDeltas = 0;
         foreach (var line in (await response.Content.ReadAsStringAsync()).Split('\n'))
         {
             if (!line.StartsWith("data: ", StringComparison.Ordinal)) { continue; }
             var frame = JsonNode.Parse(line[6..])!; var type = frame["type"]!.GetValue<string>();
+            if (type is "content_block_start" or "content_block_delta" or "content_block_stop")
+            {
+                var expectedFields = type switch
+                {
+                    "content_block_start" => "type,index,content_block",
+                    "content_block_delta" => "type,index,delta",
+                    _ => "type,index",
+                };
+                await Assert.That(string.Join(',', frame.AsObject().Select(property => property.Key))).IsEqualTo(expectedFields);
+            }
             if (type == "content_block_start")
             {
                 await Assert.That(frame["index"]!.GetValue<int>()).IsEqualTo(blocks.Count);
-                blocks.Add(frame["content_block"]!.DeepClone());
+                var block = frame["content_block"]!.AsObject();
+                if (blocks.Count == 0)
+                {
+                    await Assert.That(block["input"]!.AsObject().Count).IsEqualTo(0);
+                    await Assert.That(block.ContainsKey("text") || block.ContainsKey("citations") || block.ContainsKey("content")).IsFalse();
+                }
+                if (blocks.Count == 1)
+                {
+                    await Assert.That(block.ContainsKey("input") || block.ContainsKey("text") || block.ContainsKey("citations")).IsFalse();
+                }
+                if (blocks.Count == 2)
+                {
+                    await Assert.That(block["text"]!.GetValue<string>()).IsEqualTo(string.Empty);
+                    await Assert.That(block["citations"]!.AsArray().Count).IsEqualTo(0);
+                    await Assert.That(block.ContainsKey("input") || block.ContainsKey("content")).IsFalse();
+                }
+                blocks.Add(block.DeepClone());
             }
             if (type == "content_block_delta")
             {
                 var index = frame["index"]!.GetValue<int>(); var delta = frame["delta"]!;
                 switch (delta["type"]!.GetValue<string>())
                 {
-                    case "input_json_delta": input += delta["partial_json"]!.GetValue<string>(); break;
-                    case "text_delta": blocks[index]!["text"] = (blocks[index]!["text"]?.GetValue<string>() ?? "") + delta["text"]!.GetValue<string>(); break;
+                    case "input_json_delta":
+                        await Assert.That(string.Join(',', delta.AsObject().Select(property => property.Key))).IsEqualTo("type,partial_json");
+                        input += delta["partial_json"]!.GetValue<string>(); break;
+                    case "text_delta":
+                        await Assert.That(string.Join(',', delta.AsObject().Select(property => property.Key))).IsEqualTo("type,text");
+                        chunks.Add(delta["text"]!.GetValue<string>());
+                        blocks[index]!["text"] = (blocks[index]!["text"]?.GetValue<string>() ?? "") + chunks[^1]; break;
                     case "citations_delta":
+                        await Assert.That(string.Join(',', delta.AsObject().Select(property => property.Key))).IsEqualTo("type,citation");
+                        citationDeltas++;
                         blocks[index]!["citations"] ??= new JsonArray();
                         ((JsonArray)blocks[index]!["citations"]!).Add(delta["citation"]!.DeepClone()); break;
                 }
@@ -88,10 +122,15 @@ public sealed partial class AnthropicNativeWebSearchIntegrationTests
             if (type == "message_delta")
             {
                 await Assert.That(frame["delta"]!["stop_reason"]!.GetValue<string>()).IsEqualTo("end_turn");
+                await Assert.That(string.Join(',', frame["delta"]!.AsObject().Select(property => property.Key))).IsEqualTo("stop_reason,stop_sequence");
+                await Assert.That(frame["delta"]!["stop_sequence"] is null).IsTrue();
                 usageCount = frame["usage"]!["server_tool_use"]!["web_search_requests"]!.GetValue<int>();
             }
             if (type == "message_stop") { messageStopped = true; }
         }
+        await Assert.That(input).IsEqualTo(baseline.GetProperty("content")[0].GetProperty("input").GetRawText());
+        await Assert.That(chunks.SequenceEqual(new[] { "Paris ", "fixture." })).IsTrue();
+        await Assert.That(citationDeltas).IsEqualTo(1);
         blocks[0]!["input"] = JsonNode.Parse(input);
         await AssertContentAsync(JsonSerializer.SerializeToElement(blocks));
         await Assert.That(JsonNode.DeepEquals(blocks, JsonNode.Parse(baseline.GetProperty("content").GetRawText()))).IsTrue();

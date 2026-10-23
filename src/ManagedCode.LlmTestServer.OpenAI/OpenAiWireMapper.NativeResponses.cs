@@ -98,14 +98,14 @@ public static partial class OpenAiWireMapper
         };
     }
 
-    public static IEnumerable<object> ToResponseStreamEvents(LlmTestServerChatResult result, string responseId,
+    public static IEnumerable<JsonElement> ToResponseStreamEvents(LlmTestServerChatResult result, string responseId,
         long created, OpenAiCacheUsageShape cacheUsageShape = OpenAiCacheUsageShape.None,
         IReadOnlyCollection<string>? includedProperties = null, bool azureToolUsage = false)
     {
         var response = ToResponse(result, responseId, created, cacheUsageShape, includedProperties, azureToolUsage);
         var sequence = 0;
-        yield return new { type = "response.created", sequence_number = sequence++, response = response with { Status = "in_progress", IncompleteDetails = null, Output = [], ToolUsage = null } };
-        yield return new { type = "response.in_progress", sequence_number = sequence++, response = response with { Status = "in_progress", IncompleteDetails = null, Output = [], ToolUsage = null } };
+        yield return JsonSerializer.SerializeToElement(new { type = "response.created", sequence_number = sequence++, response = response with { Status = "in_progress", IncompleteDetails = null, Output = [], ToolUsage = null } });
+        yield return JsonSerializer.SerializeToElement(new { type = "response.in_progress", sequence_number = sequence++, response = response with { Status = "in_progress", IncompleteDetails = null, Output = [], ToolUsage = null } });
         for (var index = 0; index < response.Output.Count; index++)
         {
             var item = response.Output[index];
@@ -118,27 +118,27 @@ public static partial class OpenAiWireMapper
                 OpenAiResponseCodeInterpreterCall code => code with { Status = "in_progress", Code = code.Code is null ? null : string.Empty, Outputs = null },
                 _ => throw new InvalidOperationException("Unsupported Responses output item.")
             };
-            yield return new { type = "response.output_item.added", sequence_number = sequence++, output_index = index, item = initial };
+            yield return JsonSerializer.SerializeToElement(new { type = "response.output_item.added", sequence_number = sequence++, output_index = index, item = initial });
             if (item is OpenAiResponseFunctionCall functionItem)
             {
-                yield return new { type = "response.function_call_arguments.delta", sequence_number = sequence++, item_id = item.Id, output_index = index, delta = functionItem.Arguments };
-                yield return new { type = "response.function_call_arguments.done", sequence_number = sequence++, item_id = item.Id, output_index = index, arguments = functionItem.Arguments };
+                yield return JsonSerializer.SerializeToElement(new { type = "response.function_call_arguments.delta", sequence_number = sequence++, item_id = item.Id, output_index = index, delta = functionItem.Arguments });
+                yield return JsonSerializer.SerializeToElement(new { type = "response.function_call_arguments.done", sequence_number = sequence++, item_id = item.Id, output_index = index, arguments = functionItem.Arguments });
             }
             else if (item is OpenAiResponseWebSearchCall)
             {
-                yield return new { type = "response.web_search_call.in_progress", sequence_number = sequence++, item_id = item.Id, output_index = index };
-                yield return new { type = "response.web_search_call.searching", sequence_number = sequence++, item_id = item.Id, output_index = index };
-                yield return new { type = "response.web_search_call.completed", sequence_number = sequence++, item_id = item.Id, output_index = index };
+                yield return JsonSerializer.SerializeToElement(new { type = "response.web_search_call.in_progress", sequence_number = sequence++, item_id = item.Id, output_index = index });
+                yield return JsonSerializer.SerializeToElement(new { type = "response.web_search_call.searching", sequence_number = sequence++, item_id = item.Id, output_index = index });
+                yield return JsonSerializer.SerializeToElement(new { type = "response.web_search_call.completed", sequence_number = sequence++, item_id = item.Id, output_index = index });
             }
             else if (item is OpenAiResponseFileSearchCall)
             {
-                yield return new { type = "response.file_search_call.in_progress", sequence_number = sequence++, item_id = item.Id, output_index = index };
-                yield return new { type = "response.file_search_call.searching", sequence_number = sequence++, item_id = item.Id, output_index = index };
-                yield return new { type = "response.file_search_call.completed", sequence_number = sequence++, item_id = item.Id, output_index = index };
+                yield return JsonSerializer.SerializeToElement(new { type = "response.file_search_call.in_progress", sequence_number = sequence++, item_id = item.Id, output_index = index });
+                yield return JsonSerializer.SerializeToElement(new { type = "response.file_search_call.searching", sequence_number = sequence++, item_id = item.Id, output_index = index });
+                yield return JsonSerializer.SerializeToElement(new { type = "response.file_search_call.completed", sequence_number = sequence++, item_id = item.Id, output_index = index });
             }
             else if (item is OpenAiResponseCodeInterpreterCall codeItem)
             {
-                yield return new { type = "response.code_interpreter_call.in_progress", sequence_number = sequence++, item_id = item.Id, output_index = index };
+                yield return JsonSerializer.SerializeToElement(new { type = "response.code_interpreter_call.in_progress", sequence_number = sequence++, item_id = item.Id, output_index = index });
                 if (codeItem.Code is not null)
                 {
                     IReadOnlyList<string> codeChunks = result.OutputItems.Count > index
@@ -146,47 +146,47 @@ public static partial class OpenAiWireMapper
                         ? codePlan.CodeChunks : [codeItem.Code];
                     foreach (var chunk in codeChunks)
                     {
-                        yield return new { type = "response.code_interpreter_call_code.delta", sequence_number = sequence++, item_id = item.Id, output_index = index, delta = chunk };
+                        yield return JsonSerializer.SerializeToElement(new { type = "response.code_interpreter_call_code.delta", sequence_number = sequence++, item_id = item.Id, output_index = index, delta = chunk });
                     }
-                    yield return new { type = "response.code_interpreter_call_code.done", sequence_number = sequence++, item_id = item.Id, output_index = index, code = codeItem.Code };
+                    yield return JsonSerializer.SerializeToElement(new { type = "response.code_interpreter_call_code.done", sequence_number = sequence++, item_id = item.Id, output_index = index, code = codeItem.Code });
                 }
-                yield return new { type = "response.code_interpreter_call.interpreting", sequence_number = sequence++, item_id = item.Id, output_index = index };
-                yield return new { type = "response.code_interpreter_call.completed", sequence_number = sequence++, item_id = item.Id, output_index = index };
+                yield return JsonSerializer.SerializeToElement(new { type = "response.code_interpreter_call.interpreting", sequence_number = sequence++, item_id = item.Id, output_index = index });
+                yield return JsonSerializer.SerializeToElement(new { type = "response.code_interpreter_call.completed", sequence_number = sequence++, item_id = item.Id, output_index = index });
             }
             else if (item is OpenAiResponseOutputMessage messageItem)
             {
                 if (messageItem.Content[0] is OpenAiResponseRefusal refusal)
                 {
-                    yield return new { type = "response.content_part.added", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, part = (OpenAiResponseContentPart)new OpenAiResponseRefusal() };
+                    yield return JsonSerializer.SerializeToElement(new { type = "response.content_part.added", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, part = (OpenAiResponseContentPart)new OpenAiResponseRefusal() });
                     foreach (var chunk in result.StreamChunks.Count > 0 ? result.StreamChunks : [refusal.Refusal])
                     {
-                        yield return new { type = "response.refusal.delta", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, delta = chunk };
+                        yield return JsonSerializer.SerializeToElement(new { type = "response.refusal.delta", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, delta = chunk });
                     }
-                    yield return new { type = "response.refusal.done", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, refusal = refusal.Refusal };
-                    yield return new { type = "response.content_part.done", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, part = (OpenAiResponseContentPart)refusal };
+                    yield return JsonSerializer.SerializeToElement(new { type = "response.refusal.done", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, refusal = refusal.Refusal });
+                    yield return JsonSerializer.SerializeToElement(new { type = "response.content_part.done", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, part = (OpenAiResponseContentPart)refusal });
                 }
                 else
                 {
                     var part = (OpenAiResponseOutputText)messageItem.Content[0];
-                    yield return new { type = "response.content_part.added", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, part = (OpenAiResponseContentPart)new OpenAiResponseOutputText() };
+                    yield return JsonSerializer.SerializeToElement(new { type = "response.content_part.added", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, part = (OpenAiResponseContentPart)new OpenAiResponseOutputText() });
                     IReadOnlyList<string> chunks = result.OutputItems.Count > index && result.OutputItems[index] is LlmTestServerResponseMessageItem messagePlan
                         ? messagePlan.StreamChunks.Count > 0 ? messagePlan.StreamChunks : [messagePlan.Content]
                         : result.StreamChunks.Count > 0 ? result.StreamChunks : [part.Text];
                     foreach (var chunk in chunks)
                     {
-                        yield return new { type = "response.output_text.delta", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, delta = chunk, logprobs = Array.Empty<object>() };
+                        yield return JsonSerializer.SerializeToElement(new { type = "response.output_text.delta", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, delta = chunk, logprobs = Array.Empty<JsonElement>() });
                     }
                     for (var annotationIndex = 0; annotationIndex < part.Annotations.Count; annotationIndex++)
                     {
-                        yield return new { type = "response.output_text.annotation.added", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, annotation_index = annotationIndex, annotation = part.Annotations[annotationIndex] };
+                        yield return JsonSerializer.SerializeToElement(new { type = "response.output_text.annotation.added", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, annotation_index = annotationIndex, annotation = part.Annotations[annotationIndex] });
                     }
-                    yield return new { type = "response.output_text.done", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, text = part.Text, logprobs = Array.Empty<object>() };
-                    yield return new { type = "response.content_part.done", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, part = (OpenAiResponseContentPart)part };
+                    yield return JsonSerializer.SerializeToElement(new { type = "response.output_text.done", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, text = part.Text, logprobs = Array.Empty<JsonElement>() });
+                    yield return JsonSerializer.SerializeToElement(new { type = "response.content_part.done", sequence_number = sequence++, item_id = item.Id, output_index = index, content_index = 0, part = (OpenAiResponseContentPart)part });
                 }
             }
-            yield return new { type = "response.output_item.done", sequence_number = sequence++, output_index = index, item };
+            yield return JsonSerializer.SerializeToElement(new { type = "response.output_item.done", sequence_number = sequence++, output_index = index, item });
         }
-        yield return new { type = response.Status == "incomplete" ? "response.incomplete" : "response.completed", sequence_number = sequence, response };
+        yield return JsonSerializer.SerializeToElement(new { type = response.Status == "incomplete" ? "response.incomplete" : "response.completed", sequence_number = sequence, response });
     }
 
     private static LlmTestServerResponseWebSearchItem ReadNativeWebSearchItem(JsonElement item)

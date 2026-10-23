@@ -102,9 +102,9 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         context.MarkLlmTestServerTerminalMarker();
     }
 
-    private static async Task WriteResponseSseDataAsync(
+    private static async Task WriteResponseSseDataAsync<T>(
         HttpContext context,
-        object data,
+        T data,
         CancellationToken cancellationToken
     )
     {
@@ -303,10 +303,10 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         context.MarkLlmTestServerTerminalMarker();
     }
 
-    private static async Task WriteAnthropicSseEventAsync(
+    private static async Task WriteAnthropicSseEventAsync<T>(
         HttpContext context,
         string eventName,
-        object data,
+        T data,
         CancellationToken cancellationToken
     )
     {
@@ -382,10 +382,10 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         context.MarkLlmTestServerTerminalMarker();
     }
 
-    private static async Task WriteCohereSseEventAsync(
+    private static async Task WriteCohereSseEventAsync<T>(
         HttpContext context,
         string eventName,
-        object data,
+        T data,
         CancellationToken cancellationToken
     )
     {
@@ -520,9 +520,9 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         }
     }
 
-    private static async Task WriteBedrockEventAsync(
+    private static async Task WriteBedrockEventAsync<T>(
         HttpContext context,
-        object data,
+        T data,
         CancellationToken cancellationToken
     )
     {

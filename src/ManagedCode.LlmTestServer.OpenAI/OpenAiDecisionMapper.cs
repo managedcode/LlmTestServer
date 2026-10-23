@@ -100,7 +100,7 @@ public static class OpenAiDecisionMapper
             Confidence = answer.Refused || question.Type == OpenAiDecisionTypes.Predicate ? null : answer.Confidence,
             Probabilities = answer.Refused || question.Type == OpenAiDecisionTypes.Predicate ? null : answer.Probabilities.Select(entry => new OpenAiDecisionProbability
             {
-                Value = question.Type == OpenAiDecisionTypes.Score ? int.Parse(entry.Key, CultureInfo.InvariantCulture) : NativeChoice(question, entry.Key),
+                Value = question.Type == OpenAiDecisionTypes.Score ? JsonSerializer.SerializeToElement(int.Parse(entry.Key, CultureInfo.InvariantCulture)) : NativeChoice(question, entry.Key),
                 Label = question.Type == OpenAiDecisionTypes.Score ? question.Levels[int.Parse(entry.Key, CultureInfo.InvariantCulture)].Label : null,
                 Probability = entry.Value,
             }).ToList(),
@@ -111,9 +111,9 @@ public static class OpenAiDecisionMapper
         return value.ValueKind == JsonValueKind.String ? OpenAiDecisionFixtureIds.ForChoiceValue(value.GetString()!) : OpenAiDecisionFixtureIds.ForChoiceValue(value.GetBoolean());
     }
 
-    private static object NativeChoice(OpenAiDecisionQuestion question, string value)
+    private static JsonElement NativeChoice(OpenAiDecisionQuestion question, string value)
     {
         var native = question.Choices.First(option => ChoiceId(option.Value) == value).Value;
-        return native.ValueKind is JsonValueKind.True or JsonValueKind.False ? native.GetBoolean() : native.GetString()!;
+        return native.Clone();
     }
 }

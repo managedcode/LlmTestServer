@@ -70,9 +70,9 @@ public static partial class AnthropicWireMapper
         };
     }
 
-    public static object ToMessageStartEvent(LlmTestServerChatResult result)
+    public static JsonElement ToMessageStartEvent(LlmTestServerChatResult result)
     {
-        return new
+        return JsonSerializer.SerializeToElement(new
         {
             type = "message_start",
             message = new AnthropicMessageResponse
@@ -87,22 +87,22 @@ public static partial class AnthropicWireMapper
                 ) with
                 { ServerToolUse = NativeServerToolUsage(result) is null ? null : new AnthropicServerToolUsage() },
             },
-        };
+        });
     }
 
-    public static object ToContentBlockStartEvent()
+    public static JsonElement ToContentBlockStartEvent()
     {
-        return new
+        return JsonSerializer.SerializeToElement(new
         {
             type = "content_block_start",
             index = 0,
             content_block = new AnthropicContentBlock(),
-        };
+        });
     }
 
-    public static object ToContentBlockDeltaEvent(string text)
+    public static JsonElement ToContentBlockDeltaEvent(string text)
     {
-        return new
+        return JsonSerializer.SerializeToElement(new
         {
             type = "content_block_delta",
             index = 0,
@@ -111,30 +111,30 @@ public static partial class AnthropicWireMapper
                 type = "text_delta",
                 text,
             },
-        };
+        });
     }
 
-    public static object ToContentBlockStopEvent()
+    public static JsonElement ToContentBlockStopEvent()
     {
-        return new
+        return JsonSerializer.SerializeToElement(new
         {
             type = "content_block_stop",
             index = 0,
-        };
+        });
     }
 
-    public static object ToMessageDeltaEvent(LlmTestServerChatResult result, bool cacheOnly = false)
+    public static JsonElement ToMessageDeltaEvent(LlmTestServerChatResult result, bool cacheOnly = false)
     {
         if (!cacheOnly && NativeServerToolUsage(result) is { } nativeUsage)
         {
-            return new
+            return JsonSerializer.SerializeToElement(new
             {
                 type = "message_delta",
                 delta = new { stop_reason = result.ToolCalls.Count > 0 ? "tool_use" : "end_turn", stop_sequence = (string?)null },
                 usage = new { output_tokens = result.Usage.OutputTokens, server_tool_use = nativeUsage },
-            };
+            });
         }
-        return new
+        return JsonSerializer.SerializeToElement(new
         {
             type = "message_delta",
             delta = new
@@ -145,15 +145,15 @@ public static partial class AnthropicWireMapper
                     ? new AnthropicRefusalStopDetails { Category = result.OutputDisposition.Category, Explanation = result.OutputDisposition.Explanation } : null,
             },
             usage = new { output_tokens = result.Usage.OutputTokens },
-        };
+        });
     }
 
-    public static object ToMessageStopEvent()
+    public static JsonElement ToMessageStopEvent()
     {
-        return new
+        return JsonSerializer.SerializeToElement(new
         {
             type = "message_stop",
-        };
+        });
     }
 
     public static AnthropicContentBlock ToToolBlock(LlmTestServerToolCall call)
@@ -162,15 +162,15 @@ public static partial class AnthropicWireMapper
         { Type = "tool_use", Caller = new(), Id = call.Id, Name = call.Name, Input = JsonSerializer.Deserialize<JsonElement>(call.ArgumentsJson), Text = null };
     }
 
-    public static IEnumerable<object> ToToolStreamEvents(LlmTestServerChatResult result, int offset = 0)
+    public static IEnumerable<JsonElement> ToToolStreamEvents(LlmTestServerChatResult result, int offset = 0)
     {
         for (var position = 0; position < result.ToolCalls.Count; position++)
         {
             var index = position + offset;
             var call = result.ToolCalls[position];
-            yield return new { type = "content_block_start", index, content_block = ToToolBlock(call) with { Input = JsonSerializer.SerializeToElement(new { }) } };
-            yield return new { type = "content_block_delta", index, delta = new { type = "input_json_delta", partial_json = call.ArgumentsJson } };
-            yield return new { type = "content_block_stop", index };
+            yield return JsonSerializer.SerializeToElement(new { type = "content_block_start", index, content_block = ToToolBlock(call) with { Input = JsonSerializer.SerializeToElement(new { }) } });
+            yield return JsonSerializer.SerializeToElement(new { type = "content_block_delta", index, delta = new { type = "input_json_delta", partial_json = call.ArgumentsJson } });
+            yield return JsonSerializer.SerializeToElement(new { type = "content_block_stop", index });
         }
     }
 

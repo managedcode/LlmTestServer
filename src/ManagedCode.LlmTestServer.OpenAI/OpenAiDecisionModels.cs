@@ -45,14 +45,14 @@ public sealed record OpenAiDecisionAnswer
     [JsonPropertyName("type")] public string Type { get; init; } = string.Empty;
     [JsonPropertyName("name")] public string? Name { get; init; }
     [JsonPropertyName("probability")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? Probability { get; init; }
-    [JsonPropertyName("choice")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public object? Choice { get; init; }
+    [JsonPropertyName("choice")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public JsonElement? Choice { get; init; }
     [JsonPropertyName("score")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? Score { get; init; }
     [JsonPropertyName("confidence")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? Confidence { get; init; }
     [JsonPropertyName("probabilities")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<OpenAiDecisionProbability>? Probabilities { get; init; }
 }
 public sealed record OpenAiDecisionProbability
 {
-    [JsonPropertyName("value")] public object Value { get; init; } = string.Empty;
+    [JsonPropertyName("value")] public JsonElement Value { get; init; } = JsonSerializer.SerializeToElement(string.Empty);
     [JsonPropertyName("label")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Label { get; init; }
     [JsonPropertyName("probability")] public double Probability { get; init; }
 }

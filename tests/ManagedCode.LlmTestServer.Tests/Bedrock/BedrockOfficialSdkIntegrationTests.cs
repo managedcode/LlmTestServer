@@ -86,16 +86,30 @@ public sealed class BedrockOfficialSdkIntegrationTests
     }
 
     [Test]
-    [Arguments(false)]
-    [Arguments(true)]
-    public async Task OfficialSdk_ClientToolRoundUsesExactCallIdArgumentsAndGraphTurnAsync(bool streaming)
+    [Arguments(false, false)]
+    [Arguments(true, false)]
+    [Arguments(true, true)]
+    public async Task OfficialSdk_ClientToolRoundUsesExactCallIdArgumentsAndGraphTurnAsync(bool streaming, bool textBeforeTool)
     {
         using var host = await LlmTestServerTestHost.StartAsync();
         using var http = Transport(host.GetTestServer().CreateHandler(), host.GetTestServer().BaseAddress);
         var control = new LlmTestServerClient(http);
-        await control.ConfigureAsync(config => config.UseChatModel(_model).UseConversation("bedrock-sdk-round", graph => graph.ForModel(_model)
+        var configuration = new LlmTestServerClientConfigurationBuilder().UseChatModel(_model).UseConversation("bedrock-sdk-round", graph => graph.ForModel(_model)
             .Step("tool", step => step.WhenLatestUserEquals("weather").WhenTurn(1).CallsTool("weather", "{\"city\":\"Paris\"}", "toolu_weather").Then("final"))
-            .Step("final", step => step.WhenTurn(2).WhenToolResult("weather", "toolu_weather").WhenLatestTextContains("21C").Responds("Paris is 21C.").Complete())));
+            .Step("final", step => step.WhenTurn(2).WhenToolResult("weather", "toolu_weather").WhenLatestTextContains("21C").Responds("Paris is 21C.").Complete())).Build();
+        if (textBeforeTool)
+        {
+            var steps = configuration.ChatScenarios.Single(scenario => scenario.Id == "bedrock-sdk-round").Conversation!.Steps;
+            steps[0] = steps[0] with
+            {
+                Response = steps[0].Response with
+                {
+                    Content = "Checking weather.",
+                    StreamChunks = ["Checking ", "weather."]
+                }
+            };
+        }
+        await control.ConfigureAsync(configuration);
         using var scoped = control.ForConversation("bedrock-sdk-round"); using var sdk = Sdk(scoped.HttpClient);
         var tools = new ToolConfiguration
         {
@@ -108,12 +122,38 @@ public sealed class BedrockOfficialSdkIntegrationTests
         {
             using var first = await sdk.ConverseStreamAsync(new ConverseStreamRequest { ModelId = _model, Messages = [User("weather")], ToolConfig = tools });
             var id = ""; var name = ""; var arguments = ""; var stop = "";
+            var frames = new List<(string Kind, int? Index)>();
+            var text = "";
             first.Stream.ContentBlockStartReceived += (_, args) =>
-            { id = args.EventStreamEvent.Start.ToolUse.ToolUseId; name = args.EventStreamEvent.Start.ToolUse.Name; };
-            first.Stream.ContentBlockDeltaReceived += (_, args) => arguments += args.EventStreamEvent.Delta.ToolUse.Input;
+            {
+                frames.Add(("start", args.EventStreamEvent.ContentBlockIndex));
+                if (args.EventStreamEvent.Start.ToolUse is { } tool)
+                {
+                    id = tool.ToolUseId;
+                    name = tool.Name;
+                }
+            };
+            first.Stream.ContentBlockDeltaReceived += (_, args) =>
+            {
+                frames.Add(("delta", args.EventStreamEvent.ContentBlockIndex));
+                if (args.EventStreamEvent.Delta.ToolUse is { } tool)
+                {
+                    arguments += tool.Input;
+                }
+                else
+                {
+                    text += args.EventStreamEvent.Delta.Text;
+                }
+            };
+            first.Stream.ContentBlockStopReceived += (_, args) => frames.Add(("stop", args.EventStreamEvent.ContentBlockIndex));
             first.Stream.MessageStopReceived += (_, args) => stop = args.EventStreamEvent.StopReason;
             await first.Stream.StartProcessingAsync();
             await Assert.That(stop).IsEqualTo("tool_use");
+            await Assert.That(string.Join("|", frames.Select(frame => $"{frame.Kind}:{frame.Index}"))).IsEqualTo(textBeforeTool
+                ? "start:0|delta:0|delta:0|stop:0|start:1|delta:1|stop:1"
+                : "start:0|delta:0|stop:0");
+            await Assert.That(text).IsEqualTo(textBeforeTool ? "Checking weather." : "");
+            await Assert.That(arguments).IsEqualTo("{\"city\":\"Paris\"}");
             await Assert.That(JsonDocument.Parse(arguments).RootElement.GetProperty("city").GetString()).IsEqualTo("Paris");
             call = new ToolUseBlock { ToolUseId = id, Name = name, Input = new Document(new Dictionary<string, Document> { ["city"] = "Paris" }) };
         }
@@ -130,13 +170,17 @@ public sealed class BedrockOfficialSdkIntegrationTests
             ModelId = _model,
             ToolConfig = tools,
             Messages = [User("weather"),
-                new Message { Role = ConversationRole.Assistant, Content = [new ContentBlock { ToolUse = call }] },
+                new Message { Role = ConversationRole.Assistant, Content = textBeforeTool
+                    ? [new ContentBlock { Text = "Checking weather." }, new ContentBlock { ToolUse = call }]
+                    : [new ContentBlock { ToolUse = call }] },
                 new Message { Role = ConversationRole.User, Content = [new ContentBlock { ToolResult = new ToolResultBlock
                 { ToolUseId = call.ToolUseId, Status = ToolResultStatus.Success, Content = [new ToolResultContentBlock { Text = "21C" }] } }] }],
         });
         await Assert.That(final.Output.Message.Content.Single().Text).IsEqualTo("Paris is 21C.");
         await Assert.That(final.StopReason.Value).IsEqualTo("end_turn");
-        await Assert.That((await scoped.Control.GetConversationsAsync()).Single().ExecutedSteps).IsEqualTo(2);
+        var conversation = (await scoped.Control.GetConversationsAsync()).Single();
+        await Assert.That(conversation.ExecutedSteps).IsEqualTo(2);
+        await Assert.That(conversation.IsTerminal).IsTrue();
         var traces = (await scoped.Control.GetRequestsAsync()).Requests;
         await Assert.That(traces.Count).IsEqualTo(2);
         await Assert.That(traces[0].Messages.Single(message => message.Role == "tool").ToolCallId).IsEqualTo(call.ToolUseId);

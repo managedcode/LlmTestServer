@@ -89,6 +89,10 @@ public sealed class OpenAiEndpointTests
         var videoJson = await video.Content.ReadFromJsonAsync<JsonElement>(_jsonOptions);
 
         await Assert.That(models.GetProperty("data").GetArrayLength()).IsGreaterThanOrEqualTo(5);
+        await Assert.That(models.GetProperty("object").GetString()).IsEqualTo("list");
+        var listedChat = models.GetProperty("data").EnumerateArray().Single(model => model.GetProperty("id").GetString() == "chat-model");
+        await Assert.That(listedChat.GetProperty("object").GetString()).IsEqualTo("model");
+        await Assert.That(listedChat.GetProperty("metadata").GetProperty("kind").GetString()).IsEqualTo("chat");
         await Assert.That(
                 chatJson
                     .GetProperty("choices")[0]
@@ -713,6 +717,27 @@ public sealed class OpenAiEndpointTests
             .IsEqualTo("text/event-stream");
         await Assert.That(editStreamBody).Contains("\"type\":\"image_edit.partial_image\"");
         await Assert.That(editStreamBody).Contains("\"type\":\"image_edit.completed\"");
+        foreach (var body in new[] { streamBody, editStreamBody })
+        {
+            var frames = body.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Where(line => line.StartsWith("data: ", StringComparison.Ordinal))
+                .Select(line => JsonSerializer.Deserialize<JsonElement>(line[6..])).ToArray();
+            await Assert.That(frames.Length).IsEqualTo(2);
+            var partial = frames[0];
+            var terminal = frames[1];
+            await Assert.That(partial.EnumerateObject().Select(field => field.Name).SequenceEqual(new[]
+                { "type", "b64_json", "created_at", "size", "quality", "background", "output_format", "partial_image_index" })).IsTrue();
+            await Assert.That(terminal.EnumerateObject().Select(field => field.Name).SequenceEqual(new[]
+                { "type", "b64_json", "created_at", "size", "quality", "background", "output_format", "usage" })).IsTrue();
+            await Assert.That(partial.GetProperty("partial_image_index").GetInt32()).IsEqualTo(0);
+            await Assert.That(partial.TryGetProperty("usage", out _)).IsFalse();
+            await Assert.That(terminal.TryGetProperty("partial_image_index", out _)).IsFalse();
+            await Assert.That(terminal.GetProperty("size").GetString()).IsEqualTo("1024x1024");
+            await Assert.That(terminal.GetProperty("output_format").GetString()).IsEqualTo("png");
+            await Assert.That(terminal.GetProperty("usage").GetProperty("output_tokens").GetInt32()).IsEqualTo(0);
+            await Assert.That(terminal.GetProperty("usage").GetProperty("input_tokens_details").GetProperty("text_tokens").GetInt32()).IsEqualTo(1);
+            await Assert.That(terminal.GetProperty("b64_json").GetString()).IsEqualTo(editPayload.GetProperty("data")[0].GetProperty("b64_json").GetString());
+        }
         await Assert.That(variationPayload.GetProperty("data")[0].GetProperty("b64_json").GetString())
             .IsNotNull()
             .And
@@ -736,6 +761,13 @@ public sealed class OpenAiEndpointTests
             responseFormat: "text"
         );
         var text = await client.PostAsync("/openai/v1/audio/transcriptions", textContent);
+        using var verboseContent = CreateTranscriptionContent(
+            LlmTestServerKnownModelIds.Gpt4OMiniTts, responseFormat: "verbose_json");
+        using var verbose = await client.PostAsync("/openai/v1/audio/transcriptions", verboseContent);
+        verbose.EnsureSuccessStatusCode();
+        var verbosePayload = await verbose.Content.ReadFromJsonAsync<JsonElement>(_jsonOptions);
+        await Assert.That(verbosePayload.GetProperty("segments").GetArrayLength()).IsEqualTo(0);
+        await Assert.That(verbosePayload.GetProperty("text").GetString()).IsEqualTo("deterministic transcript");
         using var streamContent = CreateTranscriptionContent(
             LlmTestServerKnownModelIds.Gpt4OMiniTts,
             stream: true
@@ -760,6 +792,21 @@ public sealed class OpenAiEndpointTests
         await Assert.That(streamPayload).Contains("\"delta\":\"deterministic transcript\"");
         await Assert.That(streamPayload).Contains("\"type\":\"transcript.text.done\"");
         await Assert.That(streamPayload).Contains("\"text\":\"deterministic transcript\"");
+        var frames = streamPayload.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Where(line => line.StartsWith("data: ", StringComparison.Ordinal))
+            .Select(line => JsonSerializer.Deserialize<JsonElement>(line[6..])).ToArray();
+        await Assert.That(frames.Length).IsEqualTo(2);
+        await Assert.That(frames[0].EnumerateObject().Select(field => field.Name).SequenceEqual(new[] { "type", "delta" })).IsTrue();
+        await Assert.That(frames[1].EnumerateObject().Select(field => field.Name).SequenceEqual(new[] { "type", "text", "usage" })).IsTrue();
+        await Assert.That(frames[1].GetProperty("text").GetString()).IsEqualTo(jsonPayload.GetProperty("text").GetString());
+        if (jsonPayload.TryGetProperty("usage", out var usage))
+        {
+            await Assert.That(frames[1].GetProperty("usage").GetRawText()).IsEqualTo(usage.GetRawText());
+        }
+        else
+        {
+            await Assert.That(frames[1].GetProperty("usage").ValueKind).IsEqualTo(JsonValueKind.Null);
+        }
     }
 
     [Test]
@@ -776,6 +823,13 @@ public sealed class OpenAiEndpointTests
             responseFormat: "text"
         );
         var text = await client.PostAsync("/openai/v1/audio/translations", textContent);
+        using var verboseContent = CreateTranscriptionContent(
+            LlmTestServerKnownModelIds.Gpt4OMiniTts, responseFormat: "verbose_json");
+        using var verbose = await client.PostAsync("/openai/v1/audio/translations", verboseContent);
+        verbose.EnsureSuccessStatusCode();
+        var verbosePayload = await verbose.Content.ReadFromJsonAsync<JsonElement>(_jsonOptions);
+        await Assert.That(verbosePayload.GetProperty("segments").GetArrayLength()).IsEqualTo(0);
+        await Assert.That(verbosePayload.GetProperty("text").GetString()).IsEqualTo("deterministic translation");
         using var streamContent = CreateTranscriptionContent(
             LlmTestServerKnownModelIds.Gpt4OMiniTts,
             stream: true

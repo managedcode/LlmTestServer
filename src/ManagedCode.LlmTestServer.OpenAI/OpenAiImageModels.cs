@@ -126,3 +126,34 @@ public sealed record OpenAiImageVariationRequest
     [JsonPropertyName("size")]
     public string? Size { get; init; }
 }
+
+public sealed record OpenAiImageStreamingEvent
+{
+    [JsonPropertyName("type")] public string Type { get; init; } = string.Empty;
+    [JsonPropertyName("b64_json")] public string Base64Json { get; init; } = string.Empty;
+    [JsonPropertyName("created_at")] public long CreatedAt { get; init; }
+    [JsonPropertyName("size")] public string Size { get; init; } = "1024x1024";
+    [JsonPropertyName("quality")] public string Quality { get; init; } = "auto";
+    [JsonPropertyName("background")] public string Background { get; init; } = "auto";
+    [JsonPropertyName("output_format")] public string OutputFormat { get; init; } = "png";
+    [JsonPropertyName("usage")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public OpenAiImageStreamingUsage? Usage { get; init; }
+    [JsonPropertyName("partial_image_index")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? PartialImageIndex { get; init; }
+}
+
+public sealed record OpenAiImageStreamingUsage
+{
+    [JsonPropertyName("total_tokens")] public int TotalTokens { get; init; }
+    [JsonPropertyName("input_tokens")] public int InputTokens { get; init; }
+    [JsonPropertyName("output_tokens")] public int OutputTokens { get; init; }
+    [JsonPropertyName("input_tokens_details")] public OpenAiImageStreamingInputTokensDetails InputTokensDetails { get; init; } = new();
+}
+
+public sealed record OpenAiImageStreamingInputTokensDetails
+{
+    [JsonPropertyName("text_tokens")] public int TextTokens { get; init; }
+    [JsonPropertyName("image_tokens")] public int ImageTokens { get; init; }
+}

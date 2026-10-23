@@ -89,31 +89,31 @@ public static partial class OpenAiWireMapper
         };
     }
 
-    private static object MapCitation(LlmTestServerResponseCitation citation)
+    private static JsonElement MapCitation(LlmTestServerResponseCitation citation)
     {
         return citation switch
         {
-            LlmTestServerUrlCitation url => new OpenAiUrlCitation
+            LlmTestServerUrlCitation url => JsonSerializer.SerializeToElement(new OpenAiUrlCitation
             {
                 StartIndex = url.StartIndex,
                 EndIndex = url.EndIndex,
                 Url = url.Url,
                 Title = url.Title,
-            },
-            LlmTestServerFileCitation file => new OpenAiFileCitation
+            }),
+            LlmTestServerFileCitation file => JsonSerializer.SerializeToElement(new OpenAiFileCitation
             {
                 FileId = file.FileId,
                 Filename = file.Filename,
                 Index = file.Index,
-            },
-            LlmTestServerContainerFileCitation file => new OpenAiContainerFileCitation
+            }),
+            LlmTestServerContainerFileCitation file => JsonSerializer.SerializeToElement(new OpenAiContainerFileCitation
             {
                 ContainerId = file.ContainerId,
                 FileId = file.FileId,
                 Filename = file.Filename,
                 StartIndex = file.StartIndex,
                 EndIndex = file.EndIndex,
-            },
+            }),
             _ => throw new InvalidOperationException("Unsupported Responses citation."),
         };
     }
