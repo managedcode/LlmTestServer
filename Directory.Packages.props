@@ -4,7 +4,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageVersion Include="Anthropic" Version="12.60.0" />
+    <PackageVersion Include="Anthropic" Version="13.3.0" />
     <PackageVersion Include="Google.GenAI" Version="1.26.1" />
     <PackageVersion Include="AWSSDK.BedrockRuntime" Version="4.0.101.12" />
     <PackageVersion Include="AWSSDK.Core" Version="4.0.102.12" />

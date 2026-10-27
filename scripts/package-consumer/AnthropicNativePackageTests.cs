@@ -82,7 +82,7 @@ public sealed class AnthropicNativePackageTests
         Require(errorBlock.Content.TryPickError(out var nativeError) && nativeError.ErrorCode.Json.GetString() == "unavailable",
             "Official installed SDK must parse typed native errors inside successful Messages.");
         var history = JsonSerializer.Deserialize<List<ContentBlockParam>>(JsonSerializer.Serialize(first.Content))!;
-        var follow = options with { Messages = [.. options.Messages, new() { Role = Role.Assistant, Content = history }, new() { Role = Role.User, Content = "SDK follow" }] };
+        var follow = options with { Messages = [.. options.Messages, new AssistantMessageParam { Content = history }, new UserMessageParam { Content = "SDK follow" }] };
         var continued = await sdk.Messages.Create(follow, cancellationToken);
         Require(((TextBlock)continued.Content.Single().Value!).Text == "SDK history complete.", "Installed SDK assistant history must roundtrip.");
         var traces = (await control.ExportRequestsAsync(cancellationToken: cancellationToken)).Evidence.Requests;
@@ -98,7 +98,7 @@ public sealed class AnthropicNativePackageTests
         return new()
         {
             Model = Model.ClaudeSonnet5_5, MaxTokens = 256, ToolChoice = new ToolChoiceAuto(),
-            Messages = [new() { Role = Role.User, Content = "SDK fixture" }],
+            Messages = [new UserMessageParam { Content = "SDK fixture" }],
             Tools = [new WebSearchTool20250305
             { MaxUses = maxUses, AllowedDomains = ["example.com/sdk*"], UserLocation = new() { Country = "US", Timezone = "America/New_York" } }],
         };

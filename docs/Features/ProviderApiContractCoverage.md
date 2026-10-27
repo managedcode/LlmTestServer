@@ -57,7 +57,7 @@ SDKs. Cover supported parameters and streaming modes, version/auth validation, s
 transitions. Contract metadata and official documentation guide these tests; source/doc scans and reflection-based
 test guards are not used as evidence. See the [server integration inventory](../Testing/AcceptanceCriteriaTestInventory.md).
 
-`AnthropicEndpointTests` prove the first native non-OpenAI provider route: `/anthropic/v1/messages` accepts Anthropic text messages, requires `anthropic-version: 2023-06-01`, accepts the provider-owned `x-api-key` header, returns Anthropic message/error JSON with deterministic usage, and streams Anthropic-named SSE events with usage on `message_start` and cumulative output usage on `message_delta`.
+`AnthropicEndpointTests` prove the first native non-OpenAI provider route: `/anthropic/v1/messages` accepts Anthropic text messages, requires a documented `anthropic-version` (`2023-06-01` or `2026-10-21`; see [version rules](AnthropicApiVersions.md)), accepts the provider-owned `x-api-key` header, returns Anthropic message/error JSON with deterministic usage, and streams Anthropic-named SSE events with usage on `message_start` and cumulative output usage on `message_delta`.
 
 `OpenAiCompatibleProviderRouteTests` prove the documented OpenAI-compatible provider routes currently mapped by hosting: OpenAI `/openai/v1/chat/completions` and `/openai/v1/models`, Groq `/groq/openai/v1/chat/completions` and `/groq/openai/v1/models`, OpenRouter `/openrouter/api/v1/chat/completions` and `/openrouter/api/v1/models`, DeepSeek `/deepseek/v1/chat/completions` and `/deepseek/models`, Mistral `/mistral/v1/chat/completions` and `/mistral/v1/embeddings`, and Perplexity `/perplexity/v1/sonar`.
 

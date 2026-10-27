@@ -91,6 +91,6 @@ public sealed partial class OutputDispositionIntegrationTests
 
     private static MessageCreateParams AnthropicOptions()
     {
-        return new() { Model = Model.ClaudeSonnet5_5, MaxTokens = 256, Messages = [new() { Role = Role.User, Content = "policy" }] };
+        return new() { Model = Model.ClaudeSonnet5_5, MaxTokens = 256, Messages = [new UserMessageParam { Content = "policy" }] };
     }
 }

@@ -11,6 +11,17 @@ public static class AnthropicRequestValidation
         return Check(body, ValidateBody);
     }
 
+    public static LlmTestServerRequestValidationResult Validate(JsonElement body, string apiVersion)
+    {
+        string? versionError = null;
+        var result = Check(body, value =>
+        {
+            versionError = AnthropicApiVersionValidation.Validate(value, apiVersion);
+            if (versionError is null) { ValidateBody(value); }
+        });
+        return versionError is null ? result : new(versionError);
+    }
+
     private static void ValidateBody(JsonElement body)
     {
         if (body.TryGetProperty("functions", out _) || body.TryGetProperty("function_call", out _))

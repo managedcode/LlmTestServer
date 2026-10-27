@@ -9,6 +9,12 @@ public static partial class AnthropicWireMapper
 {
     public const string VersionHeaderName = "anthropic-version";
     public const string SupportedVersion = "2023-06-01";
+    public const string CurrentVersion = "2026-10-21";
+
+    public static bool IsSupportedVersion(string version)
+    {
+        return version is SupportedVersion or CurrentVersion;
+    }
 
     public static LlmTestServerChatRequest ToRuntimeRequest(AnthropicMessagesRequest request)
     {

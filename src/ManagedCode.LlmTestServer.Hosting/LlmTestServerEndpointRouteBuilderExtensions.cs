@@ -1257,7 +1257,8 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
         var read = await ReadJsonAsync<AnthropicMessagesRequest>(
                 context,
                 message => AnthropicInvalidRequest(context, message),
-                cancellationToken, validation: AnthropicRequestValidation.Validate
+                cancellationToken, validation: body => AnthropicRequestValidation.Validate(body,
+                    context.Request.Headers[AnthropicWireMapper.VersionHeaderName].ToString())
             )
             .ConfigureAwait(false);
         if (read.Error is not null)

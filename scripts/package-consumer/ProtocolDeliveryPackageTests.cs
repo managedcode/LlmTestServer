@@ -115,7 +115,7 @@ public sealed class ProtocolDeliveryPackageTests
     }
 
     private static AnthropicMessages.MessageCreateParams AnthropicOptions() => new()
-    { Model = AnthropicMessages.Model.ClaudeSonnet5_5, MaxTokens = 256, Messages = [new() { Role = AnthropicMessages.Role.User, Content = "stream" }] };
+    { Model = AnthropicMessages.Model.ClaudeSonnet5_5, MaxTokens = 256, Messages = [new AnthropicMessages.UserMessageParam { Content = "stream" }] };
 
     private static async Task<LlmTestServerProviderHttpTrace> CompletedTraceAsync(LlmTestServerClient control, CancellationToken cancellationToken)
     {

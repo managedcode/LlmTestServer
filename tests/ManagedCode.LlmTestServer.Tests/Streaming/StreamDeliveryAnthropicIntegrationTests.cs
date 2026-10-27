@@ -120,6 +120,6 @@ public sealed partial class StreamDeliveryIntegrationTests
     private static MessageCreateParams AnthropicTextOptions()
     {
         return new()
-        { Model = Model.ClaudeSonnet5_5, MaxTokens = 256, Messages = [new() { Role = Role.User, Content = "stream" }] };
+        { Model = Model.ClaudeSonnet5_5, MaxTokens = 256, Messages = [new UserMessageParam { Content = "stream" }] };
     }
 }

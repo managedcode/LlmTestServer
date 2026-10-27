@@ -202,7 +202,7 @@ public sealed partial class OutputDispositionIntegrationTests
         var refused = await sdk.Messages.Create(options);
         var history = JsonSerializer.Deserialize<List<ContentBlockParam>>(JsonSerializer.Serialize(refused.Content))!;
         var continued = await sdk.Messages.Create(options with
-        { Messages = [.. options.Messages, new() { Role = Role.Assistant, Content = history }, new() { Role = Role.User, Content = "next" }] });
+        { Messages = [.. options.Messages, new AssistantMessageParam { Content = history }, new UserMessageParam { Content = "next" }] });
         await Assert.That(((TextBlock)continued.Content.Single().Value!).Text).IsEqualTo(_recovery);
         var trace = await CompletedAsync(control, 2);
         await Assert.That(trace.Messages.Single(message => message.Role == "assistant").Content).IsEqualTo(_text);

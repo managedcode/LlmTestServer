@@ -1,7 +1,7 @@
 # Anthropic native web search
 
 The basic `web_search_20250305` contract is implemented for `claude-sonnet-5-5` on
-`POST /anthropic/v1/messages`, with `anthropic-version: 2023-06-01` and the configured
+`POST /anthropic/v1/messages`, with a [documented Anthropic API version](AnthropicApiVersions.md) and the configured
 `x-api-key`. The current model and wire subset passed **76 real HTTP/SSE integration cases**
 (`artifacts/delivery/anthropic-official-sdk-strict-wire-regression.log`). Official `Anthropic` 12.58.0
 passed **8 real SDK integration cases with `ResponseValidation: true`**, covering JSON, typed SSE,

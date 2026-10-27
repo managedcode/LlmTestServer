@@ -29,8 +29,8 @@ public static class AnthropicCompatibility
             ApiContract = new()
             {
                 DocumentationUrl = "https://platform.claude.com/docs/en/api/messages/create",
-                DocumentationRetrievedOn = "2026-09-07",
-                DocumentationVersion = "anthropic-version: 2023-06-01",
+                DocumentationRetrievedOn = "2026-10-27",
+                DocumentationVersion = $"anthropic-version: {AnthropicWireMapper.CurrentVersion}; also supports {AnthropicWireMapper.SupportedVersion}",
                 Operations =
                 [
                     new()
@@ -40,7 +40,7 @@ public static class AnthropicCompatibility
                         Path = "/anthropic/v1/messages",
                         DocumentationUrl = "https://platform.claude.com/docs/en/api/messages/create",
                         RequiredHeader = "anthropic-version",
-                        ApiVersion = "2023-06-01",
+                        ApiVersion = AnthropicWireMapper.CurrentVersion,
                         SupportsStreaming = true,
                         ImplementedByHosting = true,
                         Capabilities =

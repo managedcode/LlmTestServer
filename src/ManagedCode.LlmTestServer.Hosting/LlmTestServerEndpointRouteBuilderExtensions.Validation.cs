@@ -16,10 +16,10 @@ public static partial class LlmTestServerEndpointRouteBuilderExtensions
     private static IResult? ValidateAnthropicVersion(HttpContext context)
     {
         var version = context.Request.Headers[AnthropicWireMapper.VersionHeaderName].ToString();
-        return string.Equals(version, AnthropicWireMapper.SupportedVersion, StringComparison.Ordinal)
+        return AnthropicWireMapper.IsSupportedVersion(version)
             ? null
             : AnthropicInvalidRequest(context,
-                $"The {AnthropicWireMapper.VersionHeaderName} header must be {AnthropicWireMapper.SupportedVersion}."
+                $"The {AnthropicWireMapper.VersionHeaderName} header must be {AnthropicWireMapper.SupportedVersion} or {AnthropicWireMapper.CurrentVersion}."
             );
     }
 
