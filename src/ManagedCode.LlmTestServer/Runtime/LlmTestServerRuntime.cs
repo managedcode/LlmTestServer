@@ -142,13 +142,13 @@ public sealed partial class LlmTestServerRuntime
         }
     }
 
-    public IDisposable BeginRequest(string requestId, string? conversationId = null, string? providerNamespace = null)
+    public IDisposable BeginRequest(string requestId, string? conversationId = null, string? providerNamespace = null, Action<string>? modelObserved = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
         var previousRequest = _activeRequest.Value;
         lock (_gate)
         {
-            _activeRequest.Value = new RuntimeRequestContext(requestId, _generation, conversationId, providerNamespace, ReserveResponseMetadata(providerNamespace ?? string.Empty));
+            _activeRequest.Value = new RuntimeRequestContext(requestId, _generation, conversationId, providerNamespace, ReserveResponseMetadata(providerNamespace ?? string.Empty), modelObserved);
         }
 
         return new RuntimeRequestScope(_activeRequest, previousRequest);
@@ -2060,7 +2060,7 @@ public sealed partial class LlmTestServerRuntime
 
     private readonly record struct PromptCacheCandidate(string Key, int Tokens);
 
-    private readonly record struct RuntimeRequestContext(string RequestId, long Generation, string? ConversationId, string? ProviderNamespace, ManagedCode.LlmTestServer.Determinism.LlmTestServerResponseMetadata WireMetadata);
+    private readonly record struct RuntimeRequestContext(string RequestId, long Generation, string? ConversationId, string? ProviderNamespace, ManagedCode.LlmTestServer.Determinism.LlmTestServerResponseMetadata WireMetadata, Action<string>? ModelObserved);
 
     private static LlmTestServerTokenUsage CreateVideoUsage(string prompt)
     {

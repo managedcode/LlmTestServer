@@ -202,12 +202,25 @@ public sealed class LlmTestServerProviderHttpTraceFilter(
 
         try
         {
-            return runtimeRequestScope.BeginRequest(requestId, conversationId, providerNamespace);
+            return runtimeRequestScope.BeginRequest(requestId, conversationId, providerNamespace, modelId =>
+                CaptureModelBestEffort(requestId, modelId));
         }
         catch (Exception exception)
         {
             LogFailure(exception, "runtime correlation start", requestId);
             return null;
+        }
+    }
+
+    private void CaptureModelBestEffort(string requestId, string modelId)
+    {
+        try
+        {
+            traceStore.TryEnrich(requestId, new LlmTestServerProviderHttpTraceEnrichment { ModelId = modelId });
+        }
+        catch (Exception exception)
+        {
+            LogFailure(exception, "model capture", requestId);
         }
     }
 

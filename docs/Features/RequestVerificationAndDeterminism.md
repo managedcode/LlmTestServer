@@ -30,6 +30,9 @@ flowchart LR
 `GET /admin-api/requests` returns a JSON array. `GET /admin-api/requests/export` uses the same query against
 one captured snapshot and returns `LlmTestServerRequestExport`. Both enforce control authorization and session
 selection. Querying and exporting do not execute provider operations or consume scenario responses.
+The parsed model is attached to the existing HTTP trace as soon as the runtime receives the request.
+Use `model=...&completed=false` to observe a delayed active invocation, including requests whose bounded
+body preview is truncated. Completion updates the same request ID and sequence; this does not add runtime events.
 
 | Query parameter | Meaning |
 | --- | --- |
