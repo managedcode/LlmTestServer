@@ -12,6 +12,7 @@ namespace ManagedCode.LlmTestServer.Tests.Providers;
 public sealed class OpenAiSdkProviderCompatibilityTests
 {
     private const string _key = "sdk-provider-key";
+    private static readonly TimeSpan _requestEvidenceTimeout = TimeSpan.FromSeconds(5);
 
     [Test]
     [Arguments("/groq/openai/v1", false)]
@@ -60,6 +61,11 @@ public sealed class OpenAiSdkProviderCompatibilityTests
         var state = (await conversation.Control.GetConversationsAsync()).Single();
         await Assert.That(state.ExecutedSteps).IsEqualTo(2);
         await Assert.That(state.IsTerminal).IsTrue();
+        await Assert.That(async () =>
+        {
+            var captured = (await conversation.Control.ExportRequestsAsync()).Evidence.Requests;
+            return captured.Count == 2 && captured.All(request => request.StatusCode == 200 && request.Path == prefix + "/chat/completions");
+        }).Eventually(assertion => assertion.IsTrue(), _requestEvidenceTimeout);
         var evidence = (await conversation.Control.ExportRequestsAsync()).Evidence.Requests;
         await Assert.That(evidence.Count).IsEqualTo(2);
         await Assert.That(evidence.All(request => request.StatusCode == 200 && request.Path == prefix + "/chat/completions")).IsTrue();
